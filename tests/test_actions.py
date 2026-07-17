@@ -5,12 +5,15 @@ import numpy as np
 from minerl.herobraine.envs import MINERL_BASALT_FIND_CAVES_ENV_SPEC
 
 from mc_agent.actions import (
+    ForwardProbeGate,
     LatestActionMailbox,
     MacroAction,
     MacroExecutor,
     Watchdog,
     parse_macro_action,
+    is_safe_forward_probe,
     safe_camera_recovery,
+    safe_forward_probe,
 )
 
 
@@ -147,3 +150,44 @@ class RecoveryActionTests(unittest.TestCase):
             safe_camera_recovery(-1)
         with self.assertRaisesRegex(ValueError, "non-negative integer"):
             safe_camera_recovery(True)
+
+    def test_forward_probe_is_exactly_one_safe_tick(self):
+        probe = safe_forward_probe()
+        self.assertTrue(is_safe_forward_probe(probe))
+        self.assertEqual(probe.action, "move_forward")
+        self.assertEqual(probe.duration_ticks, 1)
+        self.assertEqual(probe.camera_pitch, 0.0)
+        self.assertEqual(probe.camera_yaw, 0.0)
+        self.assertFalse(probe.attack)
+        self.assertFalse(probe.jump)
+        self.assertFalse(probe.sprint)
+        self.assertFalse(
+            is_safe_forward_probe(
+                MacroAction(action="move_forward", duration_ticks=2)
+            )
+        )
+
+    def test_forward_probe_gate_requires_two_fresh_low_windows(self):
+        gate = ForwardProbeGate(required_low_change_windows=2)
+        self.assertFalse(gate.eligible)
+        self.assertEqual(gate.observe(True), 1)
+        self.assertFalse(gate.eligible)
+        self.assertEqual(gate.observe(True), 2)
+        self.assertTrue(gate.eligible)
+        gate.consume()
+        self.assertFalse(gate.eligible)
+        self.assertEqual(gate.consecutive_low_change_windows, 0)
+        gate.observe(True)
+        gate.observe(False)
+        self.assertEqual(gate.consecutive_low_change_windows, 0)
+
+    def test_forward_probe_gate_rejects_invalid_input_and_early_consume(self):
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            ForwardProbeGate(0)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            ForwardProbeGate(True)
+        gate = ForwardProbeGate()
+        with self.assertRaisesRegex(ValueError, "boolean"):
+            gate.observe(1)
+        with self.assertRaisesRegex(RuntimeError, "not eligible"):
+            gate.consume()

@@ -51,6 +51,10 @@ def _aggregate_recovery(results: list[dict[str, Any]]) -> dict[str, Any]:
             "forward_decisions": sum(
                 result["forward_decisions"] for result in results
             ),
+            "executed_forward_decisions": sum(
+                result["executed_forward_decisions"] for result in results
+            ),
+            "forward_ticks": sum(result["forward_ticks"] for result in results),
         }
     )
     return aggregate

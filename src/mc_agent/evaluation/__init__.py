@@ -1,6 +1,7 @@
 from .logger import EpisodeLogger
 from .phase4 import run_phase4_evaluation
 from .phase5 import run_phase5_frame_change_ab
+from .phase5_forward_probe import run_phase5_forward_probe_ab
 from .phase5_repetition import run_phase5_repetition_ab
 from .phase5_recovery import run_phase5_recovery_ab
 from .phase5_orientation import run_phase5_orientation_ab
@@ -11,6 +12,7 @@ __all__ = [
     "EpisodeLogger",
     "run_phase4_evaluation",
     "run_phase5_frame_change_ab",
+    "run_phase5_forward_probe_ab",
     "run_phase5_repetition_ab",
     "run_phase5_recovery_ab",
     "run_phase5_orientation_ab",

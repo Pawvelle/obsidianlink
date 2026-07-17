@@ -21,6 +21,7 @@ from mc_agent.env import MineRLEnvAdapter
 from mc_agent.evaluation import EpisodeLogger
 from mc_agent.evaluation.phase4 import run_phase4_evaluation
 from mc_agent.evaluation.phase5 import DEFAULT_SEEDS, run_phase5_frame_change_ab
+from mc_agent.evaluation.phase5_forward_probe import run_phase5_forward_probe_ab
 from mc_agent.evaluation.phase5_repetition import run_phase5_repetition_ab
 from mc_agent.evaluation.phase5_recovery import run_phase5_recovery_ab
 from mc_agent.evaluation.phase5_orientation import run_phase5_orientation_ab
@@ -277,6 +278,20 @@ def main() -> int:
         type=Path,
         default=ROOT / "artifacts" / "phase5" / "hierarchical-ab",
     )
+    phase5_forward_probe = subparsers.add_parser("phase5-forward-probe-ab")
+    phase5_forward_probe.add_argument(
+        "--seeds",
+        type=_seed_tuple,
+        default=DEFAULT_SEEDS,
+        help="comma-separated paired MineRL seeds",
+    )
+    phase5_forward_probe.add_argument("--ticks", type=int, default=800)
+    phase5_forward_probe.add_argument("--observation-interval", type=int, default=40)
+    phase5_forward_probe.add_argument(
+        "--output-root",
+        type=Path,
+        default=ROOT / "artifacts" / "phase5" / "forward-probe-ab",
+    )
     args = parser.parse_args()
     if args.command == "phase3-smoke":
         return phase3_smoke(args.ticks, args.output_root)
@@ -330,6 +345,14 @@ def main() -> int:
         return 0
     if args.command == "phase5-hierarchical-ab":
         run_phase5_hierarchical_ab(
+            seeds=args.seeds,
+            ticks=args.ticks,
+            observation_interval=args.observation_interval,
+            output_root=args.output_root,
+        )
+        return 0
+    if args.command == "phase5-forward-probe-ab":
+        run_phase5_forward_probe_ab(
             seeds=args.seeds,
             ticks=args.ticks,
             observation_interval=args.observation_interval,

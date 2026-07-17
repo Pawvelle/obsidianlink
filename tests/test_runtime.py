@@ -114,19 +114,46 @@ class Phase4PacingTests(unittest.TestCase):
 
     def test_recovery_selection_changes_only_enabled_semantic_no_op(self):
         no_op = MacroAction(action="look")
-        unchanged, applied = _select_executed_action(no_op, False, 0)
+        unchanged, applied, probed = _select_executed_action(no_op, False, 0)
         self.assertEqual(unchanged, no_op)
         self.assertFalse(applied)
+        self.assertFalse(probed)
 
-        recovery, applied = _select_executed_action(no_op, True, 0)
+        recovery, applied, probed = _select_executed_action(no_op, True, 0)
         self.assertTrue(applied)
+        self.assertFalse(probed)
         self.assertEqual(recovery.action, "look")
         self.assertEqual(recovery.camera_yaw, 20.0)
 
         forward = MacroAction(action="move_forward", duration_ticks=16)
-        unchanged, applied = _select_executed_action(forward, True, 1)
+        unchanged, applied, probed = _select_executed_action(forward, True, 1)
         self.assertEqual(unchanged, forward)
         self.assertFalse(applied)
+        self.assertFalse(probed)
+
+    def test_forward_probe_selection_only_replaces_semantic_no_op(self):
+        no_op = MacroAction(action="wait")
+        probe, applied, probed = _select_executed_action(
+            no_op,
+            True,
+            0,
+            use_forward_probe=True,
+        )
+        self.assertTrue(applied)
+        self.assertTrue(probed)
+        self.assertEqual(probe.action, "move_forward")
+        self.assertEqual(probe.duration_ticks, 1)
+
+        model_forward = MacroAction(action="move_forward", duration_ticks=16)
+        unchanged, applied, probed = _select_executed_action(
+            model_forward,
+            True,
+            0,
+            use_forward_probe=True,
+        )
+        self.assertEqual(unchanged, model_forward)
+        self.assertFalse(applied)
+        self.assertFalse(probed)
 
 
 if __name__ == "__main__":

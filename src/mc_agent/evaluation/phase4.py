@@ -15,10 +15,13 @@ import psutil
 from PIL import Image
 
 from mc_agent.actions import (
+    ForwardProbeGate,
     MacroAction,
     MacroExecutor,
     Watchdog,
+    is_safe_forward_probe,
     safe_camera_recovery,
+    safe_forward_probe,
 )
 from mc_agent.env import MineRLEnvAdapter
 from mc_agent.memory import OrientationMemory
@@ -35,6 +38,7 @@ from .logger import EpisodeLogger
 ROOT = Path(__file__).resolve().parents[3]
 TARGET_TICKS_PER_SECOND = 20.0
 TARGET_TICK_SECONDS = 1.0 / TARGET_TICKS_PER_SECOND
+FORWARD_PROBE_LOW_CHANGE_WINDOWS = 2
 
 
 def _percentile(values: list[float], fraction: float) -> float:
@@ -87,10 +91,13 @@ def _select_executed_action(
     action: MacroAction,
     recovery_enabled: bool,
     recovery_index: int,
-) -> tuple[MacroAction, bool]:
+    use_forward_probe: bool = False,
+) -> tuple[MacroAction, bool, bool]:
     if recovery_enabled and not _macro_action_has_effect(action):
-        return safe_camera_recovery(recovery_index), True
-    return action, False
+        if use_forward_probe:
+            return safe_forward_probe(), True, True
+        return safe_camera_recovery(recovery_index), True, False
+    return action, False, False
 
 
 def _run_episode(
@@ -113,6 +120,8 @@ def _run_episode(
     repetition_feedback: bool = False,
     measure_recovery: bool = False,
     apply_recovery: bool = False,
+    measure_forward_probe: bool = False,
+    apply_forward_probe: bool = False,
     measure_orientation: bool = False,
     orientation_feedback: bool = False,
     hierarchical_prompt: bool = False,
@@ -125,6 +134,14 @@ def _run_episode(
         raise ValueError("repetition feedback requires measurement")
     if apply_recovery and not measure_recovery:
         raise ValueError("recovery application requires measurement")
+    if measure_forward_probe and not (
+        measure_frame_change and measure_recovery and apply_recovery
+    ):
+        raise ValueError(
+            "forward probe measurement requires frame change and applied recovery"
+        )
+    if apply_forward_probe and not measure_forward_probe:
+        raise ValueError("forward probe application requires measurement")
     if measure_orientation and not measure_frame_change:
         raise ValueError("orientation measurement requires frame change measurement")
     if orientation_feedback and not measure_orientation:
@@ -150,6 +167,9 @@ def _run_episode(
             "repetition_feedback": repetition_feedback,
             "recovery_measurement": measure_recovery,
             "recovery_application": apply_recovery,
+            "forward_probe_measurement": measure_forward_probe,
+            "forward_probe_application": apply_forward_probe,
+            "forward_probe_low_change_windows": FORWARD_PROBE_LOW_CHANGE_WINDOWS,
             "orientation_measurement": measure_orientation,
             "orientation_feedback": orientation_feedback,
             "hierarchical_prompt": hierarchical_prompt,
@@ -166,6 +186,7 @@ def _run_episode(
     step_latencies: list[float] = []
     paced_sleep_seconds = 0.0
     no_op_ticks = 0
+    forward_ticks = 0
     decision_latencies: list[float] = []
     action_signatures: list[str] = []
     decisions = 0
@@ -188,6 +209,7 @@ def _run_episode(
     turning_detector = TurningLoopDetector() if measure_turning_loop else None
     rotation_only_decisions = 0
     forward_decisions = 0
+    executed_forward_decisions = 0
     turning_loop_activations = 0
     turning_loop_observations = 0
     turning_loop_was_active = False
@@ -203,6 +225,20 @@ def _run_episode(
     recovery_followup_decisions = 0
     recovery_followup_effective_decisions = 0
     recovery_action_signatures: list[str] = []
+    forward_probe_gate = (
+        ForwardProbeGate(FORWARD_PROBE_LOW_CHANGE_WINDOWS)
+        if measure_forward_probe
+        else None
+    )
+    forward_probe_opportunities = 0
+    forward_probe_actions_applied = 0
+    forward_probe_effective_model_overrides = 0
+    forward_probe_unsafe_actions = 0
+    forward_probe_followup_pending_since_tick: int | None = None
+    forward_probe_followup_samples = 0
+    forward_probe_followup_changed_samples = 0
+    forward_probe_gate_consumed_at_tick: int | None = None
+    forward_probe_action_signatures: list[str] = []
     orientation_memory = OrientationMemory() if measure_orientation else None
     orientation_feedback_observations = 0
     orientation_feedback_decisions = 0
@@ -268,6 +304,13 @@ def _run_episode(
                     repetition_state = None
                     orientation_state = None
                     recovery_applied = False
+                    forward_probe_applied = False
+                    forward_probe_eligible = False
+                    forward_probe_streak = (
+                        forward_probe_gate.consecutive_low_change_windows
+                        if forward_probe_gate is not None
+                        else 0
+                    )
                     action_to_execute = decision.action
                     repetition_feedback_decisions += int(
                         decision.repetition_feedback
@@ -310,12 +353,26 @@ def _run_episode(
                             repetition_state = state.to_log_dict()
                         if measure_recovery and not has_effect:
                             recovery_opportunities += 1
+                            if forward_probe_gate is not None:
+                                forward_probe_eligible = forward_probe_gate.eligible
+                                if forward_probe_eligible:
+                                    forward_probe_opportunities += 1
+                                    forward_probe_gate.consume()
+                                    forward_probe_gate_consumed_at_tick = completed_ticks
                             if apply_recovery:
-                                action_to_execute, recovery_applied = (
+                                (
+                                    action_to_execute,
+                                    recovery_applied,
+                                    forward_probe_applied,
+                                ) = (
                                     _select_executed_action(
                                         decision.action,
                                         True,
                                         recovery_actions_applied,
+                                        use_forward_probe=(
+                                            apply_forward_probe
+                                            and forward_probe_eligible
+                                        ),
                                     )
                                 )
                                 recovery_actions_applied += 1
@@ -326,8 +383,28 @@ def _run_episode(
                                         sort_keys=True,
                                     )
                                 )
+                                if forward_probe_applied:
+                                    forward_probe_actions_applied += 1
+                                    forward_probe_effective_model_overrides += int(
+                                        has_effect
+                                    )
+                                    forward_probe_unsafe_actions += int(
+                                        not is_safe_forward_probe(action_to_execute)
+                                    )
+                                    forward_probe_followup_pending_since_tick = (
+                                        completed_ticks
+                                    )
+                                    forward_probe_action_signatures.append(
+                                        json.dumps(
+                                            action_to_execute.to_log_dict(),
+                                            sort_keys=True,
+                                        )
+                                    )
                         executed_has_effect = _macro_action_has_effect(
                             action_to_execute
+                        )
+                        executed_forward_decisions += int(
+                            action_to_execute.action == "move_forward"
                         )
                         executed_ineffective_decisions += int(
                             not executed_has_effect
@@ -356,6 +433,9 @@ def _run_episode(
                             measure_recovery and decision.accepted and not has_effect
                         ),
                         recovery_applied=recovery_applied,
+                        forward_probe_eligible=forward_probe_eligible,
+                        forward_probe_streak=forward_probe_streak,
+                        forward_probe_applied=forward_probe_applied,
                         turning_loop=turning_state,
                         repetition=repetition_state,
                         repetition_feedback_used=decision.repetition_feedback,
@@ -371,6 +451,7 @@ def _run_episode(
                 frame_name = f"tick-{completed_ticks:04d}.png"
                 Image.fromarray(observation["pov"]).save(frames_dir / frame_name)
                 visual_change = None
+                forward_probe_followup = None
                 if change_detector is not None:
                     change_started = time.perf_counter()
                     change = change_detector.compare_and_update(observation["pov"])
@@ -379,6 +460,26 @@ def _run_episode(
                     )
                     frame_changes.append(change)
                     low_change_samples += int(change.low_change)
+                    if (
+                        forward_probe_followup_pending_since_tick is not None
+                        and completed_ticks
+                        > forward_probe_followup_pending_since_tick
+                    ):
+                        forward_probe_followup_samples += 1
+                        forward_probe_followup_changed_samples += int(
+                            not change.low_change
+                        )
+                        forward_probe_followup = {
+                            "probe_tick": forward_probe_followup_pending_since_tick,
+                            "sample_tick": completed_ticks,
+                            "changed": not change.low_change,
+                        }
+                        forward_probe_followup_pending_since_tick = None
+                    if (
+                        forward_probe_gate is not None
+                        and forward_probe_gate_consumed_at_tick != completed_ticks
+                    ):
+                        forward_probe_gate.observe(change.low_change)
                     if progress_action_ticks_since_observation > 0:
                         action_windows += 1
                         ineffective_action_windows += int(change.low_change)
@@ -429,6 +530,12 @@ def _run_episode(
                     orientation=orientation,
                     orientation_feedback=orientation_feedback,
                     hierarchical_prompt=hierarchical_prompt,
+                    forward_probe_low_change_streak=(
+                        forward_probe_gate.consecutive_low_change_windows
+                        if forward_probe_gate is not None
+                        else 0
+                    ),
+                    forward_probe_followup=forward_probe_followup,
                 )
                 progress_action_ticks_since_observation = 0
 
@@ -444,6 +551,7 @@ def _run_episode(
                 or tick_action["sprint"]
             )
             no_op_ticks += int(not action_changed)
+            forward_ticks += int(bool(tick_action["forward"]))
             progress_action_ticks_since_observation += int(action_changed)
             esc_nonzero += int(bool(tick_action["ESC"]))
             step_started = time.perf_counter()
@@ -545,6 +653,7 @@ def _run_episode(
         "paced_sleep_seconds": paced_sleep_seconds,
         "no_op_ticks": no_op_ticks,
         "no_op_tick_rate": no_op_ticks / completed_ticks if completed_ticks else None,
+        "forward_ticks": forward_ticks,
         "frame_change_measurement": measure_frame_change,
         "frame_change_feedback": frame_change_feedback,
         "frame_change_samples": len(frame_changes),
@@ -588,6 +697,7 @@ def _run_episode(
         "turning_loop_activations": turning_loop_activations,
         "turning_loop_observations": turning_loop_observations,
         "forward_decisions": forward_decisions,
+        "executed_forward_decisions": executed_forward_decisions,
         "repetition_measurement": measure_repetition,
         "repetition_feedback": repetition_feedback,
         "repetition_opportunities": repetition_opportunities,
@@ -623,6 +733,35 @@ def _run_episode(
         ),
         "recovery_followup_pending_at_end": recovery_followup_pending,
         "recovery_action_signatures": sorted(set(recovery_action_signatures)),
+        "forward_probe_measurement": measure_forward_probe,
+        "forward_probe_application": apply_forward_probe,
+        "forward_probe_low_change_windows": FORWARD_PROBE_LOW_CHANGE_WINDOWS,
+        "forward_probe_opportunities": forward_probe_opportunities,
+        "forward_probe_actions_applied": forward_probe_actions_applied,
+        "forward_probe_effective_model_overrides": (
+            forward_probe_effective_model_overrides
+        ),
+        "forward_probe_unsafe_actions": forward_probe_unsafe_actions,
+        "forward_probe_followup_samples": forward_probe_followup_samples,
+        "forward_probe_followup_changed_samples": (
+            forward_probe_followup_changed_samples
+        ),
+        "forward_probe_followup_changed_rate": (
+            forward_probe_followup_changed_samples / forward_probe_followup_samples
+            if forward_probe_followup_samples
+            else None
+        ),
+        "forward_probe_followup_pending_at_end": (
+            forward_probe_followup_pending_since_tick is not None
+        ),
+        "forward_probe_final_low_change_streak": (
+            forward_probe_gate.consecutive_low_change_windows
+            if forward_probe_gate is not None
+            else 0
+        ),
+        "forward_probe_action_signatures": sorted(
+            set(forward_probe_action_signatures)
+        ),
         "orientation_measurement": measure_orientation,
         "orientation_feedback": orientation_feedback,
         "orientation_feedback_observations": orientation_feedback_observations,
