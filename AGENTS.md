@@ -1,12 +1,20 @@
-# mc-agent 开发约束
+# mc-agent Development Constraints
 
-本项目面向个人学习和持续开发，路线说明见 `ROADMAP.md`。
+This project is intended for personal learning and long-term development. See
+`ROADMAP.md` for its execution plan.
 
-1. 开始项目工作前先阅读 `ROADMAP.md`。
-2. 不自行更换 MineRL、Qwen、Python、JDK 主版本或模型提交。
-3. 模型输出必须经过结构化解析、动作白名单和数值限幅，不能直接执行模型生成的代码或 shell 命令。
-4. MineRL step loop 与 Qwen 推理保持解耦，环境循环不得等待模型推理。
-5. `vendor/minerl` 是独立嵌套 Git 仓库；不得由外层仓库提交、删除或改写其历史。
-6. MineRL Gradle 构建会执行第三方代码，只有用户明确批准后才能重新构建。
-7. 新运行结果统一写入 `runs/`；历史验证记录位于 `runs/history/`。
-8. 结构调整和功能修改后运行对应测试，并在交付时说明验证结果和遗留问题。
+1. Read `ROADMAP.md` before starting project work.
+2. Do not independently change the major MineRL, Qwen, Python, or JDK versions,
+   or the pinned model commit.
+3. Model output must pass structured parsing, an action allowlist, and numeric
+   clamping. Never directly execute model-generated code or shell commands.
+4. Keep the MineRL step loop decoupled from Qwen inference; the environment loop
+   must not wait for model inference.
+5. `vendor/minerl` is an independent nested Git repository. The outer repository
+   must not commit, delete, or rewrite its history.
+6. MineRL Gradle builds execute third-party code and may be rerun only with the
+   user's explicit approval.
+7. Write new run results to `runs/`; historical validation records live in
+   `runs/history/`.
+8. After structural or functional changes, run the relevant tests and report the
+   verification result and any remaining issues at handoff.
