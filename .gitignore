@@ -1,0 +1,22 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Large or generated runtime data
+models/Qwen3-VL-2B-Instruct/
+artifacts/*
+logs/*
+!artifacts/.gitkeep
+!logs/.gitkeep
+
+# MineRL generated Minecraft/Gradle tree
+vendor/minerl/minerl/MCP-Reborn/
+vendor/minerl/build/
+vendor/minerl/dist/
+vendor/minerl/*.egg-info/
+
+# MineRL is an independent upstream Git checkout with its own history.
+/vendor/minerl/

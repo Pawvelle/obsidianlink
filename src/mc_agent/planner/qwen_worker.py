@@ -1,0 +1,514 @@
+"""Asynchronous local Qwen vision planner with capacity-one mailboxes."""
+
+from __future__ import annotations
+
+import json
+import queue
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Generic, TypeVar
+
+import numpy as np
+import torch
+from PIL import Image, ImageOps
+from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+
+from mc_agent.actions import MacroAction, parse_macro_action
+
+
+ROOT = Path(__file__).resolve().parents[3]
+LOCK_PATH = ROOT / "config" / "model.lock.json"
+IMAGE_SIZE = (336, 336)
+MAX_NEW_TOKENS = 72
+
+
+@dataclass(frozen=True)
+class ObservationRequest:
+    episode_id: str
+    tick: int
+    pov: np.ndarray
+    previous_action: dict[str, Any] | None
+    visual_change: dict[str, Any] | None = None
+    turning_loop: dict[str, Any] | None = None
+    repetition: dict[str, Any] | None = None
+    orientation: dict[str, Any] | None = None
+    hierarchical_prompt: bool = False
+    generation: int = 0
+
+
+@dataclass(frozen=True)
+class PlannerDecision:
+    episode_id: str
+    observation_tick: int
+    raw: str
+    action: MacroAction
+    accepted: bool
+    error: str | None
+    latency_seconds: float
+    repetition_feedback: bool = False
+    orientation_feedback: bool = False
+    hierarchical_prompt: bool = False
+
+
+T = TypeVar("T")
+
+
+class _LatestMailbox(Generic[T]):
+    def __init__(self):
+        self._queue: queue.Queue[T] = queue.Queue(maxsize=1)
+
+    def publish(self, value: T) -> None:
+        try:
+            self._queue.put_nowait(value)
+            return
+        except queue.Full:
+            pass
+        try:
+            self._queue.get_nowait()
+        except queue.Empty:
+            pass
+        self._queue.put_nowait(value)
+
+    def take_latest(self, timeout: float | None = None) -> T | None:
+        try:
+            if timeout is None:
+                return self._queue.get_nowait()
+            return self._queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def clear(self) -> None:
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                return
+
+    def empty(self) -> bool:
+        return self._queue.empty()
+
+
+class LatestObservationMailbox(_LatestMailbox[ObservationRequest]):
+    pass
+
+
+class LatestDecisionMailbox(_LatestMailbox[PlannerDecision]):
+    pass
+
+
+def _prepare_image(pov: np.ndarray) -> Image.Image:
+    image = Image.fromarray(pov).convert("RGB")
+    return ImageOps.pad(
+        image,
+        IMAGE_SIZE,
+        method=Image.Resampling.BICUBIC,
+        color=(0, 0, 0),
+        centering=(0.5, 0.5),
+    )
+
+
+def _prompt(
+    previous_action: dict[str, Any] | None,
+    visual_change: dict[str, Any] | None = None,
+    turning_loop: dict[str, Any] | None = None,
+    repetition: dict[str, Any] | None = None,
+    orientation: dict[str, Any] | None = None,
+    hierarchical_prompt: bool = False,
+) -> str:
+    previous = json.dumps(previous_action, separators=(",", ":")) if previous_action else "none"
+    prompt = (
+        "You control a Minecraft agent whose goal is to explore a plains biome and find "
+        "a natural cave. Choose exactly one safe macro-action from the current first-person "
+        "image. Compare the visible left, center, and right routes before choosing. Use yaw "
+        "-20 when the left route is clearly safer, yaw 20 when the right route is clearly "
+        "safer, and yaw 0 only when the center is clearly safest. For move_forward, choose "
+        "duration 6 when nearby terrain is uneven or partly obstructed, 16 for a medium-clear "
+        "route, and 28 only for a wide open route. Turn away from water, trees, walls, animals, "
+        "drops, or danger; look around when no route can be judged safely. The reason must name "
+        "the visible evidence used for direction and distance. Never dig straight down. ESC "
+        "and task termination are not available. Use the previous accepted action as context: "
+        "after look or turn, move forward if the newly exposed center route is visibly safe; "
+        "after move_forward, continue only if the current view still looks clear, otherwise "
+        "turn toward the safer visible side. Return exactly one JSON object on one line, "
+        "without Markdown, code, or "
+        "extra text. Use exactly this schema: "
+        '{"action":"move_forward|turn|look|wait","duration_ticks":1..40,'
+        '"camera":{"pitch":-30..30,"yaw":-30..30},"attack":false,'
+        '"jump":false,"sprint":true|false,"reason":"short visual reason"}. '
+        "For turn or look, use a meaningful non-zero pitch or yaw. Keep attack and jump "
+        f"false in this baseline. Previous accepted action: {previous}"
+    )
+    feedback: list[str] = []
+    if hierarchical_prompt:
+        feedback.append(
+            "Use this fixed decision hierarchy internally: (1) OBSERVE left, center, "
+            "and right routes and their visible hazards; (2) ASSESS which visible route "
+            "is safest and treat center as unsafe only when a specific visible hazard "
+            "blocks it; (3) ACT: when no specific center hazard is visible, you MUST use "
+            "move_forward with duration 6 for uneven ground or 16 for a clear route. "
+            "A turn/look is allowed only when the reason names the center hazard and the "
+            "camera is non-zero. Do not output these stages; return only the required "
+            "JSON object."
+        )
+    if visual_change is not None:
+        low_change = bool(visual_change["low_change"])
+        if low_change:
+            change_signal = (
+                "LOW; the recent view is nearly unchanged. Use the current image to choose "
+                "a safe action that creates visible progress, and never use a zero-angle look."
+            )
+        else:
+            change_signal = "CHANGED; re-evaluate the current image."
+        feedback.append(f"Visual-change signal: {change_signal}")
+    if turning_loop is not None and bool(turning_loop["active"]):
+        feedback.append(
+            "Turning-loop signal: ACTIVE; recent effective actions were yaw-only. "
+            "Move forward if the center is visibly safe; otherwise make one decisive turn."
+        )
+    if repetition is not None and bool(repetition["active"]):
+        action_name = str(repetition["last_action"])
+        feedback.append(
+            f"Repeat penalty: the action field MUST NOT be {action_name} this time. "
+            "If the center is visibly safe, use move_forward; otherwise choose a "
+            "different safe action."
+        )
+    if orientation is not None and bool(orientation["active"]):
+        heading = int(orientation["heading"])
+        suggested_yaw = int(orientation["suggested_yaw"])
+        recent = orientation.get("recent_views", [])[-3:]
+        recent_text = ",".join(
+            f"{int(view['heading']):+d}:{'LOW' if view['low_change'] else 'CHANGED'}"
+            for view in recent
+        )
+        feedback.append(
+            f"Orientation memory: relative heading {heading:+d} degrees; recent "
+            f"headings {recent_text}. If center is visibly safe, use move_forward; "
+            f"otherwise prefer one safe yaw {suggested_yaw:+d} turn toward the less-visited "
+            "neighbor and avoid recent LOW headings."
+        )
+    if not feedback:
+        return prompt
+    return f"{prompt} {' '.join(feedback)} Keep reason under 12 words."
+
+
+class QwenPlannerWorker:
+    def __init__(self):
+        self.observations = LatestObservationMailbox()
+        self.decisions = LatestDecisionMailbox()
+        self.ready = threading.Event()
+        self.idle = threading.Event()
+        self.idle.set()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._state = threading.Condition()
+        self._inference_active = False
+        self._transitioning = False
+        self._generation = 0
+        self._episode_id: str | None = None
+        self._awaiting_decision_ack: tuple[str, int, int] | None = None
+        self.error: str | None = None
+        self.load_seconds: float | None = None
+        self.peak_mps_driver_bytes = 0
+
+    def start(self) -> None:
+        if self._thread is not None:
+            raise RuntimeError("planner worker already started")
+        self._thread = threading.Thread(target=self._run, name="qwen-planner", daemon=True)
+        self._thread.start()
+
+    def stop(self, timeout: float = 60.0) -> None:
+        self._stop.set()
+        with self._state:
+            self._state.notify_all()
+        if self._thread is not None:
+            self._thread.join(timeout)
+            if self._thread.is_alive():
+                raise RuntimeError("planner worker did not stop")
+
+    def wait_until_idle(self, timeout: float = 60.0) -> bool:
+        """Wait for both the active inference and queued observation to drain."""
+        deadline = time.monotonic() + timeout
+        with self._state:
+            while (
+                self._inference_active
+                or self._awaiting_decision_ack is not None
+                or not self.observations.empty()
+            ):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._state.wait(remaining)
+            return True
+
+    def begin_episode(self, episode_id: str, timeout: float = 60.0) -> float:
+        """Fence off old work and prepare empty mailboxes before an env reset.
+
+        The generation changes before waiting, so even a request already removed from
+        the observation mailbox cannot publish into the new episode. This barrier is
+        intended only for episode boundaries, never for the MineRL step loop.
+        """
+        if not episode_id:
+            raise ValueError("episode_id must be non-empty")
+        if self._thread is None or not self._thread.is_alive():
+            raise RuntimeError("planner worker is not running")
+
+        started = time.perf_counter()
+        deadline = time.monotonic() + timeout
+        with self._state:
+            if self._transitioning:
+                raise RuntimeError("planner episode transition already in progress")
+            self._transitioning = True
+            self._generation += 1
+            self._episode_id = None
+            self._awaiting_decision_ack = None
+            self.idle.clear()
+            self.observations.clear()
+            self._state.notify_all()
+            try:
+                while self._inference_active:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError("planner did not become idle at episode barrier")
+                    self._state.wait(remaining)
+                self.observations.clear()
+                self.decisions.clear()
+                self._episode_id = episode_id
+                self.idle.set()
+            finally:
+                self._transitioning = False
+                self._state.notify_all()
+        return time.perf_counter() - started
+
+    def acknowledge_decision(
+        self,
+        episode_id: str,
+        observation_tick: int,
+    ) -> None:
+        """Release the worker after the step loop has applied a published decision.
+
+        Observations queued before acknowledgement describe the world before the new
+        action. They are discarded so the next inference starts from a post-action
+        observation. Only the planner thread waits; MineRL stepping never does.
+        """
+        with self._state:
+            expected = self._awaiting_decision_ack
+            actual = (episode_id, observation_tick, self._generation)
+            if expected is None:
+                raise RuntimeError("planner has no decision awaiting acknowledgement")
+            if expected != actual:
+                raise RuntimeError(
+                    f"planner awaits acknowledgement {expected!r}, not {actual!r}"
+                )
+            self.observations.clear()
+            self._awaiting_decision_ack = None
+            self.idle.set()
+            self._state.notify_all()
+
+    def submit(
+        self,
+        episode_id: str,
+        tick: int,
+        pov: np.ndarray,
+        previous_action: dict[str, Any] | None,
+        visual_change: dict[str, Any] | None = None,
+        turning_loop: dict[str, Any] | None = None,
+        repetition: dict[str, Any] | None = None,
+        orientation: dict[str, Any] | None = None,
+        hierarchical_prompt: bool = False,
+    ) -> None:
+        with self._state:
+            if self._transitioning:
+                raise RuntimeError("planner is at an episode barrier")
+            if episode_id != self._episode_id:
+                raise RuntimeError(
+                    f"planner episode is {self._episode_id!r}, not {episode_id!r}"
+                )
+            self.idle.clear()
+            self.observations.publish(
+                ObservationRequest(
+                    episode_id=episode_id,
+                    tick=tick,
+                    pov=np.array(pov, copy=True),
+                    previous_action=previous_action,
+                    visual_change=(
+                        dict(visual_change) if visual_change is not None else None
+                    ),
+                    turning_loop=(
+                        dict(turning_loop) if turning_loop is not None else None
+                    ),
+                    repetition=(dict(repetition) if repetition is not None else None),
+                    orientation=(
+                        dict(orientation) if orientation is not None else None
+                    ),
+                    hierarchical_prompt=bool(hierarchical_prompt),
+                    generation=self._generation,
+                )
+            )
+            self._state.notify_all()
+
+    def _run(self) -> None:
+        try:
+            model, processor = self._load_backend()
+            self.ready.set()
+
+            while True:
+                request: ObservationRequest | None = None
+                with self._state:
+                    while not self._stop.is_set() and request is None:
+                        if self._transitioning or self._awaiting_decision_ack is not None:
+                            self._state.wait(0.1)
+                            continue
+                        candidate = self.observations.take_latest()
+                        if candidate is None:
+                            self.idle.set()
+                            self._state.wait(0.1)
+                            continue
+                        if (
+                            candidate.generation != self._generation
+                            or candidate.episode_id != self._episode_id
+                        ):
+                            if self.observations.empty():
+                                self.idle.set()
+                            self._state.notify_all()
+                            continue
+                        request = candidate
+                        self._inference_active = True
+                        self.idle.clear()
+                    if self._stop.is_set():
+                        break
+
+                try:
+                    raw, elapsed = self._infer(model, processor, request)
+                    parsed = parse_macro_action(raw)
+                    decision = PlannerDecision(
+                        episode_id=request.episode_id,
+                        observation_tick=request.tick,
+                        raw=raw,
+                        action=parsed.action,
+                        accepted=parsed.accepted,
+                        error=parsed.error,
+                        latency_seconds=elapsed,
+                        repetition_feedback=request.repetition is not None,
+                        orientation_feedback=request.orientation is not None,
+                        hierarchical_prompt=request.hierarchical_prompt,
+                    )
+                    with self._state:
+                        if (
+                            not self._stop.is_set()
+                            and not self._transitioning
+                            and request.generation == self._generation
+                            and request.episode_id == self._episode_id
+                        ):
+                            self.decisions.publish(decision)
+                            self._awaiting_decision_ack = (
+                                request.episode_id,
+                                request.tick,
+                                request.generation,
+                            )
+                        self._inference_active = False
+                        if (
+                            self._awaiting_decision_ack is None
+                            and self.observations.empty()
+                        ):
+                            self.idle.set()
+                        self._state.notify_all()
+                    self._update_peak_memory()
+                except BaseException:
+                    with self._state:
+                        self._inference_active = False
+                        if self.observations.empty():
+                            self.idle.set()
+                        self._state.notify_all()
+                    raise
+        except BaseException as error:
+            self.error = repr(error)
+            with self._state:
+                self._inference_active = False
+                self._awaiting_decision_ack = None
+                self.observations.clear()
+                self.idle.set()
+                self._state.notify_all()
+            self.ready.set()
+
+    def _load_backend(self):
+        lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
+        model_path = (ROOT / lock["local_dir"]).resolve()
+        weights = model_path / "model.safetensors"
+        expected_size = lock["files"]["model.safetensors"]["size_bytes"]
+        if not weights.is_file() or weights.stat().st_size != expected_size:
+            raise RuntimeError("locked local Qwen weights are missing or drifted")
+        if not torch.backends.mps.is_available():
+            raise RuntimeError("MPS is required; CPU fallback is disabled")
+
+        started = time.perf_counter()
+        processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
+            model_path,
+            dtype=torch.float16,
+            low_cpu_mem_usage=True,
+            local_files_only=True,
+        ).to("mps")
+        model.eval()
+        model.generation_config.temperature = None
+        model.generation_config.top_p = None
+        model.generation_config.top_k = None
+        torch.mps.synchronize()
+        self.load_seconds = time.perf_counter() - started
+        self.peak_mps_driver_bytes = torch.mps.driver_allocated_memory()
+        return model, processor
+
+    def _infer(self, model, processor, request: ObservationRequest) -> tuple[str, float]:
+        return self._generate(model, processor, request)
+
+    def _update_peak_memory(self) -> None:
+        self.peak_mps_driver_bytes = max(
+            self.peak_mps_driver_bytes, torch.mps.driver_allocated_memory()
+        )
+
+    @staticmethod
+    def _generate(model, processor, request: ObservationRequest) -> tuple[str, float]:
+        image = _prepare_image(request.pov)
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {
+                        "type": "text",
+                        "text": _prompt(
+                            request.previous_action,
+                            request.visual_change,
+                            request.turning_loop,
+                            request.repetition,
+                            request.orientation,
+                            request.hierarchical_prompt,
+                        ),
+                    },
+                ],
+            }
+        ]
+        inputs = processor.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to("mps")
+        if "pixel_values" in inputs:
+            inputs["pixel_values"] = inputs["pixel_values"].to(dtype=torch.float16)
+        torch.mps.synchronize()
+        started = time.perf_counter()
+        with torch.inference_mode():
+            generated = model.generate(
+                **inputs,
+                do_sample=False,
+                max_new_tokens=MAX_NEW_TOKENS,
+                use_cache=True,
+            )
+        torch.mps.synchronize()
+        elapsed = time.perf_counter() - started
+        trimmed = generated[:, inputs["input_ids"].shape[1] :]
+        raw = processor.batch_decode(trimmed, skip_special_tokens=True)[0].strip()
+        return raw, elapsed

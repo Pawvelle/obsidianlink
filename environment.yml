@@ -1,0 +1,10 @@
+name: mc-agent
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10.20
+  - openjdk=8.0.472
+  - pip=24.0
+  - pip:
+      - -r requirements/runtime-lock.txt
