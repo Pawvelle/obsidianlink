@@ -376,3 +376,29 @@ MineRL 安装脚本会联网克隆 `Hexeption/MCP-Reborn@1.16.5-20210115`，随�
 - 外层 `.gitignore` 明确排除 `/vendor/minerl/`。核验确认外层 `git check-ignore` 命中嵌套目录；内层仓库仍位于 `vendor/minerl/.git`，`origin` 保持 `https://github.com/minerllabs/minerl.git`，现有 Apple Silicon/MCP 修改与未跟踪文件完整保留。
 - 修正 `README.md` 中“Phase 1 Gradle 尚未执行”的过期说明，并补充外层/内层仓库边界。
 - 结构迁移前回归：`/opt/anaconda3/bin/conda run -n mc-agent env PYTHONPATH=src python -m unittest discover -s tests -v`，52/52 通过。迁移后新增旧导入兼容性断言并使用同一命令复测，最终 53/53 通过；没有启动 Minecraft、重新构建 MineRL 或重新下载模型。
+
+## 2026-07-17 — Phase 5 第七变量：受限前向探测恢复宏
+
+### 固定边界与实现
+
+- A/B 两组都保留画面变化反馈、安全相机恢复与异步 decision-ack。B 组唯一变化是：最近连续 2 个观察窗口均为 `LOW`，且当前已接受模型动作仍为语义 no-op 时，将该次相机恢复替换为 1 tick `move_forward`。
+- 探针固定 camera pitch/yaw=0、attack/jump/sprint=false，经同一动作白名单、`limit_macro_action` 和 executor 二次限幅；有效模型动作永不覆盖。每次处理触发后立即清零连续 LOW 计数，必须重新取得两个 LOW 窗口才可再次触发。
+- 门控、动作选择、画面变化跟踪与 Qwen worker 相互独立；探针状态只进入结构化事件和验收指标，没有额外加入模型提示。MineRL step loop 继续独立推进，从不等待 Qwen。
+- 新增 `phase5-forward-probe-ab` runner/CLI、实际前进 tick、处理机会/应用/安全、后续画面变化与门控 streak 指标。规划边界提交为 `cda87d2`，实现检查点提交为 `ae4ec52`。
+
+### 单元测试与真实单-seed 预检
+
+- 测试命令：`/opt/anaconda3/bin/conda run -n mc-agent env PYTHONPATH=src python -m unittest discover -s tests -v`；57/57 通过。新增覆盖探针严格 1 tick 与所有修饰键关闭、连续 2 个 LOW 后才 eligible、consume/reset 后必须取得新窗口、非法输入拒绝，以及只替换语义 no-op、有效模型前进动作保持原样。
+- `py_compile` 与 `python -m mc_agent.cli phase5-forward-probe-ab --help` 自检通过；没有下载模型、修改依赖或触发 Gradle 构建。
+- 预检命令：`/opt/anaconda3/bin/conda run -n mc-agent env PYTHONPATH=src python -m mc_agent.cli phase5-forward-probe-ab --seeds 5101 --ticks 800 --observation-interval 40`。
+- 结果目录：`artifacts/phase5/forward-probe-ab/20260717-152510`。A/B 各完成 800 tick、20 个 observation；A 组 6/6 决策 accepted 且 6/6 decision/ack 配对，B 组 4/4 accepted 且 4/4 配对。两组 stale=0、`ESC=0`、planner error 为空，均自动 close。
+- A 组 4/4 个语义 no-op 均执行安全相机恢复，执行无效率 0；实际前进 tick 为 0，no-op tick 率 99.25%，低变化率 8/19（42.11%），总推理计算 30.311 秒。
+- B 组 2/2 个语义 no-op 均恢复，其中连续 LOW 门在 applied tick 574 识别 1 个合格机会；实际执行仅 tick 575 的 1 tick `move_forward`，tick 574/576/577 的 forward 均为 0。动作 camera=0、attack/jump/sprint/ESC=false，unsafe=0、有效模型动作覆盖=0。
+- 探针后的下一观察 tick 600 为 `CHANGED`，后续变化门 1/1 通过；B 组实际前进 tick 为 1、低变化率仍为 8/19（42.11%），总推理计算 33.799 秒，A/B 成本比 1.115，均满足冻结门。
+- 唯一失败项是 no-op tick 率：B 为 99.50%，高于 A 的 99.25%，没有满足“下降”。因此 summary `accepted=true` 但 `advance_recommended=false`，按预先约定不启动三-seed 正式 A/B，也不在结果后修改门槛。
+- 日志审计确认 `stdout.log` 与 `summary.json` 完全一致、`stderr.log` 为 0 字节、44 张 PNG 齐全；summary SHA-256 为 `7d381b5c8c9b818d4f65d1d18b61c4b153ee707b93b69b62e54d487c297343b4`。退出后未发现 Minecraft、MineRL、GradleStart、Qwen planner 或本实验 CLI 残留进程。
+- 人工复核 B 组 tick 560/600 与首尾帧：探针后视点有轻微位置变化，与 1 个前进 tick 和 `CHANGED` 检测一致；没有持续探索或洞穴证据，不能视为任务成功。
+
+### 第七变量与 Phase 5 结论
+
+**完成预检但不保留，Phase 5 总验收仍不通过。** 受限前向动作的触发、执行安全、画面跟踪和非阻塞链路均可验证，但单次 1-tick 探针没有降低 no-op tick 率，预设预检门已否决本变量，因此不消耗三-seed 正式预算。保留实现与失败资产供回归，行为基线仍为画面变化反馈、安全相机恢复和异步 decision-ack。当前停留在 Phase 5，等待用户明确批准新的 Phase 5 规划扩展；不得进入 Phase 6。
