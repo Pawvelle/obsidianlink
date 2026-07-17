@@ -11,6 +11,7 @@ from mc_agent.actions import MacroAction
 from mc_agent.env import MineRLEnvAdapter
 from mc_agent.agent import (
     TARGET_TICK_SECONDS,
+    _episode_passes_gate,
     _macro_action_has_effect,
     _select_executed_action,
     _tick_sleep_seconds,
@@ -23,6 +24,7 @@ class FakeEnv:
         self.action_space = MINERL_BASALT_FIND_CAVES_ENV_SPEC.action_space
         self.closed = False
         self.seed_value = None
+        self.render_modes = []
 
     def seed(self, seed):
         self.seed_value = seed
@@ -32,6 +34,9 @@ class FakeEnv:
 
     def step(self, action):
         return self.reset(), 0.0, False, {"ok": True}
+
+    def render(self, mode="human"):
+        self.render_modes.append(mode)
 
     def close(self):
         self.closed = True
@@ -79,6 +84,11 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "integer"):
             self.adapter.seed(True)
 
+    def test_render_is_forwarded_on_owner_thread(self):
+        self.adapter.reset()
+        self.adapter.render()
+        self.assertEqual(self.fake.render_modes, ["human"])
+
 
 class LoggerTests(unittest.TestCase):
     def test_logger_writes_config_events_and_metrics(self):
@@ -123,6 +133,28 @@ class Phase4PacingTests(unittest.TestCase):
         unchanged, applied = _select_executed_action(forward, 1)
         self.assertEqual(unchanged, forward)
         self.assertFalse(applied)
+
+    def test_episode_gate_requires_model_driven_forward_progress(self):
+        passing = {
+            "completed_ticks": 800,
+            "tick_budget": 800,
+            "early_done": False,
+            "effective_decisions": 2,
+            "model_forward_decisions": 1,
+            "forward_ticks": 6,
+            "esc_nonzero": 0,
+            "planner_error": None,
+        }
+        self.assertTrue(_episode_passes_gate(**passing))
+        for field, value in (
+            ("effective_decisions", 0),
+            ("model_forward_decisions", 0),
+            ("forward_ticks", 0),
+            ("esc_nonzero", 1),
+            ("planner_error", "failed"),
+        ):
+            case = {**passing, field: value}
+            self.assertFalse(_episode_passes_gate(**case), field)
 
 
 if __name__ == "__main__":

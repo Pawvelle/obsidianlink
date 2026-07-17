@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import queue
+import re
 import threading
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -20,6 +21,7 @@ ALLOWED_KEYS = {
     "attack",
     "jump",
     "sprint",
+    "cave_visible",
     "reason",
 }
 ALLOWED_CAMERA_KEYS = {"pitch", "yaw"}
@@ -34,6 +36,7 @@ class MacroAction:
     attack: bool = False
     jump: bool = False
     sprint: bool = False
+    cave_visible: bool = False
     reason: str = ""
 
     @classmethod
@@ -79,6 +82,7 @@ def limit_macro_action(action: MacroAction) -> MacroAction:
         attack = _boolean(action.attack, "attack")
         jump = _boolean(action.jump, "jump")
         sprint = _boolean(action.sprint, "sprint")
+        cave_visible = _boolean(action.cave_visible, "cave_visible")
         if not isinstance(action.reason, str):
             raise ValueError("reason must be string")
         return MacroAction(
@@ -89,6 +93,7 @@ def limit_macro_action(action: MacroAction) -> MacroAction:
             attack=attack,
             jump=jump,
             sprint=sprint,
+            cave_visible=cave_visible,
             reason=action.reason[:160],
         )
     except (TypeError, ValueError) as error:
@@ -122,11 +127,12 @@ def parse_macro_action(raw: str) -> ParseResult:
             raise ValueError(f"unknown camera fields: {sorted(unknown_camera)}")
         pitch = _clamp(_number(camera.get("pitch", 0.0), "camera.pitch"), -30, 30)
         yaw = _clamp(_number(camera.get("yaw", 0.0), "camera.yaw"), -30, 30)
+        if action_name in {"look", "turn"} and pitch == 0.0 and yaw == 0.0:
+            raise ValueError("look and turn require a non-zero camera angle")
 
         reason = value.get("reason", "")
         if not isinstance(reason, str):
             raise ValueError("reason must be a string")
-
         parsed = MacroAction(
             action=action_name,
             duration_ticks=duration,
@@ -135,6 +141,10 @@ def parse_macro_action(raw: str) -> ParseResult:
             attack=_boolean(value.get("attack", False), "attack"),
             jump=_boolean(value.get("jump", False), "jump"),
             sprint=_boolean(value.get("sprint", False), "sprint"),
+            cave_visible=_boolean(
+                value.get("cave_visible", False),
+                "cave_visible",
+            ),
             reason=reason[:160],
         )
         return ParseResult(action=limit_macro_action(parsed), accepted=True)
@@ -145,6 +155,20 @@ def parse_macro_action(raw: str) -> ParseResult:
             accepted=False,
             error=message,
         )
+
+
+def is_cave_candidate(action: MacroAction) -> bool:
+    """Require a cave claim to carry minimal visible-evidence words."""
+    if not action.cave_visible:
+        return False
+    words = set(re.findall(r"[a-z]+", action.reason.lower()))
+    evidence_groups = (
+        ("dark", "black"),
+        ("stone", "rock", "rocky"),
+        ("opening", "entrance", "mouth"),
+        ("left", "center", "right", "ahead"),
+    )
+    return all(words.intersection(group) for group in evidence_groups)
 
 
 class LatestActionMailbox:
@@ -270,6 +294,7 @@ __all__ = [
     "MacroExecutor",
     "ParseResult",
     "Watchdog",
+    "is_cave_candidate",
     "limit_macro_action",
     "parse_macro_action",
     "safe_camera_recovery",

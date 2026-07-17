@@ -402,3 +402,23 @@ MineRL 安装脚本会联网克隆 `Hexeption/MCP-Reborn@1.16.5-20210115`，随�
 ### 第七变量与 Phase 5 结论
 
 **完成预检但不保留，Phase 5 总验收仍不通过。** 受限前向动作的触发、执行安全、画面跟踪和非阻塞链路均可验证，但单次 1-tick 探针没有降低 no-op tick 率，预设预检门已否决本变量，因此不消耗三-seed 正式预算。保留实现与失败资产供回归，行为基线仍为画面变化反馈、安全相机恢复和异步 decision-ack。当前停留在 Phase 5，等待用户明确批准新的 Phase 5 规划扩展；不得进入 Phase 6。
+
+## 2026-07-17 — Agent 实时观察窗口
+
+- 定位到现有 MineRL/MCP 客户端以 `GLFW_VISIBLE=false` 创建原生 Minecraft
+  窗口；后台渲染和 Agent 执行正常，但 Java Dock 图标不会提供可见游戏窗口。
+- 为个人版入口增加可选 `--watch` 参数，复用 MineRL 已有的 `render(mode="human")`
+  实时显示 `MineRL Render` 第一人称窗口。渲染只在环境 owner thread、每次 reset
+  后和 MineRL step 后执行；默认关闭，不改变 Qwen worker、动作协议、step loop
+  并发关系或既有无窗口运行。
+- README 已改为使用 `--watch` 的单回合观察命令，并说明终止方式。没有修改或
+  重新构建 `vendor/minerl`，没有更换依赖或模型。
+- 静态检查：`python -m py_compile` 通过；`python -m mc_agent.main --help`
+  已列出 `--watch`；完整单元测试 43/43 通过，新增 owner-thread render 转发覆盖。
+- 两次直接调用环境 Python 的真实检查没有完整继承 Conda/JDK 启动环境，均在
+  MineRL mission reset 的既有空回复问题处退出；没有据此修改代码。改用项目固定的
+  `/opt/anaconda3/bin/conda run --no-capture-output -n mc-agent ...` 后原样通过。
+- 最终可视单回合目录：`runs/episodes/20260717-213029`。配置记录
+  `live_view=true`，完成 800/800 ticks，7/7 决策 accepted、6 个模型前进决策、
+  46 个 forward ticks、stale=0、`ESC=0`、planner error 为空，顶层
+  `accepted=true`；`--watch` 渲染路径贯穿 reset 与全部 step，运行正常退出。

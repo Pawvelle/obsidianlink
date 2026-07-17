@@ -62,6 +62,11 @@ class MineRLEnvAdapter:
         self._validate_observation(observation)
         return StepResult(observation, float(reward), bool(done), dict(info))
 
+    def render(self) -> None:
+        """Show MineRL's live POV window on the environment owner thread."""
+        self._assert_owner()
+        self._env.render(mode="human")
+
     def close(self) -> None:
         if self._env is None:
             return

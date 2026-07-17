@@ -18,6 +18,7 @@ from mc_agent.actions import (
     MacroAction,
     MacroExecutor,
     Watchdog,
+    is_cave_candidate,
     safe_camera_recovery,
 )
 from mc_agent.env import MineRLEnvAdapter
@@ -64,6 +65,7 @@ def _action_context(action: MacroAction) -> dict[str, Any]:
         "attack": action.attack,
         "jump": action.jump,
         "sprint": action.sprint,
+        "cave_visible": action.cave_visible,
     }
 
 
@@ -87,6 +89,29 @@ def _select_executed_action(
     return action, False
 
 
+def _episode_passes_gate(
+    *,
+    completed_ticks: int,
+    tick_budget: int,
+    early_done: bool,
+    effective_decisions: int,
+    model_forward_decisions: int,
+    forward_ticks: int,
+    esc_nonzero: int,
+    planner_error: str | None,
+) -> bool:
+    """Require observable model-driven progress, not merely valid JSON."""
+    return (
+        completed_ticks == tick_budget
+        and not early_done
+        and effective_decisions >= 1
+        and model_forward_decisions >= 1
+        and forward_ticks >= 1
+        and esc_nonzero == 0
+        and planner_error is None
+    )
+
+
 def _run_episode(
     adapter: MineRLEnvAdapter,
     planner: QwenPlannerWorker,
@@ -98,6 +123,7 @@ def _run_episode(
     *,
     episode_id_override: str | None = None,
     seed: int | None = None,
+    watch: bool = False,
 ) -> dict[str, Any]:
     episode_id = episode_id_override or f"episode-{episode_index:02d}"
     run_dir = session_dir / episode_id
@@ -111,8 +137,10 @@ def _run_episode(
             "observation_interval": observation_interval,
             "target_ticks_per_second": TARGET_TICKS_PER_SECOND,
             "planner": "Qwen3-VL-2B-Instruct MPS/FP16, asynchronous",
+            "live_view": watch,
             "visual_change_feedback": True,
             "safe_camera_recovery": True,
+            "acceptance_requires_model_forward": True,
             "esc_policy": "always disabled; manual termination policy not enabled",
         },
     )
@@ -136,6 +164,7 @@ def _run_episode(
     forward_ticks = 0
     decisions = 0
     accepted_decisions = 0
+    model_forward_decisions = 0
     rejected_decisions = 0
     ineffective_decisions = 0
     executed_ineffective_decisions = 0
@@ -153,6 +182,10 @@ def _run_episode(
     recovery_followup_pending = False
     recovery_followup_decisions = 0
     recovery_followup_effective_decisions = 0
+    cave_candidate_decisions = 0
+    raw_cave_visible_decisions = 0
+    cave_candidate_observation_ticks: list[int] = []
+    cave_candidate_evidence: list[str] = []
     previous_action_context: dict[str, Any] | None = None
     barrier_seconds = 0.0
     started = time.perf_counter()
@@ -170,6 +203,8 @@ def _run_episode(
         if seed is not None:
             adapter.seed(seed)
         observation = adapter.reset()
+        if watch:
+            adapter.render()
         change_detector.reset(observation["pov"])
         Image.fromarray(observation["pov"]).save(run_dir / "initial.png")
         logger.event("reset", pov_shape=list(observation["pov"].shape), seed=seed)
@@ -208,11 +243,31 @@ def _run_episode(
                     decision_latencies.append(decision.latency_seconds)
                     action_to_execute = decision.action
                     recovery_applied = False
+                    cave_candidate_validated = False
                     if decision.accepted:
                         accepted_decisions += 1
                         has_effect = _macro_action_has_effect(decision.action)
                         ineffective_decisions += int(not has_effect)
-                        action_signatures.append(_action_signature(decision))
+                        if has_effect:
+                            action_signatures.append(_action_signature(decision))
+                        model_forward_decisions += int(
+                            decision.action.action == "move_forward"
+                        )
+                        raw_cave_visible_decisions += int(
+                            decision.action.cave_visible
+                        )
+                        cave_candidate_validated = is_cave_candidate(
+                            decision.action
+                        )
+                        if cave_candidate_validated:
+                            cave_candidate_decisions += 1
+                            cave_candidate_observation_ticks.append(
+                                decision.observation_tick
+                            )
+                            cave_candidate_evidence.append(
+                                "decision_frames/"
+                                f"tick-{decision.observation_tick:04d}.png"
+                            )
                         if recovery_followup_pending:
                             recovery_followup_decisions += 1
                             recovery_followup_effective_decisions += int(has_effect)
@@ -251,6 +306,8 @@ def _run_episode(
                         executed_has_effect=executed_has_effect,
                         recovery_opportunity=decision.accepted and not has_effect,
                         recovery_applied=recovery_applied,
+                        cave_visible=decision.action.cave_visible,
+                        cave_candidate_validated=cave_candidate_validated,
                         raw=decision.raw,
                         parsed=decision.action.to_log_dict(),
                         executed=action_to_execute.to_log_dict(),
@@ -301,6 +358,8 @@ def _run_episode(
             esc_nonzero += int(bool(tick_action["ESC"]))
             step_started = time.perf_counter()
             step = adapter.step(tick_action)
+            if watch:
+                adapter.render()
             step_elapsed = time.perf_counter() - step_started
             step_latencies.append(step_elapsed)
             completed_ticks += 1
@@ -365,12 +424,16 @@ def _run_episode(
         raise
 
     elapsed = time.perf_counter() - started
-    accepted = (
-        completed_ticks == tick_budget
-        and not early_done
-        and accepted_decisions >= 1
-        and esc_nonzero == 0
-        and planner.error is None
+    effective_decisions = accepted_decisions - ineffective_decisions
+    accepted = _episode_passes_gate(
+        completed_ticks=completed_ticks,
+        tick_budget=tick_budget,
+        early_done=early_done,
+        effective_decisions=effective_decisions,
+        model_forward_decisions=model_forward_decisions,
+        forward_ticks=forward_ticks,
+        esc_nonzero=esc_nonzero,
+        planner_error=planner.error,
     )
     metrics = {
         "accepted": accepted,
@@ -384,7 +447,8 @@ def _run_episode(
         "planner_decisions": decisions,
         "accepted_decisions": accepted_decisions,
         "rejected_decisions": rejected_decisions,
-        "effective_decisions": accepted_decisions - ineffective_decisions,
+        "effective_decisions": effective_decisions,
+        "model_forward_decisions": model_forward_decisions,
         "ineffective_decisions": ineffective_decisions,
         "ineffective_decision_rate": (
             ineffective_decisions / accepted_decisions if accepted_decisions else None
@@ -452,6 +516,10 @@ def _run_episode(
         ),
         "recovery_followup_pending_at_end": recovery_followup_pending,
         "recovery_action_signatures": sorted(set(recovery_action_signatures)),
+        "cave_candidate_decisions": cave_candidate_decisions,
+        "raw_cave_visible_decisions": raw_cave_visible_decisions,
+        "cave_candidate_observation_ticks": cave_candidate_observation_ticks,
+        "cave_candidate_evidence": cave_candidate_evidence,
         "peak_process_rss_bytes": peak_rss,
         "minimum_system_available_bytes": minimum_available,
         "esc_nonzero_ticks": esc_nonzero,
@@ -462,8 +530,16 @@ def _run_episode(
             "required": True,
             "status": "pending",
             "cave_found": None,
-            "evidence": ["initial.png", "final.png", "decision_frames/"],
-            "note": "ESC was disabled; tick-budget completion is not task success.",
+            "evidence": [
+                "initial.png",
+                "final.png",
+                "decision_frames/",
+                *cave_candidate_evidence,
+            ],
+            "note": (
+                "Cave candidates require frame review; tick-budget completion is not "
+                "FindCave task success."
+            ),
         },
     }
     logger.finish(metrics)
@@ -475,6 +551,7 @@ def run_agent(
     ticks: int = 240,
     observation_interval: int = 40,
     output_root: Path | None = None,
+    watch: bool = False,
 ) -> dict[str, Any]:
     if episodes < 1 or ticks < 1 or observation_interval < 1:
         raise ValueError("episodes, ticks, and observation_interval must be positive")
@@ -504,6 +581,7 @@ def run_agent(
                         ticks,
                         observation_interval,
                         stop_all,
+                        watch=watch,
                     )
                 )
     finally:
@@ -520,11 +598,28 @@ def run_agent(
     total_accepted_decisions = sum(
         result.get("accepted_decisions", 0) for result in results
     )
+    total_effective_decisions = sum(
+        result.get("effective_decisions", 0) for result in results
+    )
+    total_model_forward_decisions = sum(
+        result.get("model_forward_decisions", 0) for result in results
+    )
+    total_forward_ticks = sum(result.get("forward_ticks", 0) for result in results)
+    total_cave_candidate_decisions = sum(
+        result.get("cave_candidate_decisions", 0) for result in results
+    )
+    cave_candidate_episodes = [
+        result["episode_id"]
+        for result in results
+        if result.get("cave_candidate_decisions", 0) > 0
+    ]
     summary = {
         "accepted": (
             len(results) == episodes
             and all(result["accepted"] for result in results)
-            and total_accepted_decisions >= episodes
+            and total_effective_decisions >= episodes
+            and total_model_forward_decisions >= episodes
+            and total_forward_ticks >= episodes
             and len(signatures) >= 2
         ),
         "session_dir": str(session_dir),
@@ -537,13 +632,21 @@ def run_agent(
         "planner_error": planner.error,
         "total_planner_decisions": total_decisions,
         "total_accepted_decisions": total_accepted_decisions,
+        "total_effective_decisions": total_effective_decisions,
+        "total_model_forward_decisions": total_model_forward_decisions,
+        "total_forward_ticks": total_forward_ticks,
+        "total_cave_candidate_decisions": total_cave_candidate_decisions,
+        "cave_candidate_episodes": cave_candidate_episodes,
         "unique_action_signatures": signatures,
         "model_changed_action": len(signatures) >= 2,
         "episodes": results,
         "manual_review": {
             "required": True,
             "status": "pending",
-            "note": "BASALT has no reliable task-success reward; review saved frames.",
+            "note": (
+                "BASALT has no reliable task-success reward; review cave candidate "
+                "frames before marking FindCave complete."
+            ),
         },
     }
     (session_dir / "summary.json").write_text(
@@ -552,5 +655,7 @@ def run_agent(
     )
     print(json.dumps(summary, indent=2))
     if not summary["accepted"]:
-        raise RuntimeError("Agent run did not pass its replayability/action-change gate")
+        raise RuntimeError(
+            "Agent run did not pass its forward-progress/action-change gate"
+        )
     return summary

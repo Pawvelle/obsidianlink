@@ -16,7 +16,8 @@ from mc_agent.qwen import (
 VALID_ACTION = (
     '{"action":"look","duration_ticks":10,'
     '"camera":{"pitch":0,"yaw":15},"attack":false,'
-    '"jump":false,"sprint":false,"reason":"visible open route"}'
+    '"jump":false,"sprint":false,"cave_visible":false,'
+    '"reason":"visible open route"}'
 )
 
 
