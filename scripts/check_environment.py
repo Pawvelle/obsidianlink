@@ -17,7 +17,7 @@ from transformers import Qwen3VLForConditionalGeneration
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCK_PATH = ROOT / "config" / "model.lock.json"
+LOCK_PATH = ROOT / "model.lock.json"
 
 
 def sha256(path: Path) -> str:
@@ -63,7 +63,7 @@ def main() -> int:
     if not model_path.is_file():
         raise FileNotFoundError(model_path)
     if model_path.stat().st_size != expected["size_bytes"]:
-        raise RuntimeError("Model size does not match config/model.lock.json")
+        raise RuntimeError("Model size does not match model.lock.json")
     print(f"model_size={model_path.stat().st_size}")
 
     if args.verify_model:

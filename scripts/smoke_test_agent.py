@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
-"""Offline protocol check for the asynchronous Phase-4 planner."""
+"""Offline protocol check for the asynchronous Qwen planner."""
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 import time
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-from mc_agent.planner import QwenPlannerWorker
-
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from mc_agent.qwen import QwenPlannerWorker  # noqa: E402
 
 
 def main() -> int:
-    pov = np.asarray(Image.open(ROOT / "artifacts/phase1/findcave-reset.png").convert("RGB"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--frame",
+        type=Path,
+        default=ROOT / "runs" / "smoke" / "findcave-reset.png",
+    )
+    args = parser.parse_args()
+    pov = np.asarray(Image.open(args.frame).convert("RGB"))
     worker = QwenPlannerWorker()
     worker.start()
     try:
@@ -35,6 +45,10 @@ def main() -> int:
             decision = worker.decisions.take_latest(timeout=0.1)
         if decision is None:
             raise TimeoutError("planner did not produce a decision")
+        worker.acknowledge_decision(
+            decision.episode_id,
+            decision.observation_tick,
+        )
         result = {
             "accepted": decision.accepted,
             "raw": decision.raw,

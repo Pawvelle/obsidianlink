@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ID="Qwen/Qwen3-VL-2B-Instruct"
-REVISION="89644892e4d85e24eaac8bacfd4f463576704203"
-LOCAL_DIR="models/Qwen3-VL-2B-Instruct"
-EXPECTED_SHA256="7de1838c87a5349b016c26a1c3f7d2bc400a3d485f95ef39a7059ffd734977a0"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOCK_FILE="$ROOT_DIR/model.lock.json"
+cd "$ROOT_DIR"
+
+REPO_ID="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["repo_id"])' "$LOCK_FILE")"
+REVISION="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["revision"])' "$LOCK_FILE")"
+LOCAL_DIR="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["local_dir"])' "$LOCK_FILE")"
+EXPECTED_SHA256="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["files"]["model.safetensors"]["sha256"])' "$LOCK_FILE")"
 
 hf download "$REPO_ID" \
   --revision "$REVISION" \

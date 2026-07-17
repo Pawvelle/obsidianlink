@@ -18,8 +18,8 @@ from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 from mc_agent.actions import MacroAction, parse_macro_action
 
 
-ROOT = Path(__file__).resolve().parents[3]
-LOCK_PATH = ROOT / "config" / "model.lock.json"
+ROOT = Path(__file__).resolve().parents[1]
+LOCK_PATH = ROOT / "model.lock.json"
 IMAGE_SIZE = (336, 336)
 MAX_NEW_TOKENS = 72
 
@@ -31,10 +31,6 @@ class ObservationRequest:
     pov: np.ndarray
     previous_action: dict[str, Any] | None
     visual_change: dict[str, Any] | None = None
-    turning_loop: dict[str, Any] | None = None
-    repetition: dict[str, Any] | None = None
-    orientation: dict[str, Any] | None = None
-    hierarchical_prompt: bool = False
     generation: int = 0
 
 
@@ -47,9 +43,6 @@ class PlannerDecision:
     accepted: bool
     error: str | None
     latency_seconds: float
-    repetition_feedback: bool = False
-    orientation_feedback: bool = False
-    hierarchical_prompt: bool = False
 
 
 T = TypeVar("T")
@@ -112,10 +105,6 @@ def _prepare_image(pov: np.ndarray) -> Image.Image:
 def _prompt(
     previous_action: dict[str, Any] | None,
     visual_change: dict[str, Any] | None = None,
-    turning_loop: dict[str, Any] | None = None,
-    repetition: dict[str, Any] | None = None,
-    orientation: dict[str, Any] | None = None,
-    hierarchical_prompt: bool = False,
 ) -> str:
     previous = json.dumps(previous_action, separators=(",", ":")) if previous_action else "none"
     prompt = (
@@ -141,17 +130,6 @@ def _prompt(
         f"false in this baseline. Previous accepted action: {previous}"
     )
     feedback: list[str] = []
-    if hierarchical_prompt:
-        feedback.append(
-            "Use this fixed decision hierarchy internally: (1) OBSERVE left, center, "
-            "and right routes and their visible hazards; (2) ASSESS which visible route "
-            "is safest and treat center as unsafe only when a specific visible hazard "
-            "blocks it; (3) ACT: when no specific center hazard is visible, you MUST use "
-            "move_forward with duration 6 for uneven ground or 16 for a clear route. "
-            "A turn/look is allowed only when the reason names the center hazard and the "
-            "camera is non-zero. Do not output these stages; return only the required "
-            "JSON object."
-        )
     if visual_change is not None:
         low_change = bool(visual_change["low_change"])
         if low_change:
@@ -162,32 +140,6 @@ def _prompt(
         else:
             change_signal = "CHANGED; re-evaluate the current image."
         feedback.append(f"Visual-change signal: {change_signal}")
-    if turning_loop is not None and bool(turning_loop["active"]):
-        feedback.append(
-            "Turning-loop signal: ACTIVE; recent effective actions were yaw-only. "
-            "Move forward if the center is visibly safe; otherwise make one decisive turn."
-        )
-    if repetition is not None and bool(repetition["active"]):
-        action_name = str(repetition["last_action"])
-        feedback.append(
-            f"Repeat penalty: the action field MUST NOT be {action_name} this time. "
-            "If the center is visibly safe, use move_forward; otherwise choose a "
-            "different safe action."
-        )
-    if orientation is not None and bool(orientation["active"]):
-        heading = int(orientation["heading"])
-        suggested_yaw = int(orientation["suggested_yaw"])
-        recent = orientation.get("recent_views", [])[-3:]
-        recent_text = ",".join(
-            f"{int(view['heading']):+d}:{'LOW' if view['low_change'] else 'CHANGED'}"
-            for view in recent
-        )
-        feedback.append(
-            f"Orientation memory: relative heading {heading:+d} degrees; recent "
-            f"headings {recent_text}. If center is visibly safe, use move_forward; "
-            f"otherwise prefer one safe yaw {suggested_yaw:+d} turn toward the less-visited "
-            "neighbor and avoid recent LOW headings."
-        )
     if not feedback:
         return prompt
     return f"{prompt} {' '.join(feedback)} Keep reason under 12 words."
@@ -313,10 +265,6 @@ class QwenPlannerWorker:
         pov: np.ndarray,
         previous_action: dict[str, Any] | None,
         visual_change: dict[str, Any] | None = None,
-        turning_loop: dict[str, Any] | None = None,
-        repetition: dict[str, Any] | None = None,
-        orientation: dict[str, Any] | None = None,
-        hierarchical_prompt: bool = False,
     ) -> None:
         with self._state:
             if self._transitioning:
@@ -335,14 +283,6 @@ class QwenPlannerWorker:
                     visual_change=(
                         dict(visual_change) if visual_change is not None else None
                     ),
-                    turning_loop=(
-                        dict(turning_loop) if turning_loop is not None else None
-                    ),
-                    repetition=(dict(repetition) if repetition is not None else None),
-                    orientation=(
-                        dict(orientation) if orientation is not None else None
-                    ),
-                    hierarchical_prompt=bool(hierarchical_prompt),
                     generation=self._generation,
                 )
             )
@@ -390,9 +330,6 @@ class QwenPlannerWorker:
                         accepted=parsed.accepted,
                         error=parsed.error,
                         latency_seconds=elapsed,
-                        repetition_feedback=request.repetition is not None,
-                        orientation_feedback=request.orientation is not None,
-                        hierarchical_prompt=request.hierarchical_prompt,
                     )
                     with self._state:
                         if (
@@ -480,10 +417,6 @@ class QwenPlannerWorker:
                         "text": _prompt(
                             request.previous_action,
                             request.visual_change,
-                            request.turning_loop,
-                            request.repetition,
-                            request.orientation,
-                            request.hierarchical_prompt,
                         ),
                     },
                 ],

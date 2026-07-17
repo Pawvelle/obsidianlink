@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 
 from mc_agent.actions import MacroAction
-from mc_agent.planner import (
+from mc_agent.qwen import (
     LatestDecisionMailbox,
     LatestObservationMailbox,
     ObservationRequest,
@@ -152,12 +152,10 @@ class PlannerMailboxTests(unittest.TestCase):
                 80,
                 frame,
                 {"action": "look"},
-                hierarchical_prompt=True,
             )
             second = worker.decisions.take_latest(timeout=1)
             self.assertIsNotNone(second)
             self.assertEqual(second.observation_tick, 80)
-            self.assertTrue(second.hierarchical_prompt)
             worker.acknowledge_decision(
                 second.episode_id,
                 second.observation_tick,

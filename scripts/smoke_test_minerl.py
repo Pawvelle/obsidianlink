@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase-1 smoke tests for the pinned MineRL FindCave environment."""
+"""Smoke tests for the pinned MineRL FindCave environment."""
 
 import argparse
 import json
@@ -84,7 +84,7 @@ def main():
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("artifacts/phase1/findcave-reset.png"),
+        default=Path("runs/smoke/findcave-reset.png"),
     )
     parser.add_argument("--steps", type=int, default=10)
     args = parser.parse_args()

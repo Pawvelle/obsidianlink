@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import json
 import math
+import queue
+import threading
 from dataclasses import asdict, dataclass
 from typing import Any
+
+import numpy as np
 
 
 ALLOWED_ACTIONS = {"wait", "look", "turn", "move_forward"}
@@ -141,3 +145,132 @@ def parse_macro_action(raw: str) -> ParseResult:
             accepted=False,
             error=message,
         )
+
+
+class LatestActionMailbox:
+    """Capacity-one mailbox in which a newer action replaces the old one."""
+
+    def __init__(self):
+        self._queue: queue.Queue[MacroAction] = queue.Queue(maxsize=1)
+
+    def publish(self, action: MacroAction) -> None:
+        try:
+            self._queue.put_nowait(action)
+            return
+        except queue.Full:
+            pass
+        try:
+            self._queue.get_nowait()
+        except queue.Empty:
+            pass
+        self._queue.put_nowait(action)
+
+    def take_latest(self) -> MacroAction | None:
+        try:
+            return self._queue.get_nowait()
+        except queue.Empty:
+            return None
+
+
+class Watchdog:
+    """Immediate, thread-safe stop signal for the environment loop."""
+
+    def __init__(self, max_ticks: int | None = None):
+        self.max_ticks = max_ticks
+        self.ticks = 0
+        self._stop = threading.Event()
+        self.reason: str | None = None
+
+    @property
+    def should_stop(self) -> bool:
+        return self._stop.is_set() or (
+            self.max_ticks is not None and self.ticks >= self.max_ticks
+        )
+
+    def request_stop(self, reason: str = "requested") -> None:
+        self.reason = reason
+        self._stop.set()
+
+    def after_tick(self) -> None:
+        self.ticks += 1
+        if self.max_ticks is not None and self.ticks >= self.max_ticks:
+            self.reason = self.reason or "max_ticks"
+
+
+class MacroExecutor:
+    """Translate a bounded macro-action into deterministic MineRL ticks."""
+
+    def __init__(self, action_space: Any, watchdog: Watchdog | None = None):
+        self.action_space = action_space
+        self.watchdog = watchdog
+        self.current = MacroAction.no_op("initial")
+        self.elapsed_ticks = self.current.duration_ticks
+
+    @property
+    def needs_action(self) -> bool:
+        return self.elapsed_ticks >= self.current.duration_ticks
+
+    def submit(self, action: MacroAction) -> None:
+        self.current = limit_macro_action(action)
+        self.elapsed_ticks = 0
+
+    def interrupt(self, reason: str = "interrupt") -> None:
+        self.current = MacroAction.no_op(reason)
+        self.elapsed_ticks = self.current.duration_ticks
+
+    def next_tick(self) -> dict[str, Any]:
+        if self.watchdog is not None and self.watchdog.should_stop:
+            self.interrupt(self.watchdog.reason or "watchdog")
+            return self._no_op()
+        if self.needs_action:
+            return self._no_op()
+
+        tick = self._no_op()
+        action = self.current
+        first_tick = self.elapsed_ticks == 0
+        if action.action == "move_forward":
+            tick["forward"] = 1
+        if first_tick and action.action in {"look", "turn", "move_forward"}:
+            tick["camera"] = np.asarray(
+                [action.camera_pitch, action.camera_yaw], dtype=np.float32
+            )
+        tick["attack"] = int(action.attack)
+        tick["jump"] = int(action.jump)
+        tick["sprint"] = int(action.sprint and action.action == "move_forward")
+        tick["ESC"] = 0
+        self.elapsed_ticks += 1
+        return tick
+
+    def _no_op(self) -> dict[str, Any]:
+        tick = self.action_space.no_op()
+        tick["ESC"] = 0
+        return tick
+
+
+def safe_camera_recovery(index: int) -> MacroAction:
+    """Return an alternating one-tick camera sweep with no interaction keys."""
+    if type(index) is not int or index < 0:
+        raise ValueError("recovery index must be a non-negative integer")
+    yaw = 20.0 if index % 2 == 0 else -20.0
+    return limit_macro_action(
+        MacroAction(
+            action="look",
+            duration_ticks=1,
+            camera_pitch=0.0,
+            camera_yaw=yaw,
+            attack=False,
+            jump=False,
+            sprint=False,
+            reason="deterministic safe camera recovery",
+        )
+    )
+__all__ = [
+    "LatestActionMailbox",
+    "MacroAction",
+    "MacroExecutor",
+    "ParseResult",
+    "Watchdog",
+    "limit_macro_action",
+    "parse_macro_action",
+    "safe_camera_recovery",
+]
