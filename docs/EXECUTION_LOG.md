@@ -371,7 +371,8 @@ MineRL 安装脚本会联网克隆 `Hexeption/MCP-Reborn@1.16.5-20210115`，随�
 
 - 将 `MASTER_PLAN.md` 的适用目录从旧的 `/Users/joey/Documents/Projects/mc-agent` 修正为当前 `/Users/joey/Desktop/Projects/mc-agent`；只修正文档事实，冻结依赖、架构、Phase 5 状态与当前下一步均未改变。
 - 将 `OrientationMemory`、`OrientationState` 和 `OrientationView` 的实现从 `mc_agent.perception` 迁入规划预留的 `mc_agent.memory`；共享 episode loop 改从新模块导入，原 `mc_agent.perception.orientation` 保留兼容转发，避免既有调用方失效。
-- 外层 `mc-agent` 使用 `git init -b main` 初始化为独立本地 Git 仓库；没有创建提交、没有配置 remote、没有连接或推送到 GitHub。
+- 外层 `mc-agent` 使用 `git init -b main` 初始化为独立本地 Git 仓库；首次提交前使用 `git ls-files --others --exclude-standard`、凭据模式扫描、`git diff --cached --check` 和完整单元测试审计范围。模型权重、实验资产、运行日志、缓存与 `vendor/minerl` 均未进入暂存区。
+- 根提交命令：`git commit -m "chore: establish validated mc-agent workspace baseline"`；提交为 `cdcc8742badc46d673ee7adfd0fb6a396c4836ca`，包含 50 个外层项目文件。没有配置 remote、连接或推送到 GitHub。
 - 外层 `.gitignore` 明确排除 `/vendor/minerl/`。核验确认外层 `git check-ignore` 命中嵌套目录；内层仓库仍位于 `vendor/minerl/.git`，`origin` 保持 `https://github.com/minerllabs/minerl.git`，现有 Apple Silicon/MCP 修改与未跟踪文件完整保留。
 - 修正 `README.md` 中“Phase 1 Gradle 尚未执行”的过期说明，并补充外层/内层仓库边界。
 - 结构迁移前回归：`/opt/anaconda3/bin/conda run -n mc-agent env PYTHONPATH=src python -m unittest discover -s tests -v`，52/52 通过。迁移后新增旧导入兼容性断言并使用同一命令复测，最终 53/53 通过；没有启动 Minecraft、重新构建 MineRL 或重新下载模型。

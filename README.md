@@ -20,6 +20,6 @@ MineRL 的第三方 Gradle 构建已在获得明确批准后完成，并通过�
 
 ## 仓库边界
 
-- 外层 `mc-agent` 保存智能体代码、配置、测试和实验记录，是独立的本地 Git 仓库；当前尚未创建初始提交或配置 GitHub remote。
+- 外层 `mc-agent` 保存智能体代码、配置、测试和实验记录，是独立的本地 Git 仓库；已创建本地初始提交，尚未配置 GitHub remote。
 - `vendor/minerl` 是锁定在上游 `minerllabs/minerl` 的独立嵌套 Git checkout；外层通过 `.gitignore` 排除它，避免误提交其构建产物或本地 Apple Silicon 补丁。
 - MineRL 的固定分支、提交与本地补丁证据以 `MASTER_PLAN.md` 和 `docs/EXECUTION_LOG.md` 为准。
