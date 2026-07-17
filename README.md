@@ -82,8 +82,12 @@ python scripts/smoke_test_agent.py --frame <non-cave.png> --expect-no-cave
 先用单回合观察运行情况：
 
 ```bash
-python -m mc_agent.main --episodes 1 --ticks 800 --observation-interval 40
+python -m mc_agent.main --watch --episodes 1 --ticks 800 --observation-interval 40
 ```
+
+`--watch` 会打开名为 `MineRL Render` 的实时第一人称观察窗口。它只显示 Agent
+收到的画面，不接管键盘或鼠标；关闭 Agent 时请在终端按 `Ctrl+C`。不需要观察窗口时
+可以省略该参数。
 
 需要连续回放时再增加回合数：
 

@@ -24,6 +24,7 @@ class FakeEnv:
         self.action_space = MINERL_BASALT_FIND_CAVES_ENV_SPEC.action_space
         self.closed = False
         self.seed_value = None
+        self.render_modes = []
 
     def seed(self, seed):
         self.seed_value = seed
@@ -33,6 +34,9 @@ class FakeEnv:
 
     def step(self, action):
         return self.reset(), 0.0, False, {"ok": True}
+
+    def render(self, mode="human"):
+        self.render_modes.append(mode)
 
     def close(self):
         self.closed = True
@@ -79,6 +83,11 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.fake.seed_value, 5101)
         with self.assertRaisesRegex(ValueError, "integer"):
             self.adapter.seed(True)
+
+    def test_render_is_forwarded_on_owner_thread(self):
+        self.adapter.reset()
+        self.adapter.render()
+        self.assertEqual(self.fake.render_modes, ["human"])
 
 
 class LoggerTests(unittest.TestCase):

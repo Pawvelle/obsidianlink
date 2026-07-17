@@ -123,6 +123,7 @@ def _run_episode(
     *,
     episode_id_override: str | None = None,
     seed: int | None = None,
+    watch: bool = False,
 ) -> dict[str, Any]:
     episode_id = episode_id_override or f"episode-{episode_index:02d}"
     run_dir = session_dir / episode_id
@@ -136,6 +137,7 @@ def _run_episode(
             "observation_interval": observation_interval,
             "target_ticks_per_second": TARGET_TICKS_PER_SECOND,
             "planner": "Qwen3-VL-2B-Instruct MPS/FP16, asynchronous",
+            "live_view": watch,
             "visual_change_feedback": True,
             "safe_camera_recovery": True,
             "acceptance_requires_model_forward": True,
@@ -201,6 +203,8 @@ def _run_episode(
         if seed is not None:
             adapter.seed(seed)
         observation = adapter.reset()
+        if watch:
+            adapter.render()
         change_detector.reset(observation["pov"])
         Image.fromarray(observation["pov"]).save(run_dir / "initial.png")
         logger.event("reset", pov_shape=list(observation["pov"].shape), seed=seed)
@@ -354,6 +358,8 @@ def _run_episode(
             esc_nonzero += int(bool(tick_action["ESC"]))
             step_started = time.perf_counter()
             step = adapter.step(tick_action)
+            if watch:
+                adapter.render()
             step_elapsed = time.perf_counter() - step_started
             step_latencies.append(step_elapsed)
             completed_ticks += 1
@@ -545,6 +551,7 @@ def run_agent(
     ticks: int = 240,
     observation_interval: int = 40,
     output_root: Path | None = None,
+    watch: bool = False,
 ) -> dict[str, Any]:
     if episodes < 1 or ticks < 1 or observation_interval < 1:
         raise ValueError("episodes, ticks, and observation_interval must be positive")
@@ -574,6 +581,7 @@ def run_agent(
                         ticks,
                         observation_interval,
                         stop_all,
+                        watch=watch,
                     )
                 )
     finally:
