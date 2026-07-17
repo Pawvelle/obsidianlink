@@ -108,37 +108,64 @@ def _prompt(
 ) -> str:
     previous = json.dumps(previous_action, separators=(",", ":")) if previous_action else "none"
     prompt = (
-        "You control a Minecraft agent whose goal is to explore a plains biome and find "
-        "a natural cave. Choose exactly one safe macro-action from the current first-person "
-        "image. Compare the visible left, center, and right routes before choosing. Use yaw "
+        "You control a Minecraft agent exploring a plains biome to find a natural cave. "
+        "Your immediate objective is safe forward progress. Choose exactly one macro-action "
+        "from the current first-person image. First compare the visible left, center, and "
+        "right routes. If the center route is visibly walkable and has no specific hazard, "
+        "you MUST choose move_forward; do not choose look, turn, or wait in that case. Use yaw "
         "-20 when the left route is clearly safer, yaw 20 when the right route is clearly "
         "safer, and yaw 0 only when the center is clearly safest. For move_forward, choose "
         "duration 6 when nearby terrain is uneven or partly obstructed, 16 for a medium-clear "
         "route, and 28 only for a wide open route. Turn away from water, trees, walls, animals, "
-        "drops, or danger; look around when no route can be judged safely. The reason must name "
-        "the visible evidence used for direction and distance. Never dig straight down. ESC "
-        "and task termination are not available. Use the previous accepted action as context: "
-        "after look or turn, move forward if the newly exposed center route is visibly safe; "
+        "drops, or danger. Use look or turn only when the reason names the specific visible "
+        "hazard blocking forward motion, and always use a non-zero pitch or yaw. Never return "
+        "a zero-angle look or turn. The reason must name the visible evidence used for direction "
+        "and distance. Never dig straight down. ESC and task termination are not available. "
+        "Use the previous executed action as context: after look or turn, move_forward is "
+        "required if the newly exposed center route is visibly safe; "
         "after move_forward, continue only if the current view still looks clear, otherwise "
         "turn toward the safer visible side. Return exactly one JSON object on one line, "
         "without Markdown, code, or "
         "extra text. Use exactly this schema: "
         '{"action":"move_forward|turn|look|wait","duration_ticks":1..40,'
         '"camera":{"pitch":-30..30,"yaw":-30..30},"attack":false,'
-        '"jump":false,"sprint":true|false,"reason":"short visual reason"}. '
+        '"jump":false,"sprint":true|false,"cave_visible":true|false,'
+        '"reason":"short visual reason"}. Before choosing the action, set cave_visible '
+        "true ONLY when the image clearly shows an enterable dark opening bounded by exposed "
+        "stone or terrain. Set it false for shadows, trees, water, dirt walls, depressions, "
+        "distant dark patches, or merely a clear route. A clear walkable route NEVER implies "
+        "a cave. If cave_visible is true, the reason MUST truthfully contain all four evidence "
+        "parts: dark, stone or rock, opening or entrance, and its left/center/right direction. "
+        "If any part is not plainly visible, set cave_visible false. When true, safely align "
+        "with or approach that opening. "
         "For turn or look, use a meaningful non-zero pitch or yaw. Keep attack and jump "
-        f"false in this baseline. Previous accepted action: {previous}"
+        "false in this baseline. Final validity check before returning JSON: look or turn "
+        'with camera {"pitch":0,"yaw":0} is invalid; replace it with yaw -20 toward a safer '
+        "left route or yaw 20 toward a safer right route. "
+        f"Previous accepted action: {previous}"
     )
     feedback: list[str] = []
+    if previous_action is not None and previous_action.get("action") == "move_forward":
+        previous_duration = int(previous_action.get("duration_ticks", 1))
+        feedback.append(
+            "Action-change rule: the previous executed action was move_forward with "
+            f"duration {previous_duration}. Reassess the current image and MUST NOT repeat "
+            "the exact same move_forward duration, yaw, and sprint combination. If center "
+            "remains walkable, use a different safe duration (prefer 6 for cautious progress); "
+            "if it is blocked, use one non-zero turn toward the safer side."
+        )
     if visual_change is not None:
         low_change = bool(visual_change["low_change"])
         if low_change:
             change_signal = (
-                "LOW; the recent view is nearly unchanged. Use the current image to choose "
-                "a safe action that creates visible progress, and never use a zero-angle look."
+                "LOW; the recent view is nearly unchanged. If center is visibly walkable, "
+                "choose move_forward now. Otherwise turn with a non-zero camera angle and "
+                "name the blocking hazard."
             )
         else:
-            change_signal = "CHANGED; re-evaluate the current image."
+            change_signal = (
+                "CHANGED; re-evaluate the image and move_forward when center is walkable."
+            )
         feedback.append(f"Visual-change signal: {change_signal}")
     if not feedback:
         return prompt

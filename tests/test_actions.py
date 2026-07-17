@@ -9,6 +9,7 @@ from mc_agent.actions import (
     MacroAction,
     MacroExecutor,
     Watchdog,
+    is_cave_candidate,
     parse_macro_action,
     safe_camera_recovery,
 )
@@ -16,10 +17,13 @@ from mc_agent.actions import (
 
 class ActionSchemaTests(unittest.TestCase):
     def test_valid_payload_uses_defaults(self):
-        result = parse_macro_action('{"action":"move_forward"}')
+        result = parse_macro_action(
+            '{"action":"move_forward","cave_visible":false}'
+        )
         self.assertTrue(result.accepted)
         self.assertEqual(result.action.duration_ticks, 1)
         self.assertFalse(result.action.attack)
+        self.assertFalse(result.action.cave_visible)
 
     def test_limits_are_clamped(self):
         result = parse_macro_action(
@@ -28,6 +32,7 @@ class ActionSchemaTests(unittest.TestCase):
                     "action": "look",
                     "duration_ticks": 999,
                     "camera": {"pitch": -90, "yaw": 90},
+                    "cave_visible": False,
                 }
             )
         )
@@ -54,6 +59,73 @@ class ActionSchemaTests(unittest.TestCase):
 
     def test_boolean_does_not_accept_integer(self):
         self.assertFalse(parse_macro_action('{"action":"wait","attack":1}').accepted)
+
+    def test_cave_judgment_defaults_false_and_is_strictly_boolean(self):
+        missing = parse_macro_action('{"action":"move_forward"}')
+        self.assertTrue(missing.accepted)
+        self.assertFalse(missing.action.cave_visible)
+        invalid = parse_macro_action(
+            '{"action":"move_forward","cave_visible":1}'
+        )
+        self.assertFalse(invalid.accepted)
+        visible = parse_macro_action(
+            '{"action":"move_forward","cave_visible":true}'
+        )
+        self.assertTrue(visible.accepted)
+        self.assertTrue(visible.action.cave_visible)
+
+    def test_cave_candidate_requires_complete_visible_evidence(self):
+        weak = MacroAction(
+            action="move_forward",
+            cave_visible=True,
+            reason="center route is clear and walkable",
+        )
+        self.assertFalse(is_cave_candidate(weak))
+        self.assertFalse(
+            is_cave_candidate(
+                MacroAction(
+                    action="move_forward",
+                    cave_visible=True,
+                    reason="bright stone opening with no stated direction",
+                )
+            )
+        )
+        strong = MacroAction(
+            action="move_forward",
+            cave_visible=True,
+            reason="dark stone opening visible in center",
+        )
+        self.assertTrue(is_cave_candidate(strong))
+        self.assertFalse(
+            is_cave_candidate(
+                MacroAction(
+                    action="move_forward",
+                    cave_visible=False,
+                    reason=strong.reason,
+                )
+            )
+        )
+
+    def test_zero_angle_look_and_turn_are_rejected(self):
+        for action in ("look", "turn"):
+            result = parse_macro_action(
+                json.dumps(
+                    {
+                        "action": action,
+                        "camera": {"pitch": 0, "yaw": 0},
+                        "cave_visible": False,
+                    }
+                )
+            )
+            self.assertFalse(result.accepted)
+            self.assertIn("non-zero camera angle", result.error)
+
+        self.assertTrue(
+            parse_macro_action(
+                '{"action":"look","camera":{"pitch":0,"yaw":10},'
+                '"cave_visible":false}'
+            ).accepted
+        )
 
 
 class ExecutorTests(unittest.TestCase):

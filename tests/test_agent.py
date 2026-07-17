@@ -11,6 +11,7 @@ from mc_agent.actions import MacroAction
 from mc_agent.env import MineRLEnvAdapter
 from mc_agent.agent import (
     TARGET_TICK_SECONDS,
+    _episode_passes_gate,
     _macro_action_has_effect,
     _select_executed_action,
     _tick_sleep_seconds,
@@ -123,6 +124,28 @@ class Phase4PacingTests(unittest.TestCase):
         unchanged, applied = _select_executed_action(forward, 1)
         self.assertEqual(unchanged, forward)
         self.assertFalse(applied)
+
+    def test_episode_gate_requires_model_driven_forward_progress(self):
+        passing = {
+            "completed_ticks": 800,
+            "tick_budget": 800,
+            "early_done": False,
+            "effective_decisions": 2,
+            "model_forward_decisions": 1,
+            "forward_ticks": 6,
+            "esc_nonzero": 0,
+            "planner_error": None,
+        }
+        self.assertTrue(_episode_passes_gate(**passing))
+        for field, value in (
+            ("effective_decisions", 0),
+            ("model_forward_decisions", 0),
+            ("forward_ticks", 0),
+            ("esc_nonzero", 1),
+            ("planner_error", "failed"),
+        ):
+            case = {**passing, field: value}
+            self.assertFalse(_episode_passes_gate(**case), field)
 
 
 if __name__ == "__main__":

@@ -61,8 +61,34 @@ class VisualChangePromptTests(unittest.TestCase):
             },
         )
         self.assertIn("Visual-change signal: LOW", treatment)
-        self.assertIn("never use a zero-angle look", treatment)
+        self.assertIn("choose move_forward now", treatment)
+        self.assertIn("non-zero camera angle", treatment)
         self.assertIn("Keep reason under 12 words", treatment)
+
+    def test_base_prompt_requires_forward_when_center_is_walkable(self):
+        prompt = _prompt(None)
+        self.assertIn("immediate objective is safe forward progress", prompt)
+        self.assertIn("you MUST choose move_forward", prompt)
+        self.assertIn("Never return a zero-angle look or turn", prompt)
+        self.assertIn("cave_visible", prompt)
+        self.assertIn("enterable dark opening", prompt)
+        self.assertIn("A clear walkable route NEVER implies a cave", prompt)
+        self.assertIn("Final validity check before returning JSON", prompt)
+
+    def test_previous_forward_requires_a_fresh_action_choice(self):
+        prompt = _prompt(
+            {
+                "action": "move_forward",
+                "duration_ticks": 16,
+                "camera": {"pitch": 0, "yaw": 0},
+                "attack": False,
+                "jump": False,
+                "sprint": True,
+            }
+        )
+        self.assertIn("Action-change rule", prompt)
+        self.assertIn("MUST NOT repeat", prompt)
+        self.assertIn("prefer 6 for cautious progress", prompt)
 
 
 class OrientationMemoryTests(unittest.TestCase):

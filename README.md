@@ -73,6 +73,8 @@ python scripts/smoke_test_minerl.py --mode fake
 python scripts/smoke_test_qwen.py
 python scripts/smoke_test_minerl.py --mode real --steps 10
 python scripts/smoke_test_agent.py --frame runs/smoke/findcave-reset.png
+python scripts/smoke_test_agent.py --frame <frame.png> --after-forward
+python scripts/smoke_test_agent.py --frame <non-cave.png> --expect-no-cave
 ```
 
 ## 运行 Agent
@@ -93,12 +95,17 @@ python -m mc_agent.main --episodes 5 --ticks 800 --observation-interval 40
 逐 tick 事件和汇总指标。Qwen 在独立 worker 中推理，不阻塞 MineRL step loop；
 episode 切换前的 barrier 会等待旧推理结束并清空旧 observation/decision。
 
+模型动作包含 fail-closed 的 `cave_visible` 字段。字段缺失时按 false 处理；模型只有
+明确报告洞穴，并在理由中同时给出暗色、岩石、开口和方向证据时，系统才把对应决策
+帧记为洞穴候选。候选仍需人工复核，不会自动当成 FindCave 成功。
+
 ## 当前边界
 
-Agent 已经能稳定完成闭环控制和可回放记录，但还不能可靠地完成“找到洞穴”。
-后续开发按 [ROADMAP.md](ROADMAP.md) 的 Phase 4 继续，优先改善持续移动和简单目标
-判断。历史验证记录保存在 `runs/history/EXECUTION_LOG.md`；大型历史运行资产只在
-本机保留，不进入外层 Git。
+Agent 已经通过 5×800 ticks 安全前进验收，能持续产生模型驱动的 forward ticks 和
+有效动作变化。洞穴负样本及运行集成也已验证，但现有回放没有可信的洞穴入口正样本，
+因此还不能把“找到洞穴”标为完成。后续按 [ROADMAP.md](ROADMAP.md) 的 Phase 4
+继续，只验证真实洞穴正例与接近动作。历史验证记录保存在
+`runs/history/EXECUTION_LOG.md`；大型历史运行资产只在本机保留，不进入外层 Git。
 
 `vendor/minerl` 是独立 Git 仓库。外层项目不会提交它、删除它，也不会改写它的
 Git 历史。
