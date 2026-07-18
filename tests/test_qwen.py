@@ -10,6 +10,7 @@ from mc_agent.qwen import (
     ObservationRequest,
     PlannerDecision,
     QwenPlannerWorker,
+    _prompt,
 )
 
 
@@ -43,6 +44,11 @@ class BlockingPlannerWorker(QwenPlannerWorker):
 
 
 class PlannerMailboxTests(unittest.TestCase):
+    def test_prompt_requires_a_fixed_cave_evidence_reason(self):
+        prompt = _prompt(None)
+        self.assertIn("dark stone opening on the left|center|right", prompt)
+        self.assertIn("Never use 'route clear' as a cave reason", prompt)
+
     def test_observation_mailbox_keeps_latest_frame(self):
         mailbox = LatestObservationMailbox()
         mailbox.publish(ObservationRequest("a", 1, np.zeros((1, 1, 3)), None))
