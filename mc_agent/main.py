@@ -15,6 +15,12 @@ def main() -> int:
     parser.add_argument("--observation-interval", type=int, default=40)
     parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="use one reproducible MineRL seed for every requested episode",
+    )
+    parser.add_argument(
         "--watch",
         action="store_true",
         help="show a live MineRL POV window while the agent is running",
@@ -25,6 +31,7 @@ def main() -> int:
         ticks=args.ticks,
         observation_interval=args.observation_interval,
         output_root=args.output_root,
+        seed=args.seed,
         watch=args.watch,
     )
     return 0

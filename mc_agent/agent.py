@@ -172,6 +172,8 @@ def _run_episode(
     completed_ticks = 0
     reward_sum = 0.0
     early_done = False
+    termination_reason: str | None = None
+    terminal_info: dict[str, Any] | None = None
     esc_nonzero = 0
     low_change_samples = 0
     action_windows = 0
@@ -400,7 +402,14 @@ def _run_episode(
             )
             if step.done:
                 early_done = completed_ticks < tick_budget
-                logger.event("done", tick=completed_ticks, early=early_done)
+                termination_reason = "environment_done"
+                terminal_info = step.info
+                logger.event(
+                    "done",
+                    tick=completed_ticks,
+                    early=early_done,
+                    info=step.info,
+                )
                 break
 
             if completed_ticks < tick_budget:
@@ -524,8 +533,11 @@ def _run_episode(
         "minimum_system_available_bytes": minimum_available,
         "esc_nonzero_ticks": esc_nonzero,
         "termination_reason": (
-            "tick_budget" if completed_ticks == tick_budget else watchdog.reason
+            "tick_budget"
+            if completed_ticks == tick_budget
+            else termination_reason or watchdog.reason
         ),
+        "terminal_info": terminal_info,
         "manual_review": {
             "required": True,
             "status": "pending",
@@ -551,10 +563,13 @@ def run_agent(
     ticks: int = 240,
     observation_interval: int = 40,
     output_root: Path | None = None,
+    seed: int | None = None,
     watch: bool = False,
 ) -> dict[str, Any]:
     if episodes < 1 or ticks < 1 or observation_interval < 1:
         raise ValueError("episodes, ticks, and observation_interval must be positive")
+    if seed is not None and type(seed) is not int:
+        raise ValueError("seed must be an integer or None")
     output_root = output_root or ROOT / "runs" / "episodes"
     session_dir = output_root / datetime.now().strftime("%Y%m%d-%H%M%S")
     session_dir.mkdir(parents=True, exist_ok=False)
@@ -581,6 +596,7 @@ def run_agent(
                         ticks,
                         observation_interval,
                         stop_all,
+                        seed=seed,
                         watch=watch,
                     )
                 )
@@ -625,6 +641,7 @@ def run_agent(
         "session_dir": str(session_dir),
         "episodes_requested": episodes,
         "episodes_completed": len(results),
+        "seed": seed,
         "ticks_per_episode": ticks,
         "observation_interval": observation_interval,
         "planner_load_seconds": planner.load_seconds,
