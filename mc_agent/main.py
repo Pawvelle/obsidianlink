@@ -12,8 +12,23 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the MineRL + Qwen Minecraft Agent")
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--ticks", type=int, default=240)
+    parser.add_argument(
+        "--mission-ticks",
+        type=int,
+        default=None,
+        help=(
+            "override the local FindCave mission limit in ticks; 18000 is 15 minutes "
+            "at the fixed 20 Hz MineRL rate"
+        ),
+    )
     parser.add_argument("--observation-interval", type=int, default=40)
     parser.add_argument("--output-root", type=Path, default=None)
+    parser.add_argument(
+        "--model-lock",
+        type=Path,
+        default=None,
+        help="use an explicit local model lock for an isolated planner experiment",
+    )
     parser.add_argument(
         "--seed",
         type=int,
@@ -33,6 +48,8 @@ def main() -> int:
         output_root=args.output_root,
         seed=args.seed,
         watch=args.watch,
+        mission_max_ticks=args.mission_ticks,
+        model_lock_path=args.model_lock,
     )
     return 0
 

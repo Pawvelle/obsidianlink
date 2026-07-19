@@ -12,6 +12,9 @@ from mc_agent.actions import (
     is_cave_candidate,
     parse_macro_action,
     safe_camera_recovery,
+    safe_stuck_recovery,
+    safe_water_recovery,
+    water_hazard_direction,
 )
 
 
@@ -127,6 +130,29 @@ class ActionSchemaTests(unittest.TestCase):
             ).accepted
         )
 
+    def test_escape_actions_are_strictly_allowlisted_and_non_interactive(self):
+        for action in ("retreat", "sidestep_left", "sidestep_right"):
+            result = parse_macro_action(
+                json.dumps(
+                    {
+                        "action": action,
+                        "duration_ticks": 6,
+                        "camera": {"pitch": 10, "yaw": -10},
+                        "attack": True,
+                        "jump": True,
+                        "sprint": True,
+                        "cave_visible": False,
+                    }
+                )
+            )
+            self.assertTrue(result.accepted)
+            self.assertEqual(result.action.action, action)
+            self.assertEqual(result.action.camera_pitch, 0.0)
+            self.assertEqual(result.action.camera_yaw, 0.0)
+            self.assertFalse(result.action.attack)
+            self.assertFalse(result.action.jump)
+            self.assertFalse(result.action.sprint)
+
 
 class ExecutorTests(unittest.TestCase):
     def setUp(self):
@@ -166,6 +192,24 @@ class ExecutorTests(unittest.TestCase):
         executor = MacroExecutor(self.action_space)
         executor.submit(MacroAction(action="wait", sprint=True))
         self.assertEqual(executor.next_tick()["sprint"], 0)
+
+    def test_escape_actions_map_only_to_their_expected_movement_key(self):
+        cases = {
+            "retreat": "back",
+            "sidestep_left": "left",
+            "sidestep_right": "right",
+        }
+        for action_name, active_key in cases.items():
+            with self.subTest(action=action_name):
+                executor = MacroExecutor(self.action_space)
+                executor.submit(MacroAction(action=action_name, duration_ticks=6))
+                tick = executor.next_tick()
+                self.assertEqual(tick[active_key], 1)
+                self.assertEqual(tick["forward"], 0)
+                self.assertEqual(tick["attack"], 0)
+                self.assertEqual(tick["jump"], 0)
+                self.assertEqual(tick["sprint"], 0)
+                self.assertEqual(tick["ESC"], 0)
 
     def test_executor_limits_directly_constructed_action(self):
         executor = MacroExecutor(self.action_space)
@@ -217,6 +261,22 @@ class RecoveryActionTests(unittest.TestCase):
             safe_camera_recovery(-1)
         with self.assertRaisesRegex(ValueError, "non-negative integer"):
             safe_camera_recovery(True)
+
+    def test_dark_water_hazard_turns_away_and_ignores_sky_blue(self):
+        frame = np.zeros((30, 30, 3), dtype=np.uint8)
+        frame[:, :10] = (26, 41, 124)
+        self.assertEqual(water_hazard_direction(frame), "left")
+        recovery = safe_water_recovery("left", 0)
+        self.assertEqual(recovery.action, "sidestep_right")
+        self.assertEqual(recovery.duration_ticks, 6)
+        self.assertFalse(recovery.sprint)
+        self.assertEqual(safe_water_recovery("center", 1).action, "retreat")
+        self.assertEqual(safe_stuck_recovery(0).action, "sidestep_right")
+        self.assertEqual(safe_stuck_recovery(1).action, "sidestep_left")
+
+        sky = np.zeros((30, 30, 3), dtype=np.uint8)
+        sky[:, :10] = (120, 180, 255)
+        self.assertIsNone(water_hazard_direction(sky))
 
 
 if __name__ == "__main__":

@@ -70,6 +70,7 @@ class VisualChangePromptTests(unittest.TestCase):
         self.assertIn("immediate objective is safe forward progress", prompt)
         self.assertIn("you MUST choose move_forward", prompt)
         self.assertIn("Never return a zero-angle look or turn", prompt)
+        self.assertIn("sidestep_right for a left-side hazard", prompt)
         self.assertIn("cave_visible", prompt)
         self.assertIn("enterable dark opening", prompt)
         self.assertIn("A clear walkable route NEVER implies a cave", prompt)
@@ -88,7 +89,7 @@ class VisualChangePromptTests(unittest.TestCase):
         )
         self.assertIn("Action-change rule", prompt)
         self.assertIn("MUST NOT repeat", prompt)
-        self.assertIn("prefer 6 for cautious progress", prompt)
+        self.assertIn("prefer 16 for an ordinary route", prompt)
 
 
 class OrientationMemoryTests(unittest.TestCase):

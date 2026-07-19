@@ -11,6 +11,23 @@ import minerl  # noqa: F401 - import registers MineRL environments
 import numpy as np
 
 
+FIND_CAVE_ENV_ID = "MineRLBasaltFindCave-v0"
+
+
+def _make_find_cave_with_max_episode_steps(max_episode_steps: int) -> Any:
+    """Create one local FindCave task instance with an explicit time budget.
+
+    This changes neither the pinned MineRL package nor its global Gym registry.
+    The returned instance retains the standard FindCave world, controls, and
+    safety constraints; only its mission timeout is extended for a local run.
+    """
+    from minerl.herobraine.env_specs.basalt_specs import FindCaveEnvSpec
+
+    specification = FindCaveEnvSpec()
+    specification.max_episode_steps = max_episode_steps
+    return specification.make()
+
+
 @dataclass(frozen=True)
 class StepResult:
     observation: dict[str, Any]
@@ -22,11 +39,23 @@ class StepResult:
 class MineRLEnvAdapter:
     def __init__(
         self,
-        env_id: str = "MineRLBasaltFindCave-v0",
+        env_id: str = FIND_CAVE_ENV_ID,
         env_factory: Callable[[str], Any] = gym.make,
+        *,
+        max_episode_steps: int | None = None,
+        long_env_factory: Callable[[int], Any] = _make_find_cave_with_max_episode_steps,
     ):
+        if max_episode_steps is not None:
+            if type(max_episode_steps) is not int or max_episode_steps < 1:
+                raise ValueError("max_episode_steps must be a positive integer or None")
+            if env_id != FIND_CAVE_ENV_ID:
+                raise ValueError(
+                    "a custom episode limit is supported only for MineRLBasaltFindCave-v0"
+                )
         self.env_id = env_id
         self._env_factory = env_factory
+        self.max_episode_steps = max_episode_steps
+        self._long_env_factory = long_env_factory
         self._env: Any | None = None
         self._owner_thread: int | None = None
 
@@ -45,7 +74,11 @@ class MineRLEnvAdapter:
         if self._env is not None:
             raise RuntimeError("environment is already open")
         self._owner_thread = threading.get_ident()
-        self._env = self._env_factory(self.env_id)
+        self._env = (
+            self._long_env_factory(self.max_episode_steps)
+            if self.max_episode_steps is not None
+            else self._env_factory(self.env_id)
+        )
         return self
 
     def reset(self) -> dict[str, Any]:

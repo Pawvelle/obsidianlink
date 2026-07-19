@@ -13,7 +13,16 @@ from typing import Any
 import numpy as np
 
 
-ALLOWED_ACTIONS = {"wait", "look", "turn", "move_forward"}
+ALLOWED_ACTIONS = {
+    "wait",
+    "look",
+    "turn",
+    "move_forward",
+    "retreat",
+    "sidestep_left",
+    "sidestep_right",
+}
+ESCAPE_ACTIONS = {"retreat", "sidestep_left", "sidestep_right"}
 ALLOWED_KEYS = {
     "action",
     "duration_ticks",
@@ -83,6 +92,12 @@ def limit_macro_action(action: MacroAction) -> MacroAction:
         jump = _boolean(action.jump, "jump")
         sprint = _boolean(action.sprint, "sprint")
         cave_visible = _boolean(action.cave_visible, "cave_visible")
+        if action.action in ESCAPE_ACTIONS:
+            pitch = 0.0
+            yaw = 0.0
+            attack = False
+            jump = False
+            sprint = False
         if not isinstance(action.reason, str):
             raise ValueError("reason must be string")
         return MacroAction(
@@ -254,6 +269,12 @@ class MacroExecutor:
         first_tick = self.elapsed_ticks == 0
         if action.action == "move_forward":
             tick["forward"] = 1
+        elif action.action == "retreat":
+            tick["back"] = 1
+        elif action.action == "sidestep_left":
+            tick["left"] = 1
+        elif action.action == "sidestep_right":
+            tick["right"] = 1
         if first_tick and action.action in {"look", "turn", "move_forward"}:
             tick["camera"] = np.asarray(
                 [action.camera_pitch, action.camera_yaw], dtype=np.float32
@@ -288,14 +309,94 @@ def safe_camera_recovery(index: int) -> MacroAction:
             reason="deterministic safe camera recovery",
         )
     )
+
+
+def water_hazard_direction(pov: np.ndarray) -> str | None:
+    """Return the dominant visible dark-water side, if it is large enough.
+
+    Bright sky-blue pixels and the HUD strip are deliberately excluded. This is
+    a narrow fail-safe for an imminent water crossing, not scene classification.
+    """
+    if not isinstance(pov, np.ndarray) or pov.ndim != 3 or pov.shape[2] != 3:
+        raise ValueError("pov must be an RGB image")
+    height, width, _ = pov.shape
+    if height < 3 or width < 3:
+        raise ValueError("pov is too small for water-hazard detection")
+    world = pov[: max(1, int(height * 0.85))].astype(np.int16, copy=False)
+    red, green, blue = world[..., 0], world[..., 1], world[..., 2]
+    water = (
+        (blue >= 80)
+        & (blue <= 180)
+        & (green <= 110)
+        & (blue * 100 >= red * 135)
+        & (blue * 100 >= green * 115)
+    )
+    thirds = [
+        water[:, index * width // 3 : (index + 1) * width // 3].mean()
+        for index in range(3)
+    ]
+    strongest = max(range(3), key=thirds.__getitem__)
+    if thirds[strongest] < 0.05:
+        return None
+    return ("left", "center", "right")[strongest]
+
+
+def safe_water_recovery(direction: str, index: int) -> MacroAction:
+    """Use bounded displacement to leave a locally detected water hazard."""
+    if direction not in {"left", "center", "right"}:
+        raise ValueError("water hazard direction must be left, center, or right")
+    if type(index) is not int or index < 0:
+        raise ValueError("recovery index must be a non-negative integer")
+    if direction == "left":
+        action = "sidestep_right"
+    elif direction == "right":
+        action = "sidestep_left"
+    else:
+        action = "retreat"
+    return limit_macro_action(
+        MacroAction(
+            action=action,
+            duration_ticks=6,
+            camera_pitch=0.0,
+            camera_yaw=0.0,
+            attack=False,
+            jump=False,
+            sprint=False,
+            cave_visible=False,
+            reason=f"local water hazard on {direction}",
+        )
+    )
+
+
+def safe_stuck_recovery(index: int) -> MacroAction:
+    """Use a bounded lateral move after verified lack of forward progress."""
+    if type(index) is not int or index < 0:
+        raise ValueError("recovery index must be a non-negative integer")
+    return limit_macro_action(
+        MacroAction(
+            action="sidestep_right" if index % 2 == 0 else "sidestep_left",
+            duration_ticks=6,
+            camera_pitch=0.0,
+            camera_yaw=0.0,
+            attack=False,
+            jump=False,
+            sprint=False,
+            cave_visible=False,
+            reason="local low-progress recovery",
+        )
+    )
 __all__ = [
     "LatestActionMailbox",
     "MacroAction",
     "MacroExecutor",
     "ParseResult",
     "Watchdog",
+    "ESCAPE_ACTIONS",
     "is_cave_candidate",
     "limit_macro_action",
     "parse_macro_action",
     "safe_camera_recovery",
+    "safe_stuck_recovery",
+    "safe_water_recovery",
+    "water_hazard_direction",
 ]

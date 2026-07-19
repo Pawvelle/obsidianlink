@@ -102,11 +102,38 @@ Add episodes only when continuous replay is needed:
 python -m mc_agent.main --episodes 5 --ticks 800 --observation-interval 40
 ```
 
+For a genuine cave search, the stock BASALT task's three-minute mission limit
+is usually too short. Use an explicit local time budget; this leaves the
+pinned MineRL package and global Gym registration untouched, while preserving
+the same FindCave world and action constraints:
+
+```bash
+python -m mc_agent.main --episodes 1 --ticks 18000 --mission-ticks 18000 \
+  --observation-interval 40 --seed 45 --output-root runs/phase4-cave-search
+```
+
+`18000` ticks is 15 minutes of MineRL simulation at 20 Hz. The configured
+mission limit is recorded in both the run summary and the episode config.
+
+The default model remains the pinned 2B baseline. A larger local model must be
+kept behind its own checked lock and selected explicitly, for example:
+
+```bash
+python -m mc_agent.main --model-lock model.experiments/qwen3-vl-4b.lock.json
+```
+
 Results are written to `runs/episodes/<timestamp>/` by default. Each episode
 contains initial and final frames, decision frames, per-tick events, and
 summary metrics. Qwen runs in a separate worker and never blocks the MineRL
-step loop; before an episode changes, a barrier waits for old inference to
+step loop. When a bounded model macro finishes, its post-action frame starts
+the next asynchronous inference immediately; fixed-interval frames remain as
+a fallback. Before an episode changes, a barrier waits for old inference to
 finish and clears stale observations and decisions.
+
+The agent's restricted movement vocabulary includes forward progress plus
+bounded `retreat`, `sidestep_left`, and `sidestep_right` escape macros. They
+cannot press `ESC`, attack, jump, or sprint; water and low-progress guards use
+these only to leave a visible local hazard.
 
 Model actions include a fail-closed `cave_visible` field. A missing field is
 treated as `false`. A decision frame is recorded as a cave candidate only when

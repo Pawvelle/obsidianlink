@@ -14,6 +14,7 @@ from mc_agent.agent import (
     _episode_passes_gate,
     _macro_action_has_effect,
     _select_executed_action,
+    _should_publish_macro_completion_observation,
     _tick_sleep_seconds,
 )
 from mc_agent.logger import EpisodeLogger
@@ -89,6 +90,23 @@ class AdapterTests(unittest.TestCase):
         self.adapter.render()
         self.assertEqual(self.fake.render_modes, ["human"])
 
+    def test_custom_limit_uses_a_local_find_cave_factory(self):
+        fake = FakeEnv()
+        requested_limits = []
+        adapter = MineRLEnvAdapter(
+            max_episode_steps=18_000,
+            long_env_factory=lambda limit: requested_limits.append(limit) or fake,
+        ).open()
+        self.addCleanup(adapter.close)
+        self.assertEqual(requested_limits, [18_000])
+        self.assertIs(adapter.action_space, fake.action_space)
+
+    def test_custom_limit_requires_the_find_cave_task_and_positive_ticks(self):
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            MineRLEnvAdapter(max_episode_steps=0)
+        with self.assertRaisesRegex(ValueError, "only for MineRLBasaltFindCave-v0"):
+            MineRLEnvAdapter(env_id="Other-v0", max_episode_steps=18_000)
+
 
 class LoggerTests(unittest.TestCase):
     def test_logger_writes_config_events_and_metrics(self):
@@ -121,6 +139,8 @@ class Phase4PacingTests(unittest.TestCase):
             _macro_action_has_effect(MacroAction(action="look", camera_yaw=10.0))
         )
         self.assertTrue(_macro_action_has_effect(MacroAction(action="move_forward")))
+        self.assertTrue(_macro_action_has_effect(MacroAction(action="retreat")))
+        self.assertTrue(_macro_action_has_effect(MacroAction(action="sidestep_left")))
 
     def test_recovery_selection_changes_only_enabled_semantic_no_op(self):
         no_op = MacroAction(action="look")
@@ -133,6 +153,43 @@ class Phase4PacingTests(unittest.TestCase):
         unchanged, applied = _select_executed_action(forward, 1)
         self.assertEqual(unchanged, forward)
         self.assertFalse(applied)
+
+    def test_followup_observation_waits_for_completed_macro_and_idle_worker(self):
+        self.assertFalse(
+            _should_publish_macro_completion_observation(
+                action_completed=False,
+                completed_action="move_forward",
+                planner_idle=True,
+            )
+        )
+        self.assertFalse(
+            _should_publish_macro_completion_observation(
+                action_completed=True,
+                completed_action="look",
+                planner_idle=True,
+            )
+        )
+        self.assertFalse(
+            _should_publish_macro_completion_observation(
+                action_completed=True,
+                completed_action="move_forward",
+                planner_idle=False,
+            )
+        )
+        self.assertTrue(
+            _should_publish_macro_completion_observation(
+                action_completed=True,
+                completed_action="move_forward",
+                planner_idle=True,
+            )
+        )
+        self.assertTrue(
+            _should_publish_macro_completion_observation(
+                action_completed=True,
+                completed_action="sidestep_right",
+                planner_idle=True,
+            )
+        )
 
     def test_episode_gate_requires_model_driven_forward_progress(self):
         passing = {

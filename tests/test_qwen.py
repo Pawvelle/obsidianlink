@@ -1,5 +1,7 @@
 import threading
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 
@@ -44,6 +46,13 @@ class BlockingPlannerWorker(QwenPlannerWorker):
 
 
 class PlannerMailboxTests(unittest.TestCase):
+    def test_worker_uses_the_requested_lock_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lock_path = Path(directory) / "experiment.lock.json"
+            lock_path.write_text('{"local_dir":"models/example","files":{"x":{"size_bytes":1}}}')
+            worker = QwenPlannerWorker(lock_path=lock_path)
+            self.assertEqual(worker.lock_path, lock_path.resolve())
+
     def test_prompt_requires_a_fixed_cave_evidence_reason(self):
         prompt = _prompt(None)
         self.assertIn("dark stone opening on the left|center|right", prompt)

@@ -8,6 +8,8 @@ from pathlib import Path
 import gym
 import minerl  # noqa: F401 - importing registers MineRL environments
 
+from mc_agent.env import MineRLEnvAdapter
+
 
 ENV_ID = "MineRLBasaltFindCave-v0"
 
@@ -47,11 +49,10 @@ def run_fake():
                 raise
 
 
-def run_real(output: Path, steps: int):
+def run_real(output: Path, steps: int, mission_ticks: int | None = None):
     from PIL import Image
 
-    env = gym.make(ENV_ID)
-    try:
+    with MineRLEnvAdapter(max_episode_steps=mission_ticks) as env:
         observation = env.reset()
         output.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(observation["pov"]).save(output)
@@ -60,22 +61,22 @@ def run_real(output: Path, steps: int):
         for _ in range(steps):
             action = env.action_space.no_op()
             action["ESC"] = 0
-            observation, reward, done, _ = env.step(action)
-            rewards.append(float(reward))
-            if done:
+            result = env.step(action)
+            observation = result.observation
+            rewards.append(result.reward)
+            if result.done:
                 raise RuntimeError("FindCave ended before the requested smoke-test steps")
 
         return {
             "mode": "real",
             "env_id": ENV_ID,
             "steps": steps,
+            "mission_ticks": mission_ticks,
             "screenshot": str(output),
             "pov_shape": list(observation["pov"].shape),
             "reward_sum": sum(rewards),
             "closed": True,
         }
-    finally:
-        env.close()
 
 
 def main():
@@ -87,9 +88,19 @@ def main():
         default=Path("runs/smoke/findcave-reset.png"),
     )
     parser.add_argument("--steps", type=int, default=10)
+    parser.add_argument(
+        "--mission-ticks",
+        type=int,
+        default=None,
+        help="override only this local FindCave smoke-test mission limit",
+    )
     args = parser.parse_args()
 
-    result = run_fake() if args.mode == "fake" else run_real(args.output, args.steps)
+    result = (
+        run_fake()
+        if args.mode == "fake"
+        else run_real(args.output, args.steps, args.mission_ticks)
+    )
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

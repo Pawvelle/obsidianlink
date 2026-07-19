@@ -24,67 +24,87 @@ if str(ROOT) not in sys.path:
 from mc_agent.env import MineRLEnvAdapter
 
 
+def _write_index(session_dir: Path, manifest: dict[str, object]) -> None:
+    """Atomically checkpoint capture progress for an interruptible MineRL run."""
+    index_path = session_dir / "index.json"
+    temporary_path = session_dir / ".index.json.tmp"
+    temporary_path.write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    temporary_path.replace(index_path)
+
+
 def capture_starts(
     seed_start: int, count: int, output_root: Path, *, panorama: bool = False
 ) -> Path:
-    """Save reset POVs, optionally including three fixed 90-degree yaw views."""
+    """Save reset POVs, checkpointing every view for interrupted-run recovery."""
     if not 1 <= count <= 64:
         raise ValueError("count must be between 1 and 64")
 
     session_dir = output_root / datetime.now().strftime("%Y%m%d-%H%M%S")
     session_dir.mkdir(parents=True, exist_ok=False)
-    captures: list[dict[str, object]] = []
+    manifest: dict[str, object] = {
+        "env_id": "MineRLBasaltFindCave-v0",
+        "seed_start": seed_start,
+        "count": count,
+        "panorama": panorama,
+        "status": "in_progress",
+        "captures": [],
+        "note": (
+            "Frames require manual review; no model was loaded. Panorama uses only "
+            "fixed camera turns with interaction keys disabled. The index is updated "
+            "after every saved frame, so incomplete sessions remain reviewable."
+        ),
+    }
+    _write_index(session_dir, manifest)
 
-    with MineRLEnvAdapter() as adapter:
-        for offset in range(count):
-            seed = seed_start + offset
-            adapter.seed(seed)
-            observation = adapter.reset()
-            views: list[dict[str, object]] = []
-
-            def save_view(heading_degrees: int) -> None:
-                filename = f"seed-{seed}-yaw-{heading_degrees:03d}.png"
-                Image.fromarray(observation["pov"]).save(session_dir / filename)
-                views.append({"heading_degrees": heading_degrees, "frame": filename})
-
-            save_view(0)
-            if panorama:
-                for heading_degrees in (90, 180, 270):
-                    for _ in range(3):
-                        action = adapter.action_space.no_op()
-                        action["camera"] = np.asarray([0.0, 30.0], dtype=np.float32)
-                        action["attack"] = 0
-                        action["jump"] = 0
-                        action["sprint"] = 0
-                        action["ESC"] = 0
-                        observation = adapter.step(action).observation
-                    save_view(heading_degrees)
-            captures.append(
-                {
+    try:
+        with MineRLEnvAdapter() as adapter:
+            for offset in range(count):
+                seed = seed_start + offset
+                adapter.seed(seed)
+                observation = adapter.reset()
+                capture: dict[str, object] = {
                     "seed": seed,
                     "pov_shape": list(observation["pov"].shape),
-                    "views": views,
+                    "status": "in_progress",
+                    "views": [],
                 }
-            )
+                captures = manifest["captures"]
+                assert isinstance(captures, list)
+                captures.append(capture)
+                _write_index(session_dir, manifest)
 
-    (session_dir / "index.json").write_text(
-        json.dumps(
-            {
-                "env_id": "MineRLBasaltFindCave-v0",
-                "seed_start": seed_start,
-                "count": count,
-                "panorama": panorama,
-                "captures": captures,
-                "note": (
-                    "Frames require manual review; no model was loaded. Panorama uses "
-                    "only fixed camera turns with interaction keys disabled."
-                ),
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+                def save_view(heading_degrees: int) -> None:
+                    filename = f"seed-{seed}-yaw-{heading_degrees:03d}.png"
+                    Image.fromarray(observation["pov"]).save(session_dir / filename)
+                    views = capture["views"]
+                    assert isinstance(views, list)
+                    views.append({"heading_degrees": heading_degrees, "frame": filename})
+                    _write_index(session_dir, manifest)
+
+                save_view(0)
+                if panorama:
+                    for heading_degrees in (90, 180, 270):
+                        for _ in range(3):
+                            action = adapter.action_space.no_op()
+                            action["camera"] = np.asarray([0.0, 30.0], dtype=np.float32)
+                            action["attack"] = 0
+                            action["jump"] = 0
+                            action["sprint"] = 0
+                            action["ESC"] = 0
+                            observation = adapter.step(action).observation
+                        save_view(heading_degrees)
+                capture["status"] = "captured"
+                _write_index(session_dir, manifest)
+    except BaseException as error:
+        manifest["status"] = "failed"
+        manifest["error"] = {"type": type(error).__name__, "message": str(error)}
+        _write_index(session_dir, manifest)
+        raise
+
+    manifest["status"] = "completed"
+    _write_index(session_dir, manifest)
     return session_dir
 
 

@@ -37,9 +37,15 @@ def main() -> int:
         action="store_true",
         help="Fail if the validated result claims a cave candidate.",
     )
+    parser.add_argument(
+        "--model-lock",
+        type=Path,
+        default=None,
+        help="use an explicit local model lock for an isolated planner experiment",
+    )
     args = parser.parse_args()
     pov = np.asarray(Image.open(args.frame).convert("RGB"))
-    worker = QwenPlannerWorker()
+    worker = QwenPlannerWorker(lock_path=args.model_lock)
     worker.start()
     try:
         if not worker.ready.wait(30):

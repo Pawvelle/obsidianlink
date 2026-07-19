@@ -112,22 +112,27 @@ def _prompt(
         "Your immediate objective is safe forward progress. Choose exactly one macro-action "
         "from the current first-person image. First compare the visible left, center, and "
         "right routes. If the center route is visibly walkable and has no specific hazard, "
-        "you MUST choose move_forward; do not choose look, turn, or wait in that case. Use yaw "
+        "you MUST choose move_forward; do not choose look, turn, or wait in that case. If water, "
+        "a drop, a wall, or immediate danger blocks center, choose retreat for center danger, "
+        "sidestep_right for a left-side hazard, or sidestep_left for a right-side hazard before "
+        "using a turn. Use yaw "
         "-20 when the left route is clearly safer, yaw 20 when the right route is clearly "
         "safer, and yaw 0 only when the center is clearly safest. For move_forward, choose "
-        "duration 6 when nearby terrain is uneven or partly obstructed, 16 for a medium-clear "
-        "route, and 28 only for a wide open route. Turn away from water, trees, walls, animals, "
-        "drops, or danger. Use look or turn only when the reason names the specific visible "
-        "hazard blocking forward motion, and always use a non-zero pitch or yaw. Never return "
+        "duration 6 ONLY when a nearby obstacle, uneven ledge, or partial blockage is plainly "
+        "visible; choose 16 for an ordinary visibly safe route, and 28 only for a wide open "
+        "route. Use look or turn only to inspect or select a visible safer route, and always "
+        "use a non-zero pitch or yaw. Retreat and sidestep actions must use camera pitch and yaw "
+        "zero, with attack, jump, and sprint false. Never return "
         "a zero-angle look or turn. The reason must name the visible evidence used for direction "
         "and distance. Never dig straight down. ESC and task termination are not available. "
         "Use the previous executed action as context: after look or turn, move_forward is "
-        "required if the newly exposed center route is visibly safe; "
+        "required if the newly exposed center route is visibly safe; after retreat or sidestep, "
+        "reassess before moving forward; "
         "after move_forward, continue only if the current view still looks clear, otherwise "
         "turn toward the safer visible side. Return exactly one JSON object on one line, "
         "without Markdown, code, or "
         "extra text. Use exactly this schema: "
-        '{"action":"move_forward|turn|look|wait","duration_ticks":1..40,'
+        '{"action":"move_forward|retreat|sidestep_left|sidestep_right|turn|look|wait","duration_ticks":1..40,'
         '"camera":{"pitch":-30..30,"yaw":-30..30},"attack":false,'
         '"jump":false,"sprint":true|false,"cave_visible":true|false,'
         '"reason":"short visual reason"}. Before choosing the action, set cave_visible '
@@ -154,16 +159,17 @@ def _prompt(
             "Action-change rule: the previous executed action was move_forward with "
             f"duration {previous_duration}. Reassess the current image and MUST NOT repeat "
             "the exact same move_forward duration, yaw, and sprint combination. If center "
-            "remains walkable, use a different safe duration (prefer 6 for cautious progress); "
-            "if it is blocked, use one non-zero turn toward the safer side."
+            "remains walkable, use a different safe duration (prefer 16 for an ordinary "
+            "route; use 6 only for a plainly visible nearby obstacle or uneven ledge); if it "
+            "is blocked, use one non-zero turn toward the safer side."
         )
     if visual_change is not None:
         low_change = bool(visual_change["low_change"])
         if low_change:
             change_signal = (
                 "LOW; the recent view is nearly unchanged. If center is visibly walkable, "
-                "choose move_forward now. Otherwise turn with a non-zero camera angle and "
-                "name the blocking hazard."
+                "choose move_forward now. Otherwise use retreat or the safer sidestep for a "
+                "visible hazard, or turn with a non-zero camera angle to inspect."
             )
         else:
             change_signal = (
@@ -176,7 +182,8 @@ def _prompt(
 
 
 class QwenPlannerWorker:
-    def __init__(self):
+    def __init__(self, lock_path: Path | None = None):
+        self.lock_path = (lock_path or LOCK_PATH).resolve()
         self.observations = LatestObservationMailbox()
         self.decisions = LatestDecisionMailbox()
         self.ready = threading.Event()
@@ -400,12 +407,17 @@ class QwenPlannerWorker:
             self.ready.set()
 
     def _load_backend(self):
-        lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
+        lock = json.loads(self.lock_path.read_text(encoding="utf-8"))
         model_path = (ROOT / lock["local_dir"]).resolve()
-        weights = model_path / "model.safetensors"
-        expected_size = lock["files"]["model.safetensors"]["size_bytes"]
-        if not weights.is_file() or weights.stat().st_size != expected_size:
-            raise RuntimeError("locked local Qwen weights are missing or drifted")
+        files = lock.get("files")
+        if not isinstance(files, dict) or not files:
+            raise RuntimeError("model lock must declare at least one checked file")
+        for filename, expected in files.items():
+            if not isinstance(expected, dict) or type(expected.get("size_bytes")) is not int:
+                raise RuntimeError(f"model lock has invalid metadata for {filename!r}")
+            path = model_path / filename
+            if not path.is_file() or path.stat().st_size != expected["size_bytes"]:
+                raise RuntimeError(f"locked local model file is missing or drifted: {filename}")
         if not torch.backends.mps.is_available():
             raise RuntimeError("MPS is required; CPU fallback is disabled")
 

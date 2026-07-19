@@ -20,6 +20,9 @@ from mc_agent.actions import (
     Watchdog,
     is_cave_candidate,
     safe_camera_recovery,
+    safe_stuck_recovery,
+    safe_water_recovery,
+    water_hazard_direction,
 )
 from mc_agent.env import MineRLEnvAdapter
 from mc_agent.logger import EpisodeLogger
@@ -70,7 +73,12 @@ def _action_context(action: MacroAction) -> dict[str, Any]:
 
 
 def _macro_action_has_effect(action: MacroAction) -> bool:
-    if action.action == "move_forward":
+    if action.action in {
+        "move_forward",
+        "retreat",
+        "sidestep_left",
+        "sidestep_right",
+    }:
         return True
     if action.action in {"look", "turn"} and (
         action.camera_pitch != 0.0 or action.camera_yaw != 0.0
@@ -87,6 +95,23 @@ def _select_executed_action(
     if not _macro_action_has_effect(action):
         return safe_camera_recovery(recovery_index), True
     return action, False
+
+
+def _should_publish_macro_completion_observation(
+    *, action_completed: bool, completed_action: str, planner_idle: bool
+) -> bool:
+    """Publish a real post-movement frame while the worker can consume it.
+
+    Turns and looks deliberately keep periodic visual-change feedback: an
+    immediate one-tick follow-up can ask the planner to reassess nearly the
+    same view and create a camera loop. This does not participate in pacing.
+    """
+    return (
+        action_completed
+        and completed_action
+        in {"move_forward", "retreat", "sidestep_left", "sidestep_right"}
+        and planner_idle
+    )
 
 
 def _episode_passes_gate(
@@ -124,6 +149,8 @@ def _run_episode(
     episode_id_override: str | None = None,
     seed: int | None = None,
     watch: bool = False,
+    mission_max_ticks: int | None = None,
+    model_lock_path: Path | None = None,
 ) -> dict[str, Any]:
     episode_id = episode_id_override or f"episode-{episode_index:02d}"
     run_dir = session_dir / episode_id
@@ -134,12 +161,17 @@ def _run_episode(
             "env_id": "MineRLBasaltFindCave-v0",
             "seed": seed,
             "tick_budget": tick_budget,
+            "mission_max_ticks": mission_max_ticks,
             "observation_interval": observation_interval,
             "target_ticks_per_second": TARGET_TICKS_PER_SECOND,
             "planner": "Qwen3-VL-2B-Instruct MPS/FP16, asynchronous",
+            "model_lock_path": str(model_lock_path) if model_lock_path else "model.lock.json",
             "live_view": watch,
             "visual_change_feedback": True,
+            "macro_completion_observations": True,
             "safe_camera_recovery": True,
+            "local_water_hazard_guard": True,
+            "local_low_progress_guard": True,
             "acceptance_requires_model_forward": True,
             "esc_policy": "always disabled; manual termination policy not enabled",
         },
@@ -159,9 +191,14 @@ def _run_episode(
     action_signatures: list[str] = []
     recovery_action_signatures: list[str] = []
     frame_changes = []
+    periodic_observations = 1
+    macro_completion_observations = 0
     paced_sleep_seconds = 0.0
     no_op_ticks = 0
     forward_ticks = 0
+    retreat_ticks = 0
+    sidestep_left_ticks = 0
+    sidestep_right_ticks = 0
     decisions = 0
     accepted_decisions = 0
     model_forward_decisions = 0
@@ -184,6 +221,9 @@ def _run_episode(
     recovery_followup_pending = False
     recovery_followup_decisions = 0
     recovery_followup_effective_decisions = 0
+    water_hazard_overrides = 0
+    water_hazard_directions: list[str] = []
+    stuck_recovery_actions = 0
     cave_candidate_decisions = 0
     raw_cave_visible_decisions = 0
     cave_candidate_observation_ticks: list[int] = []
@@ -222,6 +262,7 @@ def _run_episode(
         while completed_ticks < tick_budget:
             tick_started = time.perf_counter()
             pending_ack: PlannerDecision | None = None
+            decision_applied_this_tick = False
             if stop_all.is_set():
                 watchdog.request_stop("SIGINT")
             if planner.error:
@@ -241,6 +282,7 @@ def _run_episode(
                         observation_tick=decision.observation_tick,
                     )
                 else:
+                    decision_applied_this_tick = True
                     decisions += 1
                     decision_latencies.append(decision.latency_seconds)
                     action_to_execute = decision.action
@@ -288,6 +330,18 @@ def _run_episode(
                                     sort_keys=True,
                                 )
                             )
+                        water_direction = water_hazard_direction(observation["pov"])
+                        water_override = (
+                            action_to_execute.action == "move_forward"
+                            and water_direction is not None
+                        )
+                        if water_override:
+                            action_to_execute = safe_water_recovery(
+                                water_direction,
+                                water_hazard_overrides,
+                            )
+                            water_hazard_overrides += 1
+                            water_hazard_directions.append(water_direction)
                         executed_has_effect = _macro_action_has_effect(action_to_execute)
                         executed_ineffective_decisions += int(not executed_has_effect)
                         previous_action_context = _action_context(action_to_execute)
@@ -308,6 +362,8 @@ def _run_episode(
                         executed_has_effect=executed_has_effect,
                         recovery_opportunity=decision.accepted and not has_effect,
                         recovery_applied=recovery_applied,
+                        water_hazard_override=water_override if decision.accepted else False,
+                        water_hazard_direction=water_direction if decision.accepted else None,
                         cave_visible=decision.action.cave_visible,
                         cave_candidate_validated=cave_candidate_validated,
                         raw=decision.raw,
@@ -327,6 +383,24 @@ def _run_episode(
                     action_windows += 1
                     ineffective_action_windows += int(change.low_change)
                 visual_change = change.to_log_dict()
+                stuck_recovery = (
+                    change.low_change
+                    and progress_action_ticks_since_observation > 0
+                    and previous_action_context is not None
+                    and previous_action_context["action"] == "move_forward"
+                    and not decision_applied_this_tick
+                )
+                if stuck_recovery:
+                    action_to_execute = safe_stuck_recovery(stuck_recovery_actions)
+                    executor.submit(action_to_execute)
+                    previous_action_context = _action_context(action_to_execute)
+                    stuck_recovery_actions += 1
+                    logger.event(
+                        "low_progress_recovery",
+                        tick=completed_ticks,
+                        visual_change=visual_change,
+                        executed=action_to_execute.to_log_dict(),
+                    )
                 planner.submit(
                     episode_id,
                     completed_ticks,
@@ -334,12 +408,14 @@ def _run_episode(
                     previous_action_context,
                     visual_change,
                 )
+                periodic_observations += 1
                 logger.event(
                     "observation_published",
                     tick=completed_ticks,
                     frame=f"decision_frames/{frame_name}",
                     visual_change=visual_change,
                     progress_action_ticks=progress_action_ticks_since_observation,
+                    source="periodic",
                 )
                 progress_action_ticks_since_observation = 0
 
@@ -350,12 +426,18 @@ def _run_episode(
             action_changed = bool(
                 camera_changed
                 or tick_action["attack"]
+                or tick_action["back"]
                 or tick_action["forward"]
                 or tick_action["jump"]
+                or tick_action["left"]
+                or tick_action["right"]
                 or tick_action["sprint"]
             )
             no_op_ticks += int(not action_changed)
             forward_ticks += int(bool(tick_action["forward"]))
+            retreat_ticks += int(bool(tick_action["back"]))
+            sidestep_left_ticks += int(bool(tick_action["left"]))
+            sidestep_right_ticks += int(bool(tick_action["right"]))
             progress_action_ticks_since_observation += int(action_changed)
             esc_nonzero += int(bool(tick_action["ESC"]))
             step_started = time.perf_counter()
@@ -383,6 +465,34 @@ def _run_episode(
                     after_tick=completed_ticks,
                 )
 
+            # A short forward macro can finish long before the next fixed
+            # sampling slot. Start the next inference from its actual
+            # post-action frame immediately, without changing the macro length
+            # or waiting in the MineRL loop. Camera-only actions retain the
+            # periodic visual-change feedback to avoid a turn loop.
+            if _should_publish_macro_completion_observation(
+                action_completed=executor.needs_action,
+                completed_action=executor.current.action,
+                planner_idle=planner.idle.is_set(),
+            ):
+                frame_name = f"tick-{completed_ticks:04d}.png"
+                Image.fromarray(observation["pov"]).save(frames_dir / frame_name)
+                planner.submit(
+                    episode_id,
+                    completed_ticks,
+                    observation["pov"],
+                    previous_action_context,
+                )
+                macro_completion_observations += 1
+                logger.event(
+                    "observation_published",
+                    tick=completed_ticks,
+                    frame=f"decision_frames/{frame_name}",
+                    visual_change=None,
+                    progress_action_ticks=0,
+                    source="macro_completion",
+                )
+
             peak_rss = max(peak_rss, process.memory_info().rss)
             minimum_available = min(minimum_available, psutil.virtual_memory().available)
             logger.event(
@@ -391,9 +501,12 @@ def _run_episode(
                 action={
                     "ESC": tick_action["ESC"],
                     "attack": tick_action["attack"],
+                    "back": tick_action["back"],
                     "camera": tick_action["camera"],
                     "forward": tick_action["forward"],
                     "jump": tick_action["jump"],
+                    "left": tick_action["left"],
+                    "right": tick_action["right"],
                     "sprint": tick_action["sprint"],
                 },
                 reward=step.reward,
@@ -476,7 +589,12 @@ def _run_episode(
         "no_op_ticks": no_op_ticks,
         "no_op_tick_rate": no_op_ticks / completed_ticks if completed_ticks else None,
         "forward_ticks": forward_ticks,
+        "retreat_ticks": retreat_ticks,
+        "sidestep_left_ticks": sidestep_left_ticks,
+        "sidestep_right_ticks": sidestep_right_ticks,
         "frame_change_samples": len(frame_changes),
+        "periodic_observations": periodic_observations,
+        "macro_completion_observations": macro_completion_observations,
         "low_change_samples": low_change_samples,
         "low_change_rate": low_change_samples / len(frame_changes) if frame_changes else None,
         "mean_frame_difference": (
@@ -525,6 +643,9 @@ def _run_episode(
         ),
         "recovery_followup_pending_at_end": recovery_followup_pending,
         "recovery_action_signatures": sorted(set(recovery_action_signatures)),
+        "water_hazard_overrides": water_hazard_overrides,
+        "water_hazard_directions": water_hazard_directions,
+        "low_progress_recovery_actions": stuck_recovery_actions,
         "cave_candidate_decisions": cave_candidate_decisions,
         "raw_cave_visible_decisions": raw_cave_visible_decisions,
         "cave_candidate_observation_ticks": cave_candidate_observation_ticks,
@@ -565,17 +686,25 @@ def run_agent(
     output_root: Path | None = None,
     seed: int | None = None,
     watch: bool = False,
+    mission_max_ticks: int | None = None,
+    model_lock_path: Path | None = None,
 ) -> dict[str, Any]:
     if episodes < 1 or ticks < 1 or observation_interval < 1:
         raise ValueError("episodes, ticks, and observation_interval must be positive")
     if seed is not None and type(seed) is not int:
         raise ValueError("seed must be an integer or None")
+    if mission_max_ticks is not None and (
+        type(mission_max_ticks) is not int or mission_max_ticks < 1
+    ):
+        raise ValueError("mission_max_ticks must be a positive integer or None")
+    if model_lock_path is not None and not model_lock_path.is_file():
+        raise ValueError(f"model lock does not exist: {model_lock_path}")
     output_root = output_root or ROOT / "runs" / "episodes"
     session_dir = output_root / datetime.now().strftime("%Y%m%d-%H%M%S")
     session_dir.mkdir(parents=True, exist_ok=False)
     stop_all = threading.Event()
     signal.signal(signal.SIGINT, lambda *_: stop_all.set())
-    planner = QwenPlannerWorker()
+    planner = QwenPlannerWorker(lock_path=model_lock_path)
     results: list[dict[str, Any]] = []
     planner.start()
     try:
@@ -583,7 +712,7 @@ def run_agent(
             raise TimeoutError("Qwen planner did not load within 30 seconds")
         if planner.error:
             raise RuntimeError(planner.error)
-        with MineRLEnvAdapter() as adapter:
+        with MineRLEnvAdapter(max_episode_steps=mission_max_ticks) as adapter:
             for episode_index in range(1, episodes + 1):
                 if stop_all.is_set():
                     break
@@ -598,6 +727,8 @@ def run_agent(
                         stop_all,
                         seed=seed,
                         watch=watch,
+                        mission_max_ticks=mission_max_ticks,
+                        model_lock_path=model_lock_path,
                     )
                 )
     finally:
@@ -643,6 +774,8 @@ def run_agent(
         "episodes_completed": len(results),
         "seed": seed,
         "ticks_per_episode": ticks,
+        "mission_max_ticks": mission_max_ticks,
+        "model_lock_path": str(model_lock_path) if model_lock_path else "model.lock.json",
         "observation_interval": observation_interval,
         "planner_load_seconds": planner.load_seconds,
         "planner_peak_mps_driver_bytes": planner.peak_mps_driver_bytes,
