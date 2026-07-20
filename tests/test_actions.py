@@ -1,21 +1,32 @@
 import json
 import unittest
+from pathlib import Path
 
 import numpy as np
 from minerl.herobraine.envs import MINERL_BASALT_FIND_CAVES_ENV_SPEC
+from PIL import Image
 
 from mc_agent.actions import (
+    TURN_SCAN_MAX_TOTAL_DEGREES,
+    TURN_SCAN_STEPS,
     LatestActionMailbox,
     MacroAction,
     MacroExecutor,
     Watchdog,
+    has_dark_opening_region,
+    has_directional_dark_opening_region,
     is_cave_candidate,
     parse_macro_action,
+    resolve_cave_direction,
     safe_camera_recovery,
+    safe_forward_continuation,
     safe_stuck_recovery,
+    safe_turn_scan_recovery,
     safe_water_recovery,
     water_hazard_direction,
 )
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "seed3_frame_veto_regression"
 
 
 class ActionSchemaTests(unittest.TestCase):
@@ -277,6 +288,165 @@ class RecoveryActionTests(unittest.TestCase):
         sky = np.zeros((30, 30, 3), dtype=np.uint8)
         sky[:, :10] = (120, 180, 255)
         self.assertIsNone(water_hazard_direction(sky))
+
+
+class DarkOpeningFrameVetoTests(unittest.TestCase):
+    """Regression + synthetic coverage for the frame-veto cave candidate gate.
+
+    seed 3's long-run validation (runs/phase4-cave-search/20260720-164452)
+    produced three ``cave_candidate_validated`` decisions whose frames were
+    manually confirmed to be a brightly lit sandstone wall/sky/sand, not a
+    cave opening. Those exact frames are copied into
+    tests/fixtures/seed3_frame_veto_regression/ so this gate's rejection of
+    them is verifiable without depending on the (gitignored) runs/ tree.
+    """
+
+    def test_seed3_known_false_positive_frames_are_rejected(self):
+        frame_names = ["tick-7000.png", "tick-7109.png", "tick-7410.png"]
+        for frame_name in frame_names:
+            frame = np.asarray(Image.open(FIXTURES_DIR / frame_name).convert("RGB"))
+            self.assertFalse(
+                has_dark_opening_region(frame),
+                f"{frame_name} is a bright sandstone/sky frame and must be vetoed",
+            )
+
+    def test_bright_uniform_frame_is_rejected(self):
+        bright_sandstone = np.full((90, 120, 3), (205, 185, 145), dtype=np.uint8)
+        self.assertFalse(has_dark_opening_region(bright_sandstone))
+
+    def test_frame_with_a_clear_continuous_dark_region_is_not_rejected(self):
+        frame = np.full((90, 120, 3), (205, 185, 145), dtype=np.uint8)
+        frame[20:70, 30:90] = (5, 5, 5)
+        self.assertTrue(has_dark_opening_region(frame))
+
+    def test_scattered_noise_darkness_without_a_contiguous_patch_is_rejected(self):
+        rng = np.random.default_rng(0)
+        frame = np.full((90, 120, 3), (205, 185, 145), dtype=np.uint8)
+        noise_rows = rng.integers(0, 90, size=200)
+        noise_cols = rng.integers(0, 120, size=200)
+        frame[noise_rows, noise_cols] = (5, 5, 5)
+        self.assertFalse(has_dark_opening_region(frame))
+
+    def test_invalid_input_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "RGB image"):
+            has_dark_opening_region(np.zeros((90, 120), dtype=np.uint8))
+        with self.assertRaisesRegex(ValueError, "too small"):
+            has_dark_opening_region(np.zeros((3, 3, 3), dtype=np.uint8))
+
+
+class TurnScanRecoveryTests(unittest.TestCase):
+    def test_scan_is_a_fixed_bounded_camera_only_sequence(self):
+        scan = safe_turn_scan_recovery(0)
+        self.assertEqual(len(scan), TURN_SCAN_STEPS)
+        total_rotation = sum(abs(step.camera_yaw) for step in scan)
+        self.assertAlmostEqual(total_rotation, TURN_SCAN_MAX_TOTAL_DEGREES)
+        for step in scan:
+            self.assertEqual(step.action, "turn")
+            self.assertEqual(step.duration_ticks, 1)
+            self.assertEqual(step.camera_pitch, 0.0)
+            self.assertFalse(step.attack)
+            self.assertFalse(step.jump)
+            self.assertFalse(step.sprint)
+            self.assertFalse(step.cave_visible)
+
+    def test_scan_direction_alternates_by_index_and_stays_bounded(self):
+        first_scan = safe_turn_scan_recovery(0)
+        second_scan = safe_turn_scan_recovery(1)
+        self.assertGreater(first_scan[0].camera_yaw, 0.0)
+        self.assertLess(second_scan[0].camera_yaw, 0.0)
+        for scan in (first_scan, second_scan):
+            for step in scan:
+                self.assertLessEqual(abs(step.camera_yaw), 30.0)
+
+    def test_scan_rejects_invalid_index(self):
+        with self.assertRaisesRegex(ValueError, "non-negative integer"):
+            safe_turn_scan_recovery(-1)
+        with self.assertRaisesRegex(ValueError, "non-negative integer"):
+            safe_turn_scan_recovery(True)
+
+
+class CaveDirectionResolutionTests(unittest.TestCase):
+    def test_single_direction_word_resolves_to_its_band(self):
+        self.assertEqual(
+            resolve_cave_direction("dark stone opening on the left"), "left"
+        )
+        self.assertEqual(
+            resolve_cave_direction("dark stone opening on the right"), "right"
+        )
+        self.assertEqual(
+            resolve_cave_direction("dark stone opening in the center"), "center"
+        )
+        self.assertEqual(
+            resolve_cave_direction("dark stone opening ahead"), "center"
+        )
+
+    def test_ambiguous_or_missing_direction_fails_closed(self):
+        self.assertIsNone(
+            resolve_cave_direction("dark stone opening on the left and right")
+        )
+        self.assertIsNone(resolve_cave_direction("dark stone opening visible"))
+        self.assertIsNone(resolve_cave_direction(""))
+
+
+class DirectionalDarkOpeningRegionTests(unittest.TestCase):
+    def _frame_with_left_dark_patch(self):
+        frame = np.full((90, 120, 3), (205, 185, 145), dtype=np.uint8)
+        # width // 3 == 40, so this patch is fully inside the left band.
+        frame[20:70, 5:35] = (5, 5, 5)
+        return frame
+
+    def test_left_claim_is_supported_only_by_a_left_dark_patch(self):
+        frame = self._frame_with_left_dark_patch()
+        self.assertTrue(has_directional_dark_opening_region(frame, "left"))
+        self.assertFalse(has_directional_dark_opening_region(frame, "center"))
+        self.assertFalse(has_directional_dark_opening_region(frame, "right"))
+
+    def test_right_claim_is_supported_only_by_a_right_dark_patch(self):
+        frame = np.full((90, 120, 3), (205, 185, 145), dtype=np.uint8)
+        frame[20:70, 85:115] = (5, 5, 5)
+        self.assertTrue(has_directional_dark_opening_region(frame, "right"))
+        self.assertFalse(has_directional_dark_opening_region(frame, "left"))
+        self.assertFalse(has_directional_dark_opening_region(frame, "center"))
+
+    def test_seed3_known_false_positive_frames_are_rejected_in_every_band(self):
+        frame_names = ["tick-7000.png", "tick-7109.png", "tick-7410.png"]
+        for frame_name in frame_names:
+            frame = np.asarray(Image.open(FIXTURES_DIR / frame_name).convert("RGB"))
+            for direction in ("left", "center", "right"):
+                self.assertFalse(
+                    has_directional_dark_opening_region(frame, direction),
+                    f"{frame_name} ({direction}) is bright and must be vetoed",
+                )
+
+    def test_invalid_direction_is_rejected(self):
+        frame = self._frame_with_left_dark_patch()
+        with self.assertRaisesRegex(ValueError, "left, center, or right"):
+            has_directional_dark_opening_region(frame, "up")
+
+
+class ForwardContinuationRecoveryTests(unittest.TestCase):
+    def test_single_macro_is_capped_at_forty_ticks(self):
+        macro = safe_forward_continuation(120)
+        self.assertEqual(macro.action, "move_forward")
+        self.assertEqual(macro.duration_ticks, 40)
+        self.assertEqual(macro.camera_pitch, 0.0)
+        self.assertEqual(macro.camera_yaw, 0.0)
+        self.assertFalse(macro.attack)
+        self.assertFalse(macro.jump)
+        self.assertFalse(macro.sprint)
+        self.assertFalse(macro.cave_visible)
+
+    def test_macro_never_exceeds_the_remaining_budget(self):
+        self.assertEqual(safe_forward_continuation(5).duration_ticks, 5)
+        self.assertEqual(safe_forward_continuation(1).duration_ticks, 1)
+
+    def test_rejects_invalid_remaining_ticks(self):
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            safe_forward_continuation(0)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            safe_forward_continuation(-1)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            safe_forward_continuation(True)
 
 
 if __name__ == "__main__":

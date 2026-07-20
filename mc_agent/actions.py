@@ -186,6 +186,130 @@ def is_cave_candidate(action: MacroAction) -> bool:
     return all(words.intersection(group) for group in evidence_groups)
 
 
+DARK_OPENING_LUMINANCE_THRESHOLD = 55.0
+DARK_OPENING_MIN_REGION_FRACTION = 0.03
+DARK_OPENING_GRID_ROWS = 9
+DARK_OPENING_GRID_COLS = 12
+
+
+def has_dark_opening_region(
+    pov: np.ndarray,
+    *,
+    dark_luminance: float = DARK_OPENING_LUMINANCE_THRESHOLD,
+    min_region_fraction: float = DARK_OPENING_MIN_REGION_FRACTION,
+    grid_rows: int = DARK_OPENING_GRID_ROWS,
+    grid_cols: int = DARK_OPENING_GRID_COLS,
+) -> bool:
+    """Deterministically veto a cave claim whose frame has no dark patch.
+
+    This is a narrow, local, fail-closed check: it only rejects frames that
+    are obviously implausible (large bright area, no continuous dark region,
+    e.g. a sunlit sandstone wall). Passing this check never confirms a cave by
+    itself; it is combined with the existing text-evidence gate
+    (``is_cave_candidate``) and still requires human frame review afterward.
+    """
+    if not isinstance(pov, np.ndarray) or pov.ndim != 3 or pov.shape[2] != 3:
+        raise ValueError("pov must be an RGB image")
+    height, width, _ = pov.shape
+    if height < grid_rows or width < grid_cols:
+        raise ValueError("pov is too small for darkness-region detection")
+    if grid_rows < 1 or grid_cols < 1:
+        raise ValueError("grid_rows and grid_cols must be positive")
+    if not 0.0 < min_region_fraction <= 1.0:
+        raise ValueError("min_region_fraction must be within (0, 1]")
+
+    world_height = max(1, int(height * 0.85))  # exclude the bottom HUD strip
+    world = pov[:world_height].astype(np.float32, copy=False)
+    luminance = (
+        world[..., 0] * 0.299 + world[..., 1] * 0.587 + world[..., 2] * 0.114
+    )
+
+    row_edges = np.linspace(0, luminance.shape[0], grid_rows + 1).astype(int)
+    col_edges = np.linspace(0, luminance.shape[1], grid_cols + 1).astype(int)
+    dark_cell = np.zeros((grid_rows, grid_cols), dtype=bool)
+    for row in range(grid_rows):
+        for col in range(grid_cols):
+            cell = luminance[
+                row_edges[row] : row_edges[row + 1],
+                col_edges[col] : col_edges[col + 1],
+            ]
+            if cell.size and float(cell.mean()) <= dark_luminance:
+                dark_cell[row, col] = True
+
+    if not dark_cell.any():
+        return False
+
+    visited = np.zeros_like(dark_cell)
+    largest_component = 0
+    for row in range(grid_rows):
+        for col in range(grid_cols):
+            if not dark_cell[row, col] or visited[row, col]:
+                continue
+            stack = [(row, col)]
+            visited[row, col] = True
+            component_size = 0
+            while stack:
+                current_row, current_col = stack.pop()
+                component_size += 1
+                for delta_row, delta_col in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    next_row, next_col = current_row + delta_row, current_col + delta_col
+                    if (
+                        0 <= next_row < grid_rows
+                        and 0 <= next_col < grid_cols
+                        and dark_cell[next_row, next_col]
+                        and not visited[next_row, next_col]
+                    ):
+                        visited[next_row, next_col] = True
+                        stack.append((next_row, next_col))
+            largest_component = max(largest_component, component_size)
+
+    region_fraction = largest_component / (grid_rows * grid_cols)
+    return region_fraction >= min_region_fraction
+
+
+def resolve_cave_direction(reason: str) -> str | None:
+    """Map the model's stated left/center/right/ahead word to one band.
+
+    Returns ``None`` when the reason names zero direction words or more than
+    one distinct band (e.g. both "left" and "right"): an ambiguous or absent
+    direction must fail the frame veto closed rather than guess a band.
+    """
+    words = set(re.findall(r"[a-z]+", reason.lower()))
+    direction_words = {"left": "left", "center": "center", "right": "right", "ahead": "center"}
+    matches = {direction_words[word] for word in words if word in direction_words}
+    if len(matches) != 1:
+        return None
+    return next(iter(matches))
+
+
+def has_directional_dark_opening_region(
+    pov: np.ndarray,
+    direction: str,
+    **kwargs: Any,
+) -> bool:
+    """Restrict the frame-veto darkness check to the claimed left/center/right band.
+
+    A model claiming "opening on the left" must not be validated by a dark
+    patch that only exists on the right (or center); each third of the frame
+    is checked independently using the same deterministic
+    ``has_dark_opening_region`` logic, applied only to the claimed band.
+    """
+    if direction not in {"left", "center", "right"}:
+        raise ValueError("direction must be left, center, or right")
+    if not isinstance(pov, np.ndarray) or pov.ndim != 3 or pov.shape[2] != 3:
+        raise ValueError("pov must be an RGB image")
+    width = pov.shape[1]
+    third = width // 3
+    bounds = {
+        "left": (0, third),
+        "center": (third, 2 * third),
+        "right": (2 * third, width),
+    }
+    start, end = bounds[direction]
+    band = pov[:, start:end]
+    return has_dark_opening_region(band, **kwargs)
+
+
 class LatestActionMailbox:
     """Capacity-one mailbox in which a newer action replaces the old one."""
 
@@ -385,6 +509,75 @@ def safe_stuck_recovery(index: int) -> MacroAction:
             reason="local low-progress recovery",
         )
     )
+
+
+TURN_SCAN_STEPS = 3
+TURN_SCAN_STEP_DEGREES = 20.0
+TURN_SCAN_MAX_TOTAL_DEGREES = TURN_SCAN_STEPS * TURN_SCAN_STEP_DEGREES
+
+
+def safe_turn_scan_recovery(index: int) -> list[MacroAction]:
+    """Return one fixed, capped local turn scan instead of unbounded sidesteps.
+
+    Used after repeated ("consecutive") forward low-progress recoveries, in
+    place of continuing to alternate sidesteps indefinitely. The scan is a
+    short, deterministic sequence of camera-only, one-tick turns: no movement
+    key, no attack, no jump, no sprint, and ESC is never part of a macro
+    action. Its cumulative rotation is hard-capped at
+    ``TURN_SCAN_MAX_TOTAL_DEGREES`` (``TURN_SCAN_STEPS`` steps of
+    ``TURN_SCAN_STEP_DEGREES`` each), independent of how many times this is
+    called; callers must submit a fresh observation once the returned
+    sequence is fully executed instead of waiting inside the MineRL loop.
+    """
+    if type(index) is not int or index < 0:
+        raise ValueError("recovery index must be a non-negative integer")
+    direction = 1.0 if index % 2 == 0 else -1.0
+    return [
+        limit_macro_action(
+            MacroAction(
+                action="turn",
+                duration_ticks=1,
+                camera_pitch=0.0,
+                camera_yaw=direction * TURN_SCAN_STEP_DEGREES,
+                attack=False,
+                jump=False,
+                sprint=False,
+                cave_visible=False,
+                reason=f"bounded local turn scan step {step + 1}/{TURN_SCAN_STEPS}",
+            )
+        )
+        for step in range(TURN_SCAN_STEPS)
+    ]
+
+
+def safe_forward_continuation(remaining_ticks: int) -> MacroAction:
+    """One bounded forward macro used by the local continuation safety layer.
+
+    Qwen only chooses direction; while the step loop waits for the next
+    (slow) decision, this lets it keep making limited forward progress
+    instead of idling. The caller is responsible for enforcing the
+    cumulative ``LOCAL_FORWARD_CONTINUATION_MAX_TICKS`` budget across calls;
+    this only clamps one macro to the existing 1..40 duration limit via
+    ``limit_macro_action`` and keeps it a plain, camera-neutral forward step
+    with no attack, jump, sprint, or cave claim.
+    """
+    if type(remaining_ticks) is not int or remaining_ticks < 1:
+        raise ValueError("remaining_ticks must be a positive integer")
+    return limit_macro_action(
+        MacroAction(
+            action="move_forward",
+            duration_ticks=min(40, remaining_ticks),
+            camera_pitch=0.0,
+            camera_yaw=0.0,
+            attack=False,
+            jump=False,
+            sprint=False,
+            cave_visible=False,
+            reason="bounded local forward continuation while awaiting the next decision",
+        )
+    )
+
+
 __all__ = [
     "LatestActionMailbox",
     "MacroAction",
@@ -392,11 +585,19 @@ __all__ = [
     "ParseResult",
     "Watchdog",
     "ESCAPE_ACTIONS",
+    "has_dark_opening_region",
+    "has_directional_dark_opening_region",
     "is_cave_candidate",
     "limit_macro_action",
     "parse_macro_action",
+    "resolve_cave_direction",
     "safe_camera_recovery",
+    "safe_forward_continuation",
     "safe_stuck_recovery",
+    "safe_turn_scan_recovery",
     "safe_water_recovery",
     "water_hazard_direction",
+    "TURN_SCAN_MAX_TOTAL_DEGREES",
+    "TURN_SCAN_STEPS",
+    "TURN_SCAN_STEP_DEGREES",
 ]

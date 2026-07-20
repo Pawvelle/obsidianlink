@@ -7,10 +7,12 @@ import signal
 import statistics
 import threading
 import time
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import psutil
 from PIL import Image
 
@@ -18,9 +20,13 @@ from mc_agent.actions import (
     MacroAction,
     MacroExecutor,
     Watchdog,
+    has_directional_dark_opening_region,
     is_cave_candidate,
+    resolve_cave_direction,
     safe_camera_recovery,
+    safe_forward_continuation,
     safe_stuck_recovery,
+    safe_turn_scan_recovery,
     safe_water_recovery,
     water_hazard_direction,
 )
@@ -33,6 +39,18 @@ from mc_agent.qwen import PlannerDecision, QwenPlannerWorker
 ROOT = Path(__file__).resolve().parents[1]
 TARGET_TICKS_PER_SECOND = 20.0
 TARGET_TICK_SECONDS = 1.0 / TARGET_TICKS_PER_SECOND
+CONSECUTIVE_FORWARD_STALL_TURN_SCAN_THRESHOLD = 2
+LOCAL_FORWARD_CONTINUATION_MAX_TICKS = 120
+FORWARD_CONTINUATION_CANCEL_REASONS = (
+    "planner_decision",
+    "water_hazard",
+    "low_progress",
+    "turn_scan",
+    "environment_done",
+    "watchdog",
+    "max_ticks",
+)
+PUBLISHED_FRAME_CACHE_MAX_ENTRIES = 16
 
 
 def _percentile(values: list[float], fraction: float) -> float:
@@ -137,6 +155,61 @@ def _episode_passes_gate(
     )
 
 
+class _PublishedFrameCache:
+    """Bounded (episode_id, observation_tick) -> copied POV cache.
+
+    A cave-candidate frame veto must judge the exact frame the model saw at
+    ``decision.observation_tick``, not whichever frame happens to be newest
+    when the (much later) asynchronous decision is applied. This cache keeps
+    only the most recent ``max_entries`` published frames -- just enough to
+    span the inference delay -- and always stores a copy, never a mutable
+    reference to a MineRL buffer. It is created fresh per episode and is not
+    a long-term map or memory.
+    """
+
+    def __init__(self, max_entries: int = PUBLISHED_FRAME_CACHE_MAX_ENTRIES):
+        if max_entries < 1:
+            raise ValueError("max_entries must be positive")
+        self.max_entries = max_entries
+        self._entries: "OrderedDict[tuple[str, int], np.ndarray]" = OrderedDict()
+
+    def put(self, episode_id: str, tick: int, pov: np.ndarray) -> None:
+        key = (episode_id, tick)
+        self._entries[key] = np.array(pov, copy=True)
+        self._entries.move_to_end(key)
+        while len(self._entries) > self.max_entries:
+            self._entries.popitem(last=False)
+
+    def get(self, episode_id: str, tick: int) -> np.ndarray | None:
+        return self._entries.get((episode_id, tick))
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+
+def _forward_continuation_is_eligible(
+    *, decision_accepted: bool, decision_action: str, executed_action: str
+) -> bool:
+    """Only an accepted, unmodified move_forward decision may start continuation.
+
+    If the decision was rejected, was not move_forward, or was overridden by
+    a safety layer (water hazard or ineffective-action recovery), the local
+    continuation safety layer must not run.
+    """
+    return (
+        decision_accepted
+        and decision_action == "move_forward"
+        and executed_action == "move_forward"
+    )
+
+
+def _forward_continuation_next_duration(remaining_ticks: int) -> int:
+    """Return one bounded macro length that never exceeds the remaining budget."""
+    if remaining_ticks < 1:
+        raise ValueError("remaining_ticks must be a positive integer")
+    return min(40, remaining_ticks)
+
+
 def _run_episode(
     adapter: MineRLEnvAdapter,
     planner: QwenPlannerWorker,
@@ -226,11 +299,50 @@ def _run_episode(
     stuck_recovery_actions = 0
     cave_candidate_decisions = 0
     raw_cave_visible_decisions = 0
+    cave_candidate_frame_vetoes = 0
+    cave_candidate_frame_missing = 0
     cave_candidate_observation_ticks: list[int] = []
     cave_candidate_evidence: list[str] = []
+    consecutive_forward_stall_periods = 0
+    turn_scan_recoveries = 0
+    turn_scan_completion_observations = 0
+    pending_turn_scan_actions: list[MacroAction] = []
+    awaiting_turn_scan_observation = False
+    frame_cache = _PublishedFrameCache()
+    forward_continuation_eligible = False
+    forward_continuation_session_active = False
+    # True while the executor is currently running a macro that the local
+    # continuation layer itself submitted (as opposed to the model's own
+    # decision macro or a safety override). This -- not the remaining
+    # budget -- is what "an active continuation session" means: even after
+    # the budget reaches zero, the last submitted macro can still be
+    # executing for up to 40 more ticks, and must still be treated as
+    # cancellable until it either finishes on its own or is pre-empted.
+    forward_continuation_macro_pending = False
+    forward_continuation_remaining_ticks = 0
+    # Only real ticks handed to MineRL with forward=1 while
+    # forward_continuation_macro_pending was true are counted here; this is
+    # always a subset of forward_ticks, never a pre-allocated budget.
+    forward_continuation_ticks = 0
+    forward_continuation_sessions_started = 0
+    forward_continuation_cancellations = {
+        reason: 0 for reason in FORWARD_CONTINUATION_CANCEL_REASONS
+    }
     previous_action_context: dict[str, Any] | None = None
     barrier_seconds = 0.0
     started = time.perf_counter()
+
+    def _cancel_forward_continuation(reason: str, *, tick: int) -> None:
+        nonlocal forward_continuation_eligible, forward_continuation_remaining_ticks
+        nonlocal forward_continuation_session_active, forward_continuation_macro_pending
+        if not forward_continuation_eligible:
+            return
+        forward_continuation_eligible = False
+        forward_continuation_session_active = False
+        forward_continuation_macro_pending = False
+        forward_continuation_remaining_ticks = 0
+        forward_continuation_cancellations[reason] += 1
+        logger.event("forward_continuation_cancelled", tick=tick, reason=reason)
 
     try:
         # This is the only planner wait in an episode. It happens before reset,
@@ -251,6 +363,7 @@ def _run_episode(
         Image.fromarray(observation["pov"]).save(run_dir / "initial.png")
         logger.event("reset", pov_shape=list(observation["pov"].shape), seed=seed)
         Image.fromarray(observation["pov"]).save(frames_dir / "tick-0000.png")
+        frame_cache.put(episode_id, 0, observation["pov"])
         planner.submit(episode_id, 0, observation["pov"], None)
         logger.event(
             "observation_published",
@@ -268,6 +381,7 @@ def _run_episode(
             if planner.error:
                 watchdog.request_stop("planner_error")
             if watchdog.should_stop and watchdog.reason not in (None, "max_ticks"):
+                _cancel_forward_continuation("watchdog", tick=completed_ticks)
                 logger.event("interrupted", tick=completed_ticks, reason=watchdog.reason)
                 break
 
@@ -285,9 +399,19 @@ def _run_episode(
                     decision_applied_this_tick = True
                     decisions += 1
                     decision_latencies.append(decision.latency_seconds)
+                    # A real planner decision always takes priority over the
+                    # local forward-continuation safety layer; abandon any
+                    # active session rather than resume it out of context.
+                    _cancel_forward_continuation(
+                        "planner_decision", tick=completed_ticks
+                    )
                     action_to_execute = decision.action
                     recovery_applied = False
                     cave_candidate_validated = False
+                    cave_text_evidence_complete = False
+                    cave_frame_plausible: bool | None = None
+                    candidate_gate_direction: str | None = None
+                    candidate_gate_frame_tick: int | None = None
                     if decision.accepted:
                         accepted_decisions += 1
                         has_effect = _macro_action_has_effect(decision.action)
@@ -300,9 +424,56 @@ def _run_episode(
                         raw_cave_visible_decisions += int(
                             decision.action.cave_visible
                         )
-                        cave_candidate_validated = is_cave_candidate(
+                        # Text evidence alone can be a model hallucination (e.g.
+                        # a sunlit sandstone wall described as a "dark stone
+                        # opening"). A candidate must also survive a local,
+                        # deterministic frame veto -- applied to the exact frame
+                        # published at decision.observation_tick, restricted to
+                        # the claimed left/center/right band -- before it is
+                        # counted. This still never auto-confirms a cave, it
+                        # only avoids counting obviously implausible frames.
+                        cave_text_evidence_complete = is_cave_candidate(
                             decision.action
                         )
+                        if cave_text_evidence_complete:
+                            candidate_gate_direction = resolve_cave_direction(
+                                decision.action.reason
+                            )
+                            evidence_frame = frame_cache.get(
+                                episode_id, decision.observation_tick
+                            )
+                            if evidence_frame is None:
+                                cave_candidate_frame_missing += 1
+                                cave_frame_plausible = False
+                                logger.event(
+                                    "cave_candidate_frame_missing",
+                                    tick=completed_ticks,
+                                    observation_tick=decision.observation_tick,
+                                    reason=decision.action.reason,
+                                )
+                            else:
+                                candidate_gate_frame_tick = decision.observation_tick
+                                if candidate_gate_direction is None:
+                                    # Ambiguous or unstated direction: fail
+                                    # closed instead of accepting a dark patch
+                                    # anywhere in the frame.
+                                    cave_frame_plausible = False
+                                else:
+                                    cave_frame_plausible = (
+                                        has_directional_dark_opening_region(
+                                            evidence_frame, candidate_gate_direction
+                                        )
+                                    )
+                                if not cave_frame_plausible:
+                                    cave_candidate_frame_vetoes += 1
+                                    logger.event(
+                                        "cave_candidate_frame_vetoed",
+                                        tick=completed_ticks,
+                                        observation_tick=decision.observation_tick,
+                                        direction=candidate_gate_direction,
+                                        reason=decision.action.reason,
+                                    )
+                            cave_candidate_validated = bool(cave_frame_plausible)
                         if cave_candidate_validated:
                             cave_candidate_decisions += 1
                             cave_candidate_observation_ticks.append(
@@ -345,10 +516,31 @@ def _run_episode(
                         executed_has_effect = _macro_action_has_effect(action_to_execute)
                         executed_ineffective_decisions += int(not executed_has_effect)
                         previous_action_context = _action_context(action_to_execute)
+                        # Only an accepted move_forward decision that survived
+                        # untouched (no water-hazard or ineffective-action
+                        # override) may open a bounded local continuation
+                        # window; Qwen still chooses direction, the local
+                        # safety layer only avoids idling while it waits.
+                        if _forward_continuation_is_eligible(
+                            decision_accepted=decision.accepted,
+                            decision_action=decision.action.action,
+                            executed_action=action_to_execute.action,
+                        ):
+                            forward_continuation_eligible = True
+                            forward_continuation_session_active = False
+                            forward_continuation_macro_pending = False
+                            forward_continuation_remaining_ticks = (
+                                LOCAL_FORWARD_CONTINUATION_MAX_TICKS
+                            )
                     else:
                         rejected_decisions += 1
                         has_effect = False
                         executed_has_effect = False
+                    # A real planner decision always takes priority over a
+                    # short local recovery scan; abandon any unfinished scan
+                    # rather than resume it later out of context.
+                    pending_turn_scan_actions = []
+                    awaiting_turn_scan_observation = False
                     executor.submit(action_to_execute)
                     logger.event(
                         "planner_decision",
@@ -365,7 +557,11 @@ def _run_episode(
                         water_hazard_override=water_override if decision.accepted else False,
                         water_hazard_direction=water_direction if decision.accepted else None,
                         cave_visible=decision.action.cave_visible,
+                        cave_text_evidence_complete=cave_text_evidence_complete,
+                        cave_frame_plausible=cave_frame_plausible,
                         cave_candidate_validated=cave_candidate_validated,
+                        candidate_gate_direction=candidate_gate_direction,
+                        candidate_gate_frame_tick=candidate_gate_frame_tick,
                         raw=decision.raw,
                         parsed=decision.action.to_log_dict(),
                         executed=action_to_execute.to_log_dict(),
@@ -391,16 +587,48 @@ def _run_episode(
                     and not decision_applied_this_tick
                 )
                 if stuck_recovery:
-                    action_to_execute = safe_stuck_recovery(stuck_recovery_actions)
-                    executor.submit(action_to_execute)
-                    previous_action_context = _action_context(action_to_execute)
-                    stuck_recovery_actions += 1
-                    logger.event(
-                        "low_progress_recovery",
-                        tick=completed_ticks,
-                        visual_change=visual_change,
-                        executed=action_to_execute.to_log_dict(),
-                    )
+                    consecutive_forward_stall_periods += 1
+                    if (
+                        consecutive_forward_stall_periods
+                        >= CONSECUTIVE_FORWARD_STALL_TURN_SCAN_THRESHOLD
+                    ):
+                        # Two or more consecutive forward stalls: run one
+                        # fixed, capped local turn scan instead of continuing
+                        # to alternate sidesteps without limit.
+                        _cancel_forward_continuation("turn_scan", tick=completed_ticks)
+                        pending_turn_scan_actions = safe_turn_scan_recovery(
+                            turn_scan_recoveries
+                        )
+                        turn_scan_recoveries += 1
+                        action_to_execute = pending_turn_scan_actions.pop(0)
+                        executor.submit(action_to_execute)
+                        previous_action_context = _action_context(action_to_execute)
+                        awaiting_turn_scan_observation = True
+                        logger.event(
+                            "bounded_turn_scan_recovery_started",
+                            tick=completed_ticks,
+                            visual_change=visual_change,
+                            consecutive_forward_stall_periods=(
+                                consecutive_forward_stall_periods
+                            ),
+                            remaining_scan_steps=len(pending_turn_scan_actions),
+                            executed=action_to_execute.to_log_dict(),
+                        )
+                    else:
+                        _cancel_forward_continuation("low_progress", tick=completed_ticks)
+                        action_to_execute = safe_stuck_recovery(stuck_recovery_actions)
+                        executor.submit(action_to_execute)
+                        previous_action_context = _action_context(action_to_execute)
+                        stuck_recovery_actions += 1
+                        logger.event(
+                            "low_progress_recovery",
+                            tick=completed_ticks,
+                            visual_change=visual_change,
+                            executed=action_to_execute.to_log_dict(),
+                        )
+                else:
+                    consecutive_forward_stall_periods = 0
+                frame_cache.put(episode_id, completed_ticks, observation["pov"])
                 planner.submit(
                     episode_id,
                     completed_ticks,
@@ -419,6 +647,11 @@ def _run_episode(
                 )
                 progress_action_ticks_since_observation = 0
 
+            if pending_turn_scan_actions and executor.needs_action:
+                action_to_execute = pending_turn_scan_actions.pop(0)
+                executor.submit(action_to_execute)
+                previous_action_context = _action_context(action_to_execute)
+
             tick_action = executor.next_tick()
             camera_changed = bool(
                 float(tick_action["camera"][0]) or float(tick_action["camera"][1])
@@ -434,7 +667,14 @@ def _run_episode(
                 or tick_action["sprint"]
             )
             no_op_ticks += int(not action_changed)
-            forward_ticks += int(bool(tick_action["forward"]))
+            executing_forward_tick = bool(tick_action["forward"])
+            forward_ticks += int(executing_forward_tick)
+            # Count only ticks actually handed to MineRL while a macro that
+            # the continuation layer itself submitted was executing -- never
+            # the size of a macro merely allocated/queued. This keeps
+            # forward_continuation_ticks a strict subset of forward_ticks.
+            if forward_continuation_macro_pending and executing_forward_tick:
+                forward_continuation_ticks += 1
             retreat_ticks += int(bool(tick_action["back"]))
             sidestep_left_ticks += int(bool(tick_action["left"]))
             sidestep_right_ticks += int(bool(tick_action["right"]))
@@ -450,6 +690,30 @@ def _run_episode(
             watchdog.after_tick()
             reward_sum += step.reward
             observation = step.observation
+
+            # The local forward-continuation safety layer runs without a
+            # fresh model decision, so it re-checks the existing water-hazard
+            # guard every tick (not just at decision time) and immediately
+            # overrides whatever is currently executing, mid-macro if needed.
+            if forward_continuation_eligible:
+                continuation_water_direction = water_hazard_direction(
+                    observation["pov"]
+                )
+                if continuation_water_direction is not None:
+                    _cancel_forward_continuation("water_hazard", tick=completed_ticks)
+                    water_recovery_action = safe_water_recovery(
+                        continuation_water_direction, water_hazard_overrides
+                    )
+                    water_hazard_overrides += 1
+                    water_hazard_directions.append(continuation_water_direction)
+                    executor.submit(water_recovery_action)
+                    previous_action_context = _action_context(water_recovery_action)
+                    logger.event(
+                        "forward_continuation_water_override",
+                        tick=completed_ticks,
+                        water_hazard_direction=continuation_water_direction,
+                        executed=water_recovery_action.to_log_dict(),
+                    )
 
             # The acknowledgement only releases the planner worker. MineRL has
             # already stepped, so inference never blocks this loop.
@@ -477,6 +741,7 @@ def _run_episode(
             ):
                 frame_name = f"tick-{completed_ticks:04d}.png"
                 Image.fromarray(observation["pov"]).save(frames_dir / frame_name)
+                frame_cache.put(episode_id, completed_ticks, observation["pov"])
                 planner.submit(
                     episode_id,
                     completed_ticks,
@@ -491,6 +756,101 @@ def _run_episode(
                     visual_change=None,
                     progress_action_ticks=0,
                     source="macro_completion",
+                )
+
+            # Local forward-continuation safety layer: once the current
+            # forward macro (the model's original decision or a previous
+            # continuation step) is fully executed and the bounded budget is
+            # not exhausted, keep making limited forward progress instead of
+            # idling while the next (slow) decision is still pending. This
+            # never waits on the planner; it only checks already-available
+            # local state on this same tick.
+            if (
+                forward_continuation_eligible
+                and executor.needs_action
+                and executor.current.action == "move_forward"
+                and forward_continuation_remaining_ticks > 0
+            ):
+                if not forward_continuation_session_active:
+                    forward_continuation_session_active = True
+                    forward_continuation_sessions_started += 1
+                    logger.event(
+                        "forward_continuation_started",
+                        tick=completed_ticks,
+                        budget_ticks=LOCAL_FORWARD_CONTINUATION_MAX_TICKS,
+                    )
+                continuation_action = safe_forward_continuation(
+                    _forward_continuation_next_duration(
+                        forward_continuation_remaining_ticks
+                    )
+                )
+                forward_continuation_remaining_ticks -= continuation_action.duration_ticks
+                executor.submit(continuation_action)
+                # This macro is now the one executing; forward_continuation_ticks
+                # is incremented per real tick below, never here at allocation
+                # time. The session remains active (eligible + pending) even
+                # once remaining_ticks reaches 0, until this exact macro either
+                # finishes on its own (handled below) or is pre-empted by a
+                # real cancellation reason.
+                forward_continuation_macro_pending = True
+                previous_action_context = _action_context(continuation_action)
+                logger.event(
+                    "forward_continuation_extended",
+                    tick=completed_ticks,
+                    duration_ticks=continuation_action.duration_ticks,
+                    remaining_ticks=forward_continuation_remaining_ticks,
+                )
+            elif (
+                forward_continuation_eligible
+                and forward_continuation_macro_pending
+                and forward_continuation_remaining_ticks == 0
+                and executor.needs_action
+            ):
+                # The last allocated continuation macro has now fully
+                # executed and no budget remains to extend it further: a
+                # natural, non-cancelled end of the session. Until this
+                # branch (or a real cancellation reason above) fires, the
+                # session stayed active even though remaining_ticks was
+                # already 0, so any pre-emption while this final macro was
+                # still running was correctly counted as a cancellation.
+                forward_continuation_eligible = False
+                forward_continuation_session_active = False
+                forward_continuation_macro_pending = False
+                logger.event(
+                    "forward_continuation_completed",
+                    tick=completed_ticks,
+                    reason="budget_exhausted",
+                )
+
+            # The bounded turn scan is a short, deterministic sequence of
+            # camera-only ticks; once its capped total rotation is fully
+            # executed, submit a fresh observation immediately rather than
+            # waiting for the next periodic sampling slot, without blocking
+            # the MineRL step loop on Qwen inference.
+            if (
+                awaiting_turn_scan_observation
+                and executor.needs_action
+                and not pending_turn_scan_actions
+            ):
+                awaiting_turn_scan_observation = False
+                consecutive_forward_stall_periods = 0
+                frame_name = f"tick-{completed_ticks:04d}.png"
+                Image.fromarray(observation["pov"]).save(frames_dir / frame_name)
+                frame_cache.put(episode_id, completed_ticks, observation["pov"])
+                planner.submit(
+                    episode_id,
+                    completed_ticks,
+                    observation["pov"],
+                    previous_action_context,
+                )
+                turn_scan_completion_observations += 1
+                logger.event(
+                    "observation_published",
+                    tick=completed_ticks,
+                    frame=f"decision_frames/{frame_name}",
+                    visual_change=None,
+                    progress_action_ticks=0,
+                    source="turn_scan_completion",
                 )
 
             peak_rss = max(peak_rss, process.memory_info().rss)
@@ -514,6 +874,7 @@ def _run_episode(
                 step_seconds=step_elapsed,
             )
             if step.done:
+                _cancel_forward_continuation("environment_done", tick=completed_ticks)
                 early_done = completed_ticks < tick_budget
                 termination_reason = "environment_done"
                 terminal_info = step.info
@@ -532,6 +893,9 @@ def _run_episode(
                     stop_all.wait(sleep_seconds)
                     paced_sleep_seconds += time.perf_counter() - sleep_started
 
+        # Idempotent: a no-op if a decision, water hazard, low-progress, turn
+        # scan, or environment_done already cancelled the session above.
+        _cancel_forward_continuation("max_ticks", tick=completed_ticks)
         Image.fromarray(observation["pov"]).save(run_dir / "final.png")
     except BaseException as error:
         logger.event("error", error=repr(error), tick=completed_ticks)
@@ -592,6 +956,10 @@ def _run_episode(
         "retreat_ticks": retreat_ticks,
         "sidestep_left_ticks": sidestep_left_ticks,
         "sidestep_right_ticks": sidestep_right_ticks,
+        "forward_continuation_ticks": forward_continuation_ticks,
+        "forward_continuation_max_ticks": LOCAL_FORWARD_CONTINUATION_MAX_TICKS,
+        "forward_continuation_sessions_started": forward_continuation_sessions_started,
+        "forward_continuation_cancellations": forward_continuation_cancellations,
         "frame_change_samples": len(frame_changes),
         "periodic_observations": periodic_observations,
         "macro_completion_observations": macro_completion_observations,
@@ -646,8 +1014,12 @@ def _run_episode(
         "water_hazard_overrides": water_hazard_overrides,
         "water_hazard_directions": water_hazard_directions,
         "low_progress_recovery_actions": stuck_recovery_actions,
+        "bounded_turn_scan_recoveries": turn_scan_recoveries,
+        "turn_scan_completion_observations": turn_scan_completion_observations,
         "cave_candidate_decisions": cave_candidate_decisions,
         "raw_cave_visible_decisions": raw_cave_visible_decisions,
+        "cave_candidate_frame_vetoes": cave_candidate_frame_vetoes,
+        "cave_candidate_frame_missing": cave_candidate_frame_missing,
         "cave_candidate_observation_ticks": cave_candidate_observation_ticks,
         "cave_candidate_evidence": cave_candidate_evidence,
         "peak_process_rss_bytes": peak_rss,
