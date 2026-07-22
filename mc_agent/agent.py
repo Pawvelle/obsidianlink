@@ -8,6 +8,7 @@ import statistics
 import threading
 import time
 from collections import OrderedDict
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,9 @@ TARGET_TICKS_PER_SECOND = 20.0
 TARGET_TICK_SECONDS = 1.0 / TARGET_TICKS_PER_SECOND
 CONSECUTIVE_FORWARD_STALL_TURN_SCAN_THRESHOLD = 2
 LOCAL_FORWARD_CONTINUATION_MAX_TICKS = 120
+CAMERA_PITCH_GUARD_MIN_DEGREES = -15.0
+CAMERA_PITCH_GUARD_MAX_DEGREES = 30.0
+CAMERA_PITCH_GUARD_CORRECTION_DEGREES = 15.0
 FORWARD_CONTINUATION_CANCEL_REASONS = (
     "planner_decision",
     "water_hazard",
@@ -113,6 +117,43 @@ def _select_executed_action(
     if not _macro_action_has_effect(action):
         return safe_camera_recovery(recovery_index), True
     return action, False
+
+
+def _guard_camera_pitch(
+    action: MacroAction, commanded_pitch_degrees: float
+) -> tuple[MacroAction, bool]:
+    """Keep cumulative relative camera pitch inside a ground-visible band.
+
+    MineRL camera values are relative deltas. A sequence of otherwise valid
+    negative model pitch commands can therefore accumulate until the player
+    only sees the sky. The loop tracks its own emitted pitch deltas (reset to
+    zero for every episode) and applies a single bounded correction whenever
+    the next action would cross either edge of the safe band. The action type,
+    yaw, and all interaction flags are preserved; this remains an allowlisted,
+    clamped macro action rather than a model-generated command.
+    """
+    target_pitch = commanded_pitch_degrees + action.camera_pitch
+    if CAMERA_PITCH_GUARD_MIN_DEGREES <= target_pitch <= CAMERA_PITCH_GUARD_MAX_DEGREES:
+        return action, False
+
+    if target_pitch < CAMERA_PITCH_GUARD_MIN_DEGREES:
+        correction = min(
+            CAMERA_PITCH_GUARD_CORRECTION_DEGREES,
+            CAMERA_PITCH_GUARD_MAX_DEGREES - commanded_pitch_degrees,
+        )
+    else:
+        correction = max(
+            -CAMERA_PITCH_GUARD_CORRECTION_DEGREES,
+            CAMERA_PITCH_GUARD_MIN_DEGREES - commanded_pitch_degrees,
+        )
+    return (
+        replace(
+            action,
+            camera_pitch=correction,
+            reason="local camera pitch guard correction",
+        ),
+        True,
+    )
 
 
 def _should_publish_macro_completion_observation(
@@ -243,6 +284,11 @@ def _run_episode(
             "visual_change_feedback": True,
             "macro_completion_observations": True,
             "safe_camera_recovery": True,
+            "camera_pitch_guard": {
+                "minimum_degrees": CAMERA_PITCH_GUARD_MIN_DEGREES,
+                "maximum_degrees": CAMERA_PITCH_GUARD_MAX_DEGREES,
+                "correction_degrees": CAMERA_PITCH_GUARD_CORRECTION_DEGREES,
+            },
             "local_water_hazard_guard": True,
             "local_low_progress_guard": True,
             "acceptance_requires_model_forward": True,
@@ -306,6 +352,8 @@ def _run_episode(
     consecutive_forward_stall_periods = 0
     turn_scan_recoveries = 0
     turn_scan_completion_observations = 0
+    camera_pitch_guard_overrides = 0
+    commanded_camera_pitch_degrees = 0.0
     pending_turn_scan_actions: list[MacroAction] = []
     awaiting_turn_scan_observation = False
     frame_cache = _PublishedFrameCache()
@@ -407,6 +455,7 @@ def _run_episode(
                     )
                     action_to_execute = decision.action
                     recovery_applied = False
+                    camera_pitch_guard_applied = False
                     cave_candidate_validated = False
                     cave_text_evidence_complete = False
                     cave_frame_plausible: bool | None = None
@@ -513,6 +562,13 @@ def _run_episode(
                             )
                             water_hazard_overrides += 1
                             water_hazard_directions.append(water_direction)
+                        (
+                            action_to_execute,
+                            camera_pitch_guard_applied,
+                        ) = _guard_camera_pitch(
+                            action_to_execute, commanded_camera_pitch_degrees
+                        )
+                        camera_pitch_guard_overrides += int(camera_pitch_guard_applied)
                         executed_has_effect = _macro_action_has_effect(action_to_execute)
                         executed_ineffective_decisions += int(not executed_has_effect)
                         previous_action_context = _action_context(action_to_execute)
@@ -556,6 +612,8 @@ def _run_episode(
                         recovery_applied=recovery_applied,
                         water_hazard_override=water_override if decision.accepted else False,
                         water_hazard_direction=water_direction if decision.accepted else None,
+                        camera_pitch_guard_applied=camera_pitch_guard_applied,
+                        commanded_camera_pitch_degrees=commanded_camera_pitch_degrees,
                         cave_visible=decision.action.cave_visible,
                         cave_text_evidence_complete=cave_text_evidence_complete,
                         cave_frame_plausible=cave_frame_plausible,
@@ -653,6 +711,13 @@ def _run_episode(
                 previous_action_context = _action_context(action_to_execute)
 
             tick_action = executor.next_tick()
+            commanded_camera_pitch_degrees = min(
+                CAMERA_PITCH_GUARD_MAX_DEGREES,
+                max(
+                    CAMERA_PITCH_GUARD_MIN_DEGREES,
+                    commanded_camera_pitch_degrees + float(tick_action["camera"][0]),
+                ),
+            )
             camera_changed = bool(
                 float(tick_action["camera"][0]) or float(tick_action["camera"][1])
             )
@@ -1016,6 +1081,8 @@ def _run_episode(
         "low_progress_recovery_actions": stuck_recovery_actions,
         "bounded_turn_scan_recoveries": turn_scan_recoveries,
         "turn_scan_completion_observations": turn_scan_completion_observations,
+        "camera_pitch_guard_overrides": camera_pitch_guard_overrides,
+        "final_commanded_camera_pitch_degrees": commanded_camera_pitch_degrees,
         "cave_candidate_decisions": cave_candidate_decisions,
         "raw_cave_visible_decisions": raw_cave_visible_decisions,
         "cave_candidate_frame_vetoes": cave_candidate_frame_vetoes,

@@ -15,6 +15,7 @@ from mc_agent.agent import (
     _episode_passes_gate,
     _forward_continuation_is_eligible,
     _forward_continuation_next_duration,
+    _guard_camera_pitch,
     _macro_action_has_effect,
     _run_episode,
     _select_executed_action,
@@ -159,6 +160,26 @@ class Phase4PacingTests(unittest.TestCase):
         unchanged, applied = _select_executed_action(forward, 1)
         self.assertEqual(unchanged, forward)
         self.assertFalse(applied)
+
+    def test_camera_pitch_guard_corrects_another_upward_command_at_the_limit(self):
+        first = MacroAction(action="look", camera_pitch=-15.0, camera_yaw=-20.0)
+        unchanged, guarded = _guard_camera_pitch(first, 0.0)
+        self.assertEqual(unchanged, first)
+        self.assertFalse(guarded)
+
+        corrected, guarded = _guard_camera_pitch(first, -15.0)
+        self.assertTrue(guarded)
+        self.assertEqual(corrected.action, "look")
+        self.assertEqual(corrected.camera_pitch, 15.0)
+        self.assertEqual(corrected.camera_yaw, -20.0)
+        self.assertEqual(corrected.reason, "local camera pitch guard correction")
+
+    def test_camera_pitch_guard_corrects_another_downward_command_at_the_limit(self):
+        action = MacroAction(action="look", camera_pitch=20.0, camera_yaw=10.0)
+        corrected, guarded = _guard_camera_pitch(action, 30.0)
+        self.assertTrue(guarded)
+        self.assertEqual(corrected.camera_pitch, -15.0)
+        self.assertEqual(corrected.camera_yaw, 10.0)
 
     def test_followup_observation_waits_for_completed_macro_and_idle_worker(self):
         self.assertFalse(
@@ -343,6 +364,60 @@ class FakePlanner:
 
 
 class ForwardContinuationIntegrationTests(unittest.TestCase):
+    def test_camera_pitch_guard_replaces_repeated_upward_decision(self):
+        first = PlannerDecision(
+            episode_id="episode-test",
+            observation_tick=0,
+            raw='{"action":"look","camera":{"pitch":-15,"yaw":-20}}',
+            action=MacroAction(action="look", camera_pitch=-15.0, camera_yaw=-20.0),
+            accepted=True,
+            error=None,
+            latency_seconds=1.0,
+        )
+        second = PlannerDecision(
+            episode_id="episode-test",
+            observation_tick=1,
+            raw='{"action":"look","camera":{"pitch":-15,"yaw":-20}}',
+            action=MacroAction(action="look", camera_pitch=-15.0, camera_yaw=-20.0),
+            accepted=True,
+            error=None,
+            latency_seconds=1.0,
+        )
+        class RecordingFakeEnv(FakeEnv):
+            def __init__(self):
+                super().__init__()
+                self.camera_commands = []
+
+            def step(self, action):
+                self.camera_commands.append(np.array(action["camera"], copy=True))
+                return super().step(action)
+
+        fake_env = RecordingFakeEnv()
+        adapter = MineRLEnvAdapter(env_factory=lambda _: fake_env).open()
+        self.addCleanup(adapter.close)
+        planner = FakePlanner([first, second])
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = _run_episode(
+                adapter,
+                planner,
+                Path(directory),
+                1,
+                tick_budget=4,
+                observation_interval=1000,
+                stop_all=threading.Event(),
+                episode_id_override="episode-test",
+            )
+
+        self.assertEqual(result["camera_pitch_guard_overrides"], 1)
+        self.assertEqual(result["final_commanded_camera_pitch_degrees"], 0.0)
+        self.assertTrue(
+            np.array_equal(fake_env.camera_commands[0], np.asarray([-15.0, -20.0]))
+        )
+        self.assertTrue(
+            np.array_equal(fake_env.camera_commands[1], np.asarray([15.0, -20.0]))
+        )
+
     def test_local_continuation_advances_without_waiting_for_the_planner(self):
         """A single accepted move_forward decision plus a planner that never
         supplies a second one (idle stays cleared, as if still mid-inference)
