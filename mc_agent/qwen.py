@@ -31,6 +31,7 @@ class ObservationRequest:
     pov: np.ndarray
     previous_action: dict[str, Any] | None
     visual_change: dict[str, Any] | None = None
+    cave_target: dict[str, Any] | None = None
     generation: int = 0
 
 
@@ -105,6 +106,7 @@ def _prepare_image(pov: np.ndarray) -> Image.Image:
 def _prompt(
     previous_action: dict[str, Any] | None,
     visual_change: dict[str, Any] | None = None,
+    cave_target: dict[str, Any] | None = None,
 ) -> str:
     previous = json.dumps(previous_action, separators=(",", ":")) if previous_action else "none"
     prompt = (
@@ -176,6 +178,16 @@ def _prompt(
                 "CHANGED; re-evaluate the image and move_forward when center is walkable."
             )
         feedback.append(f"Visual-change signal: {change_signal}")
+    if cave_target is not None and cave_target.get("active"):
+        direction = cave_target.get("direction")
+        if direction in {"left", "center", "right"}:
+            feedback.append(
+                "Short-lived validated cave target: a prior frame passed the local "
+                f"cave-evidence gate approximately on the {direction}. Safely re-observe "
+                f"or approach that {direction} route before resuming generic exploration. "
+                "Water, drops, and other visible hazards still take priority. Never claim "
+                "a cave unless the current image independently shows the required evidence."
+            )
     if not feedback:
         return prompt
     return f"{prompt} {' '.join(feedback)} Keep reason under 12 words."
@@ -302,6 +314,7 @@ class QwenPlannerWorker:
         pov: np.ndarray,
         previous_action: dict[str, Any] | None,
         visual_change: dict[str, Any] | None = None,
+        cave_target: dict[str, Any] | None = None,
     ) -> None:
         with self._state:
             if self._transitioning:
@@ -320,6 +333,7 @@ class QwenPlannerWorker:
                     visual_change=(
                         dict(visual_change) if visual_change is not None else None
                     ),
+                    cave_target=(dict(cave_target) if cave_target is not None else None),
                     generation=self._generation,
                 )
             )
@@ -459,6 +473,7 @@ class QwenPlannerWorker:
                         "text": _prompt(
                             request.previous_action,
                             request.visual_change,
+                            request.cave_target,
                         ),
                     },
                 ],

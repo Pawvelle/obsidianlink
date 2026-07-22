@@ -368,6 +368,8 @@ class MacroExecutor:
         self.watchdog = watchdog
         self.current = MacroAction.no_op("initial")
         self.elapsed_ticks = self.current.duration_ticks
+        self._completion_pending = False
+        self._completion_sent = False
 
     @property
     def needs_action(self) -> bool:
@@ -381,7 +383,26 @@ class MacroExecutor:
         self.current = MacroAction.no_op(reason)
         self.elapsed_ticks = self.current.duration_ticks
 
+    def request_cave_completion(self) -> None:
+        """Queue one local ESC tick after the agent independently re-confirms a cave.
+
+        This is intentionally not part of ``MacroAction`` or the model schema:
+        the planner can never emit ESC. The environment owner calls it only
+        after the deterministic double-confirmation gate has accepted a second
+        cave frame following real forward progress.
+        """
+        if self._completion_sent or self._completion_pending:
+            raise RuntimeError("cave completion was already requested")
+        self.interrupt("locally gated cave completion")
+        self._completion_pending = True
+
     def next_tick(self) -> dict[str, Any]:
+        if self._completion_pending:
+            self._completion_pending = False
+            self._completion_sent = True
+            tick = self.action_space.no_op()
+            tick["ESC"] = 1
+            return tick
         if self.watchdog is not None and self.watchdog.should_stop:
             self.interrupt(self.watchdog.reason or "watchdog")
             return self._no_op()

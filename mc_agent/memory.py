@@ -107,6 +107,92 @@ class OrientationMemory:
 
 
 @dataclass(frozen=True)
+class CaveTargetState:
+    """Short-lived bearing for one locally validated cave observation."""
+
+    active: bool
+    direction: str | None
+    source_tick: int | None
+    remaining_decisions: int
+    forward_ticks_after_acquisition: int
+
+    def to_log_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class CaveTargetMemory:
+    """Keep a verified cave bearing only long enough to re-observe it safely.
+
+    This is deliberately not a map or long-term exploration memory. It exists
+    only after the existing text-and-frame cave gate has accepted a source
+    frame, expires after a small number of planner decisions, and tracks
+    relative camera yaw so an instruction such as "left" remains meaningful
+    after a controlled turn.
+    """
+
+    _DIRECTION_TO_BEARING = {"left": -20.0, "center": 0.0, "right": 20.0}
+
+    def __init__(self, max_decisions: int = 4):
+        if max_decisions < 1:
+            raise ValueError("max_decisions must be positive")
+        self.max_decisions = max_decisions
+        self.reset()
+
+    def reset(self) -> None:
+        self._bearing: float | None = None
+        self._source_tick: int | None = None
+        self._remaining_decisions = 0
+        self._forward_ticks = 0
+
+    def acquire(self, direction: str, source_tick: int) -> CaveTargetState:
+        if direction not in self._DIRECTION_TO_BEARING:
+            raise ValueError("direction must be left, center, or right")
+        if type(source_tick) is not int or source_tick < 0:
+            raise ValueError("source_tick must be a non-negative integer")
+        self._bearing = self._DIRECTION_TO_BEARING[direction]
+        self._source_tick = source_tick
+        self._remaining_decisions = self.max_decisions
+        self._forward_ticks = 0
+        return self.snapshot()
+
+    def observe_action(self, action: MacroAction) -> CaveTargetState:
+        if self._bearing is not None:
+            self._bearing = OrientationMemory._wrap_yaw(
+                self._bearing - float(action.camera_yaw)
+            )
+        return self.snapshot()
+
+    def observe_forward_tick(self) -> CaveTargetState:
+        if self._bearing is not None:
+            self._forward_ticks += 1
+        return self.snapshot()
+
+    def consume_decision(self) -> CaveTargetState:
+        if self._bearing is not None:
+            self._remaining_decisions -= 1
+            if self._remaining_decisions <= 0:
+                self.reset()
+        return self.snapshot()
+
+    def snapshot(self) -> CaveTargetState:
+        if self._bearing is None:
+            return CaveTargetState(False, None, None, 0, 0)
+        if self._bearing <= -10.0:
+            direction = "left"
+        elif self._bearing >= 10.0:
+            direction = "right"
+        else:
+            direction = "center"
+        return CaveTargetState(
+            active=True,
+            direction=direction,
+            source_tick=self._source_tick,
+            remaining_decisions=self._remaining_decisions,
+            forward_ticks_after_acquisition=self._forward_ticks,
+        )
+
+
+@dataclass(frozen=True)
 class FrameChange:
     mean_absolute_difference: float
     changed_pixel_fraction: float
@@ -177,6 +263,8 @@ class FrameChangeDetector:
 __all__ = [
     "FrameChange",
     "FrameChangeDetector",
+    "CaveTargetMemory",
+    "CaveTargetState",
     "OrientationMemory",
     "OrientationState",
     "OrientationView",

@@ -33,7 +33,7 @@ from mc_agent.actions import (
 )
 from mc_agent.env import MineRLEnvAdapter
 from mc_agent.logger import EpisodeLogger
-from mc_agent.memory import FrameChangeDetector
+from mc_agent.memory import CaveTargetMemory, FrameChangeDetector
 from mc_agent.qwen import PlannerDecision, QwenPlannerWorker
 
 
@@ -45,11 +45,13 @@ LOCAL_FORWARD_CONTINUATION_MAX_TICKS = 120
 CAMERA_PITCH_GUARD_MIN_DEGREES = -15.0
 CAMERA_PITCH_GUARD_MAX_DEGREES = 30.0
 CAMERA_PITCH_GUARD_CORRECTION_DEGREES = 15.0
+CAVE_COMPLETION_MIN_FORWARD_TICKS = 12
 FORWARD_CONTINUATION_CANCEL_REASONS = (
     "planner_decision",
     "water_hazard",
     "low_progress",
     "turn_scan",
+    "cave_completion",
     "environment_done",
     "watchdog",
     "max_ticks",
@@ -183,8 +185,17 @@ def _episode_passes_gate(
     forward_ticks: int,
     esc_nonzero: int,
     planner_error: str | None,
+    cave_completion_requested: bool = False,
 ) -> bool:
     """Require observable model-driven progress, not merely valid JSON."""
+    if cave_completion_requested:
+        return (
+            effective_decisions >= 1
+            and model_forward_decisions >= 1
+            and forward_ticks >= CAVE_COMPLETION_MIN_FORWARD_TICKS
+            and esc_nonzero == 1
+            and planner_error is None
+        )
     return (
         completed_ticks == tick_budget
         and not early_done
@@ -292,7 +303,11 @@ def _run_episode(
             "local_water_hazard_guard": True,
             "local_low_progress_guard": True,
             "acceptance_requires_model_forward": True,
-            "esc_policy": "always disabled; manual termination policy not enabled",
+            "cave_target_memory": {
+                "max_decisions": 4,
+                "completion_min_forward_ticks": CAVE_COMPLETION_MIN_FORWARD_TICKS,
+            },
+            "esc_policy": "local single tick only after double-confirmed cave evidence",
         },
     )
     frames_dir = run_dir / "decision_frames"
@@ -349,6 +364,10 @@ def _run_episode(
     cave_candidate_frame_missing = 0
     cave_candidate_observation_ticks: list[int] = []
     cave_candidate_evidence: list[str] = []
+    cave_target_acquisitions = 0
+    cave_target_reconfirmations = 0
+    cave_completion_requested = False
+    cave_completion_evidence: list[str] = []
     consecutive_forward_stall_periods = 0
     turn_scan_recoveries = 0
     turn_scan_completion_observations = 0
@@ -357,6 +376,7 @@ def _run_episode(
     pending_turn_scan_actions: list[MacroAction] = []
     awaiting_turn_scan_observation = False
     frame_cache = _PublishedFrameCache()
+    cave_target = CaveTargetMemory()
     forward_continuation_eligible = False
     forward_continuation_session_active = False
     # True while the executor is currently running a macro that the local
@@ -392,6 +412,26 @@ def _run_episode(
         forward_continuation_cancellations[reason] += 1
         logger.event("forward_continuation_cancelled", tick=tick, reason=reason)
 
+    def _submit_action(action: MacroAction) -> None:
+        """Submit a local-safe action and keep any target bearing relative."""
+        executor.submit(action)
+        cave_target.observe_action(action)
+
+    def _submit_observation(
+        tick: int,
+        pov: np.ndarray,
+        previous_action: dict[str, Any] | None,
+        visual_change: dict[str, Any] | None = None,
+    ) -> None:
+        planner.submit(
+            episode_id,
+            tick,
+            pov,
+            previous_action,
+            visual_change,
+            cave_target.snapshot().to_log_dict(),
+        )
+
     try:
         # This is the only planner wait in an episode. It happens before reset,
         # while the MineRL step loop is not running.
@@ -412,7 +452,7 @@ def _run_episode(
         logger.event("reset", pov_shape=list(observation["pov"].shape), seed=seed)
         Image.fromarray(observation["pov"]).save(frames_dir / "tick-0000.png")
         frame_cache.put(episode_id, 0, observation["pov"])
-        planner.submit(episode_id, 0, observation["pov"], None)
+        _submit_observation(0, observation["pov"], None)
         logger.event(
             "observation_published",
             tick=0,
@@ -453,6 +493,7 @@ def _run_episode(
                     _cancel_forward_continuation(
                         "planner_decision", tick=completed_ticks
                     )
+                    target_before_decision = cave_target.snapshot()
                     action_to_execute = decision.action
                     recovery_applied = False
                     camera_pitch_guard_applied = False
@@ -532,6 +573,33 @@ def _run_episode(
                                 "decision_frames/"
                                 f"tick-{decision.observation_tick:04d}.png"
                             )
+                            if (
+                                target_before_decision.active
+                                and target_before_decision.direction
+                                == candidate_gate_direction
+                                and target_before_decision.forward_ticks_after_acquisition
+                                >= CAVE_COMPLETION_MIN_FORWARD_TICKS
+                            ):
+                                cave_target_reconfirmations += 1
+                                cave_completion_requested = True
+                                cave_completion_evidence.append(
+                                    "decision_frames/"
+                                    f"tick-{decision.observation_tick:04d}.png"
+                                )
+                            elif candidate_gate_direction is not None:
+                                cave_target.acquire(
+                                    candidate_gate_direction,
+                                    decision.observation_tick,
+                                )
+                                cave_target_acquisitions += 1
+                                logger.event(
+                                    "cave_target_acquired",
+                                    tick=completed_ticks,
+                                    observation_tick=decision.observation_tick,
+                                    target=cave_target.snapshot().to_log_dict(),
+                                )
+                        elif target_before_decision.active:
+                            cave_target.consume_decision()
                         if recovery_followup_pending:
                             recovery_followup_decisions += 1
                             recovery_followup_effective_decisions += int(has_effect)
@@ -597,7 +665,20 @@ def _run_episode(
                     # rather than resume it later out of context.
                     pending_turn_scan_actions = []
                     awaiting_turn_scan_observation = False
-                    executor.submit(action_to_execute)
+                    if cave_completion_requested:
+                        _cancel_forward_continuation(
+                            "cave_completion", tick=completed_ticks
+                        )
+                        executor.request_cave_completion()
+                        logger.event(
+                            "cave_completion_requested",
+                            tick=completed_ticks,
+                            observation_tick=decision.observation_tick,
+                            target=target_before_decision.to_log_dict(),
+                            evidence=cave_completion_evidence[-1],
+                        )
+                    else:
+                        _submit_action(action_to_execute)
                     logger.event(
                         "planner_decision",
                         applied_tick=completed_ticks,
@@ -659,7 +740,7 @@ def _run_episode(
                         )
                         turn_scan_recoveries += 1
                         action_to_execute = pending_turn_scan_actions.pop(0)
-                        executor.submit(action_to_execute)
+                        _submit_action(action_to_execute)
                         previous_action_context = _action_context(action_to_execute)
                         awaiting_turn_scan_observation = True
                         logger.event(
@@ -675,7 +756,7 @@ def _run_episode(
                     else:
                         _cancel_forward_continuation("low_progress", tick=completed_ticks)
                         action_to_execute = safe_stuck_recovery(stuck_recovery_actions)
-                        executor.submit(action_to_execute)
+                        _submit_action(action_to_execute)
                         previous_action_context = _action_context(action_to_execute)
                         stuck_recovery_actions += 1
                         logger.event(
@@ -687,8 +768,7 @@ def _run_episode(
                 else:
                     consecutive_forward_stall_periods = 0
                 frame_cache.put(episode_id, completed_ticks, observation["pov"])
-                planner.submit(
-                    episode_id,
+                _submit_observation(
                     completed_ticks,
                     observation["pov"],
                     previous_action_context,
@@ -707,7 +787,7 @@ def _run_episode(
 
             if pending_turn_scan_actions and executor.needs_action:
                 action_to_execute = pending_turn_scan_actions.pop(0)
-                executor.submit(action_to_execute)
+                _submit_action(action_to_execute)
                 previous_action_context = _action_context(action_to_execute)
 
             tick_action = executor.next_tick()
@@ -734,6 +814,8 @@ def _run_episode(
             no_op_ticks += int(not action_changed)
             executing_forward_tick = bool(tick_action["forward"])
             forward_ticks += int(executing_forward_tick)
+            if executing_forward_tick:
+                cave_target.observe_forward_tick()
             # Count only ticks actually handed to MineRL while a macro that
             # the continuation layer itself submitted was executing -- never
             # the size of a macro merely allocated/queued. This keeps
@@ -771,7 +853,7 @@ def _run_episode(
                     )
                     water_hazard_overrides += 1
                     water_hazard_directions.append(continuation_water_direction)
-                    executor.submit(water_recovery_action)
+                    _submit_action(water_recovery_action)
                     previous_action_context = _action_context(water_recovery_action)
                     logger.event(
                         "forward_continuation_water_override",
@@ -807,8 +889,7 @@ def _run_episode(
                 frame_name = f"tick-{completed_ticks:04d}.png"
                 Image.fromarray(observation["pov"]).save(frames_dir / frame_name)
                 frame_cache.put(episode_id, completed_ticks, observation["pov"])
-                planner.submit(
-                    episode_id,
+                _submit_observation(
                     completed_ticks,
                     observation["pov"],
                     previous_action_context,
@@ -850,7 +931,7 @@ def _run_episode(
                     )
                 )
                 forward_continuation_remaining_ticks -= continuation_action.duration_ticks
-                executor.submit(continuation_action)
+                _submit_action(continuation_action)
                 # This macro is now the one executing; forward_continuation_ticks
                 # is incremented per real tick below, never here at allocation
                 # time. The session remains active (eligible + pending) even
@@ -902,8 +983,7 @@ def _run_episode(
                 frame_name = f"tick-{completed_ticks:04d}.png"
                 Image.fromarray(observation["pov"]).save(frames_dir / frame_name)
                 frame_cache.put(episode_id, completed_ticks, observation["pov"])
-                planner.submit(
-                    episode_id,
+                _submit_observation(
                     completed_ticks,
                     observation["pov"],
                     previous_action_context,
@@ -938,6 +1018,16 @@ def _run_episode(
                 done=step.done,
                 step_seconds=step_elapsed,
             )
+            if tick_action["ESC"]:
+                termination_reason = "cave_completion_requested"
+                terminal_info = step.info
+                logger.event(
+                    "cave_completion_sent",
+                    tick=completed_ticks,
+                    environment_done=step.done,
+                    info=step.info,
+                )
+                break
             if step.done:
                 _cancel_forward_continuation("environment_done", tick=completed_ticks)
                 early_done = completed_ticks < tick_budget
@@ -985,6 +1075,7 @@ def _run_episode(
         forward_ticks=forward_ticks,
         esc_nonzero=esc_nonzero,
         planner_error=planner.error,
+        cave_completion_requested=cave_completion_requested,
     )
     metrics = {
         "accepted": accepted,
@@ -1089,6 +1180,11 @@ def _run_episode(
         "cave_candidate_frame_missing": cave_candidate_frame_missing,
         "cave_candidate_observation_ticks": cave_candidate_observation_ticks,
         "cave_candidate_evidence": cave_candidate_evidence,
+        "cave_target_acquisitions": cave_target_acquisitions,
+        "cave_target_reconfirmations": cave_target_reconfirmations,
+        "final_cave_target": cave_target.snapshot().to_log_dict(),
+        "cave_completion_requested": cave_completion_requested,
+        "cave_completion_evidence": cave_completion_evidence,
         "peak_process_rss_bytes": peak_rss,
         "minimum_system_available_bytes": minimum_available,
         "esc_nonzero_ticks": esc_nonzero,
@@ -1109,8 +1205,8 @@ def _run_episode(
                 *cave_candidate_evidence,
             ],
             "note": (
-                "Cave candidates require frame review; tick-budget completion is not "
-                "FindCave task success."
+                "Cave candidates require frame review. A local ESC is emitted only after "
+                "two validated cave frames separated by real forward progress."
             ),
         },
     }

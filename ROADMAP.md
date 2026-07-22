@@ -64,6 +64,16 @@ Completed personal project milestones:
 - The historical dirt-wall false-positive sample and an 800-tick integration
   episode passed. Ordinary plains frames did not produce cave candidates and
   did not break the safe-forward loop.
+- A bounded cave-target memory and local completion gate are covered by unit
+  tests: only a first candidate that passes the existing text, direction, and
+  frame gates may establish a target; only a second matching candidate after
+  at least 12 real forward ticks can cause the environment owner to emit one
+  `ESC=1` tick. The model protocol still cannot request `ESC`. This change has
+  not yet been validated against a genuine cave-positive MineRL frame. Its
+  seed-101 800-tick integration smoke
+  (`runs/phase4-cave-target-smoke/20260722-220148`) passed with 7 accepted
+  decisions, 468 forward ticks, zero stale decisions, and zero target or ESC
+  triggers in the absence of cave evidence.
 
 Phase 4 is not complete: the 506+ historical decision frames and newest replays
 contain no trustworthy positive cave-entrance sample. Positive detection cannot
@@ -73,7 +83,7 @@ candidate decision and approach action. Do not add a paper-style A/B runner,
 complex long-term memory, or another model backend.
 
 Seed reconnaissance (`scripts/capture_findcave_starts.py`, camera-only panorama,
-no Qwen) has screened 112 seeds across seven batches. Nine candidate seeds have
+no Qwen) has screened 144 seeds across nine batches. Nine candidate seeds have
 since completed a full Qwen long episode and were manually reviewed frame by
 frame; eight remain negative and one (seed 101's first attempt) was
 inconclusive due to a camera-pitch runaway, described below:
@@ -187,6 +197,8 @@ Local evidence:
 - `runs/cave-starts/20260721-212753/review.md` (seeds 65-80 reconnaissance)
 - `runs/cave-starts/20260721-215628/review.md` (seeds 81-96 reconnaissance)
 - `runs/cave-starts/20260721-223334/review.md` (seeds 97-112 reconnaissance)
+- `runs/cave-starts/20260722-213644/review.md` (seeds 113-128 reconnaissance)
+- `runs/cave-starts/20260722-214058/review.md` (seeds 129-144 reconnaissance)
 - `runs/phase4-cave-search/20260720-161104/manual_review.md` (seed 7)
 - `runs/phase4-cave-search/20260720-164452/manual_review.md` (seed 3)
 - `runs/phase4-cave-search/20260721-163330/manual_review.md` (seed 30)
@@ -211,6 +223,9 @@ Local evidence:
    not commit or rewrite its history.
 6. MineRL Gradle builds execute third-party code and require explicit user
    approval before rebuilding.
+7. `ESC` is never model-generated. The environment owner may emit it once only
+   through the double-confirmed cave-completion gate, with evidence logged for
+   manual review.
 
 Detailed historical validation records are in `runs/history/EXECUTION_LOG.md`.
 Older run assets remain in `runs/history/artifacts/` and `runs/history/logs/`.

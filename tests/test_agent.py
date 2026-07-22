@@ -356,7 +356,9 @@ class FakePlanner:
     def begin_episode(self, episode_id):
         return 0.0
 
-    def submit(self, episode_id, tick, pov, previous_action, visual_change=None):
+    def submit(
+        self, episode_id, tick, pov, previous_action, visual_change=None, cave_target=None
+    ):
         self.submitted_ticks.append(tick)
 
     def acknowledge_decision(self, episode_id, tick):
@@ -364,6 +366,77 @@ class FakePlanner:
 
 
 class ForwardContinuationIntegrationTests(unittest.TestCase):
+    def test_double_confirmed_cave_requests_one_local_escape_after_approach(self):
+        class RecordingCaveEnv(FakeEnv):
+            def __init__(self):
+                super().__init__()
+                self.actions = []
+                self.steps = 0
+
+            def step(self, action):
+                self.actions.append({key: value.copy() if hasattr(value, "copy") else value for key, value in action.items()})
+                self.steps += 1
+                frame = np.zeros((360, 640, 3), dtype=np.uint8)
+                if self.steps % 2:
+                    frame[:80, :80] = 255
+                return {"pov": frame}, 0.0, False, {"ok": True}
+
+        first = PlannerDecision(
+            episode_id="episode-test",
+            observation_tick=0,
+            raw='{"action":"move_forward"}',
+            action=MacroAction(
+                action="move_forward",
+                duration_ticks=12,
+                cave_visible=True,
+                reason="dark stone opening in center",
+            ),
+            accepted=True,
+            error=None,
+            latency_seconds=1.0,
+        )
+        second = PlannerDecision(
+            episode_id="episode-test",
+            observation_tick=11,
+            raw='{"action":"move_forward"}',
+            action=MacroAction(
+                action="move_forward",
+                duration_ticks=6,
+                cave_visible=True,
+                reason="dark stone opening in center",
+            ),
+            accepted=True,
+            error=None,
+            latency_seconds=1.0,
+        )
+        fake_env = RecordingCaveEnv()
+        adapter = MineRLEnvAdapter(env_factory=lambda _: fake_env).open()
+        self.addCleanup(adapter.close)
+        planner = FakePlanner(
+            mailbox=_DelayedDecisionMailbox([first], second, delay_calls=13)
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = _run_episode(
+                adapter,
+                planner,
+                Path(directory),
+                1,
+                tick_budget=40,
+                observation_interval=1,
+                stop_all=threading.Event(),
+                episode_id_override="episode-test",
+            )
+
+        self.assertTrue(result["cave_completion_requested"], result)
+        self.assertEqual(result["cave_target_acquisitions"], 1)
+        self.assertEqual(result["cave_target_reconfirmations"], 1)
+        self.assertEqual(result["cave_candidate_decisions"], 2)
+        self.assertEqual(result["esc_nonzero_ticks"], 1)
+        self.assertEqual(result["termination_reason"], "cave_completion_requested")
+        self.assertTrue(result["accepted"])
+        self.assertEqual(sum(int(bool(action["ESC"])) for action in fake_env.actions), 1)
+
     def test_camera_pitch_guard_replaces_repeated_upward_decision(self):
         first = PlannerDecision(
             episode_id="episode-test",

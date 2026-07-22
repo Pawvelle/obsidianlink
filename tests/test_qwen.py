@@ -58,6 +58,16 @@ class PlannerMailboxTests(unittest.TestCase):
         self.assertIn("dark stone opening on the left|center|right", prompt)
         self.assertIn("Never use 'route clear' as a cave reason", prompt)
 
+    def test_prompt_carries_only_an_active_validated_cave_target(self):
+        prompt = _prompt(
+            None,
+            cave_target={"active": True, "direction": "left"},
+        )
+        self.assertIn("Short-lived validated cave target", prompt)
+        self.assertIn("approximately on the left", prompt)
+        inactive = _prompt(None, cave_target={"active": False, "direction": "left"})
+        self.assertNotIn("Short-lived validated cave target", inactive)
+
     def test_observation_mailbox_keeps_latest_frame(self):
         mailbox = LatestObservationMailbox()
         mailbox.publish(ObservationRequest("a", 1, np.zeros((1, 1, 3)), None))

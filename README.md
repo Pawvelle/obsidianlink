@@ -132,14 +132,19 @@ finish and clears stale observations and decisions.
 
 The agent's restricted movement vocabulary includes forward progress plus
 bounded `retreat`, `sidestep_left`, and `sidestep_right` escape macros. They
-cannot press `ESC`, attack, jump, or sprint; water and low-progress guards use
-these only to leave a visible local hazard.
+cannot press `ESC`, attack, or jump; water and low-progress guards use the
+escape macros only to leave a visible local hazard. `ESC` is not present in
+the model schema. The environment owner may emit exactly one local `ESC=1`
+tick only after two independently validated cave frames in the same short-lived
+target direction, separated by at least 12 real forward ticks.
 
 Model actions include a fail-closed `cave_visible` field. A missing field is
 treated as `false`. A decision frame is recorded as a cave candidate only when
 the model explicitly reports a cave and its rationale includes evidence of
-darkness, rock, an opening, and direction. Candidates still require manual
-review and never automatically count as FindCave success.
+darkness, rock, an opening, and direction. The first validated frame establishes
+a bounded target bearing for the next few decisions; a second matching validated
+frame after real approach progress is the only path to the local completion tick.
+All candidate evidence and any completion request still require manual review.
 
 ## Current scope
 

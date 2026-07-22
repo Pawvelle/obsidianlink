@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from mc_agent.actions import MacroAction
-from mc_agent.memory import FrameChangeDetector, OrientationMemory
+from mc_agent.memory import CaveTargetMemory, FrameChangeDetector, OrientationMemory
 from mc_agent.qwen import _prompt
 
 
@@ -128,6 +128,28 @@ class OrientationMemoryTests(unittest.TestCase):
             OrientationMemory(bucket_degrees=7)
         with self.assertRaisesRegex(ValueError, "boolean"):
             memory.observe_view(1)
+
+
+class CaveTargetMemoryTests(unittest.TestCase):
+    def test_tracks_relative_bearing_and_expires_after_bounded_decisions(self):
+        target = CaveTargetMemory(max_decisions=2)
+        self.assertFalse(target.snapshot().active)
+        self.assertEqual(target.acquire("left", 40).direction, "left")
+        self.assertEqual(target.observe_action(MacroAction(camera_yaw=-20)).direction, "center")
+        target.observe_forward_tick()
+        target.observe_forward_tick()
+        self.assertEqual(target.snapshot().forward_ticks_after_acquisition, 2)
+        self.assertTrue(target.consume_decision().active)
+        self.assertFalse(target.consume_decision().active)
+
+    def test_rejects_invalid_target_inputs(self):
+        with self.assertRaisesRegex(ValueError, "positive"):
+            CaveTargetMemory(max_decisions=0)
+        target = CaveTargetMemory()
+        with self.assertRaisesRegex(ValueError, "left, center, or right"):
+            target.acquire("up", 0)
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            target.acquire("center", -1)
 
 
 if __name__ == "__main__":

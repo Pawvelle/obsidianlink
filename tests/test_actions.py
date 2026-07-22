@@ -199,6 +199,20 @@ class ExecutorTests(unittest.TestCase):
         self.assertEqual(interrupted["forward"], 0)
         self.assertEqual(interrupted["ESC"], 0)
 
+    def test_cave_completion_is_local_and_exactly_once(self):
+        executor = MacroExecutor(self.action_space)
+        executor.submit(MacroAction(action="move_forward", duration_ticks=40))
+        executor.request_cave_completion()
+        with self.assertRaisesRegex(RuntimeError, "already requested"):
+            executor.request_cave_completion()
+        completion = executor.next_tick()
+        self.assertEqual(completion["ESC"], 1)
+        self.assertEqual(completion["forward"], 0)
+        self.assertTrue(self.action_space.contains(completion))
+        self.assertEqual(executor.next_tick()["ESC"], 0)
+        with self.assertRaisesRegex(RuntimeError, "already requested"):
+            executor.request_cave_completion()
+
     def test_sprint_only_applies_to_forward(self):
         executor = MacroExecutor(self.action_space)
         executor.submit(MacroAction(action="wait", sprint=True))
