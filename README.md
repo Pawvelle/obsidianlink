@@ -96,6 +96,22 @@ Render`. It only displays frames received by the Agent and does not take over
 the keyboard or mouse. Press `Ctrl+C` in the terminal to stop the Agent. Omit
 this flag when no observation window is needed.
 
+### Manual evidence collection
+
+To explore a real FindCave world yourself without loading Qwen, start the
+manual controller:
+
+```bash
+python scripts/manual_findcave.py --seed 101 --ticks 18000 --mission-ticks 18000
+```
+
+Focus the `MineRL Manual FindCave` window. `W`, `A`, `S`, and `D` toggle the
+corresponding movement (opposite directions replace one another); `I`, `J`, `K`, and `L` look; Space performs one jump;
+`R` toggles sprint; `C` saves a candidate frame; and `Q` or Esc ends the
+session. Qwen is never loaded, attack and `ESC` are always disabled, forward
+movement pauses when a center water hazard is detected, and all candidate
+frames plus an action log are saved below `runs/manual-findcave/` for review.
+
 Add episodes only when continuous replay is needed:
 
 ```bash
@@ -131,9 +147,11 @@ a fallback. Before an episode changes, a barrier waits for old inference to
 finish and clears stale observations and decisions.
 
 The agent's restricted movement vocabulary includes forward progress plus
-bounded `retreat`, `sidestep_left`, and `sidestep_right` escape macros. They
-cannot press `ESC`, attack, or jump; water and low-progress guards use the
-escape macros only to leave a visible local hazard. `ESC` is not present in
+bounded `retreat`, `sidestep_left`, and `sidestep_right` escape macros. It
+cannot press `ESC` or attack. A jump may accompany `move_forward` only when the
+model identifies a visible one-block ledge on an otherwise safe route; the
+executor emits it for exactly one local tick. Water and low-progress guards use
+the escape macros only to leave a visible local hazard. `ESC` is not present in
 the model schema. The environment owner may emit exactly one local `ESC=1`
 tick only after two independently validated cave frames in the same short-lived
 target direction, separated by at least 12 real forward ticks.
@@ -146,16 +164,17 @@ a bounded target bearing for the next few decisions; a second matching validated
 frame after real approach progress is the only path to the local completion tick.
 All candidate evidence and any completion request still require manual review.
 
-## Current scope
+## Phase 4 completion
 
 The Agent has passed the 5 × 800-tick safe-forward acceptance test, with
-model-driven forward ticks and meaningful action variation. Cave negative
-samples and run integration have also been verified, but no existing replay
-contains a trustworthy positive cave-entrance sample. Therefore, finding a
-cave is not yet complete. Continue Phase 4 in [ROADMAP.md](ROADMAP.md) by
-validating only genuine cave positives and approach actions. Historical
-validation records are in `runs/history/EXECUTION_LOG.md`; large historical
-run artifacts stay local and are not committed to the outer Git repository.
+model-driven forward ticks and meaningful action variation. Phase 4 completed
+in the autonomous seed-101 run at
+`runs/phase4-true-entrance-approach/20260723-142315/episode-01/`: two manually
+reviewed genuine entrance frames were separated by 114 real forward ticks, then
+the local owner emitted exactly one `ESC=1` completion tick. The model never
+had access to `ESC`. Historical validation records are in
+`runs/history/EXECUTION_LOG.md`; large historical run artifacts stay local and
+are not committed to the outer Git repository.
 
 `vendor/minerl` is an independent Git repository. The outer project does not
 commit, delete, or rewrite its Git history.

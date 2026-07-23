@@ -21,8 +21,9 @@ from mc_agent.actions import (
     MacroAction,
     MacroExecutor,
     Watchdog,
-    has_directional_dark_opening_region,
+    has_directional_stone_bounded_dark_opening_region,
     is_cave_candidate,
+    resolve_dark_opening_direction,
     resolve_cave_direction,
     safe_camera_recovery,
     safe_forward_continuation,
@@ -501,6 +502,7 @@ def _run_episode(
                     cave_text_evidence_complete = False
                     cave_frame_plausible: bool | None = None
                     candidate_gate_direction: str | None = None
+                    candidate_direction_source: str | None = None
                     candidate_gate_frame_tick: int | None = None
                     if decision.accepted:
                         accepted_decisions += 1
@@ -543,17 +545,30 @@ def _run_episode(
                                 )
                             else:
                                 candidate_gate_frame_tick = decision.observation_tick
-                                if candidate_gate_direction is None:
+                            if candidate_gate_direction is None:
                                     # Ambiguous or unstated direction: fail
                                     # closed instead of accepting a dark patch
                                     # anywhere in the frame.
-                                    cave_frame_plausible = False
-                                else:
-                                    cave_frame_plausible = (
-                                        has_directional_dark_opening_region(
-                                            evidence_frame, candidate_gate_direction
-                                        )
+                                cave_frame_plausible = False
+                            else:
+                                cave_frame_plausible = (
+                                    has_directional_stone_bounded_dark_opening_region(
+                                        evidence_frame, candidate_gate_direction
                                     )
+                                )
+                                candidate_direction_source = "model_reason"
+                                if not cave_frame_plausible:
+                                    local_direction = resolve_dark_opening_direction(
+                                        evidence_frame
+                                    )
+                                    if local_direction is not None:
+                                        candidate_gate_direction = local_direction
+                                        candidate_direction_source = "local_dark_region"
+                                        cave_frame_plausible = (
+                                            has_directional_stone_bounded_dark_opening_region(
+                                                evidence_frame, local_direction
+                                            )
+                                        )
                                 if not cave_frame_plausible:
                                     cave_candidate_frame_vetoes += 1
                                     logger.event(
@@ -700,6 +715,7 @@ def _run_episode(
                         cave_frame_plausible=cave_frame_plausible,
                         cave_candidate_validated=cave_candidate_validated,
                         candidate_gate_direction=candidate_gate_direction,
+                        candidate_direction_source=candidate_direction_source,
                         candidate_gate_frame_tick=candidate_gate_frame_tick,
                         raw=decision.raw,
                         parsed=decision.action.to_log_dict(),

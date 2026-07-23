@@ -373,10 +373,19 @@ class ForwardContinuationIntegrationTests(unittest.TestCase):
                 self.actions = []
                 self.steps = 0
 
+            @staticmethod
+            def _cave_frame():
+                frame = np.full((360, 640, 3), 110, dtype=np.uint8)
+                frame[100:250, 260:380] = 5
+                return frame
+
+            def reset(self):
+                return {"pov": self._cave_frame()}
+
             def step(self, action):
                 self.actions.append({key: value.copy() if hasattr(value, "copy") else value for key, value in action.items()})
                 self.steps += 1
-                frame = np.zeros((360, 640, 3), dtype=np.uint8)
+                frame = self._cave_frame()
                 if self.steps % 2:
                     frame[:80, :80] = 255
                 return {"pov": frame}, 0.0, False, {"ok": True}

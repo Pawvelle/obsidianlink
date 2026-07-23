@@ -33,6 +33,7 @@ class FakeAdapter:
     def __init__(self, fail_on_step=False):
         self.fail_on_step = fail_on_step
         self.seed_value = 0
+        self.actions = []
 
     def __enter__(self):
         return self
@@ -49,7 +50,8 @@ class FakeAdapter:
     def step(self, action):
         if self.fail_on_step:
             raise RuntimeError("deliberate capture interruption")
-        return SimpleNamespace(observation=self._observation())
+        self.actions.append(action)
+        return SimpleNamespace(observation=self._observation(), done=False)
 
     def _observation(self):
         return {"pov": np.full((3, 4, 3), self.seed_value % 255, dtype=np.uint8)}
@@ -72,6 +74,53 @@ class CaptureFindCaveStartsTests(unittest.TestCase):
             )
             for view in manifest["captures"][0]["views"]:
                 self.assertTrue((session_dir / view["frame"]).is_file())
+
+    def test_bounded_approach_records_frames_and_safe_actions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = FakeAdapter()
+            with patch.object(capture_script, "MineRLEnvAdapter", lambda: adapter):
+                session_dir = capture_script.capture_starts(
+                    41,
+                    1,
+                    Path(directory),
+                    approach_forward_ticks=5,
+                    approach_frame_interval=2,
+                    approach_jump=True,
+                )
+
+            manifest = json.loads((session_dir / "index.json").read_text())
+            approach = manifest["captures"][0]["approach"]
+            self.assertEqual(approach["completed_forward_ticks"], 5)
+            self.assertEqual(approach["stopped_reason"], "tick_budget")
+            self.assertTrue(manifest["approach_jump"])
+            self.assertEqual(
+                [frame["forward_ticks"] for frame in approach["frames"]], [2, 4, 5]
+            )
+            self.assertEqual(len(adapter.actions), 5)
+            for action in adapter.actions:
+                self.assertEqual(action["forward"], 1)
+                self.assertEqual(action["sprint"], 1)
+                self.assertEqual(action["attack"], 0)
+                self.assertEqual(action["jump"], 1)
+                self.assertEqual(action["ESC"], 0)
+
+    def test_bounded_approach_stops_before_a_center_water_hazard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = FakeAdapter()
+            with (
+                patch.object(capture_script, "MineRLEnvAdapter", lambda: adapter),
+                patch.object(capture_script, "water_hazard_direction", return_value="center"),
+            ):
+                session_dir = capture_script.capture_starts(
+                    41, 1, Path(directory), approach_forward_ticks=5
+                )
+
+            manifest = json.loads((session_dir / "index.json").read_text())
+            approach = manifest["captures"][0]["approach"]
+            self.assertEqual(approach["completed_forward_ticks"], 0)
+            self.assertEqual(approach["stopped_reason"], "center_water_hazard")
+            self.assertEqual(approach["frames"], [])
+            self.assertEqual(adapter.actions, [])
 
     def test_failure_preserves_the_reviewable_partial_manifest(self):
         with tempfile.TemporaryDirectory() as directory:

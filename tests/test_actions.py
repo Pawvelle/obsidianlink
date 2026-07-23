@@ -15,9 +15,11 @@ from mc_agent.actions import (
     Watchdog,
     has_dark_opening_region,
     has_directional_dark_opening_region,
+    has_directional_stone_bounded_dark_opening_region,
     is_cave_candidate,
     parse_macro_action,
     resolve_cave_direction,
+    resolve_dark_opening_direction,
     safe_camera_recovery,
     safe_forward_continuation,
     safe_stuck_recovery,
@@ -27,6 +29,9 @@ from mc_agent.actions import (
 )
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "seed3_frame_veto_regression"
+GENUINE_CAVE_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "genuine_cave_entrance" / "entrance.png"
+)
 
 
 class ActionSchemaTests(unittest.TestCase):
@@ -164,6 +169,18 @@ class ActionSchemaTests(unittest.TestCase):
             self.assertFalse(result.action.jump)
             self.assertFalse(result.action.sprint)
 
+    def test_jump_is_limited_to_a_forward_macro(self):
+        non_forward = parse_macro_action(
+            '{"action":"turn","camera":{"yaw":20},"jump":true}'
+        )
+        self.assertTrue(non_forward.accepted)
+        self.assertFalse(non_forward.action.jump)
+        forward = parse_macro_action(
+            '{"action":"move_forward","duration_ticks":6,"jump":true}'
+        )
+        self.assertTrue(forward.accepted)
+        self.assertTrue(forward.action.jump)
+
 
 class ExecutorTests(unittest.TestCase):
     def setUp(self):
@@ -188,6 +205,13 @@ class ExecutorTests(unittest.TestCase):
         self.assertTrue(executor.needs_action)
         self.assertEqual(first["ESC"], 0)
         self.assertTrue(self.action_space.contains(first))
+
+    def test_forward_jump_is_emitted_once_only(self):
+        executor = MacroExecutor(self.action_space)
+        executor.submit(MacroAction(action="move_forward", duration_ticks=3, jump=True))
+        self.assertEqual(executor.next_tick()["jump"], 1)
+        self.assertEqual(executor.next_tick()["jump"], 0)
+        self.assertEqual(executor.next_tick()["jump"], 0)
 
     def test_stop_interrupts_by_next_tick(self):
         watchdog = Watchdog()
@@ -431,6 +455,52 @@ class DirectionalDarkOpeningRegionTests(unittest.TestCase):
                     has_directional_dark_opening_region(frame, direction),
                     f"{frame_name} ({direction}) is bright and must be vetoed",
                 )
+
+    def test_genuine_cave_entrance_requires_its_actual_image_band(self):
+        frame = np.asarray(Image.open(GENUINE_CAVE_FIXTURE).convert("RGB"))
+        self.assertTrue(has_dark_opening_region(frame))
+        self.assertFalse(has_directional_dark_opening_region(frame, "left"))
+        self.assertTrue(has_directional_dark_opening_region(frame, "center"))
+        self.assertTrue(has_directional_dark_opening_region(frame, "right"))
+        self.assertEqual(resolve_dark_opening_direction(frame), "center")
+
+    def test_stone_context_rejects_dark_grass_but_keeps_real_entrance(self):
+        grass = np.full((90, 120, 3), [8, 42, 10], dtype=np.uint8)
+        self.assertTrue(has_directional_dark_opening_region(grass, "center"))
+        self.assertFalse(
+            has_directional_stone_bounded_dark_opening_region(grass, "center")
+        )
+        frame = np.asarray(Image.open(GENUINE_CAVE_FIXTURE).convert("RGB"))
+        self.assertTrue(
+            has_directional_stone_bounded_dark_opening_region(frame, "center")
+        )
+
+    def test_stone_context_requires_one_coherent_neutral_dark_component(self):
+        fragmented = np.full((180, 360, 3), 120, dtype=np.uint8)
+        for row in range(9):
+            for col in range(0, 12, 2):
+                fragmented[row * 20 : (row + 1) * 20, col * 10 : (col + 1) * 10] = 5
+        self.assertFalse(
+            has_directional_stone_bounded_dark_opening_region(fragmented, "left")
+        )
+        opening = np.full((180, 360, 3), 120, dtype=np.uint8)
+        opening[40:150, 20:110] = 5
+        self.assertTrue(
+            has_directional_stone_bounded_dark_opening_region(opening, "left")
+        )
+
+    def test_stone_context_rejects_an_almost_full_dark_wall(self):
+        wall = np.full((180, 360, 3), 5, dtype=np.uint8)
+        wall[:30, :120] = 120
+        self.assertFalse(
+            has_directional_stone_bounded_dark_opening_region(wall, "left")
+        )
+
+    def test_local_direction_rejects_separate_left_and_right_dark_regions(self):
+        frame = np.full((90, 120, 3), (205, 185, 145), dtype=np.uint8)
+        frame[20:70, 5:35] = (5, 5, 5)
+        frame[20:70, 85:115] = (5, 5, 5)
+        self.assertIsNone(resolve_dark_opening_direction(frame))
 
     def test_invalid_direction_is_rejected(self):
         frame = self._frame_with_left_dark_patch()

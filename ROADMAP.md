@@ -47,7 +47,7 @@ structural maintenance.
 
 ## Phase 4 — Complete a simple task
 
-**Status: in progress.**
+**Status: complete.**
 
 The current task remains `MineRLBasaltFindCave-v0`.
 
@@ -75,15 +75,48 @@ Completed personal project milestones:
   decisions, 468 forward ticks, zero stale decisions, and zero target or ESC
   triggers in the absence of cave evidence.
 
-Phase 4 is not complete: the 506+ historical decision frames and newest replays
-contain no trustworthy positive cave-entrance sample. Positive detection cannot
-therefore be validated and FindCave cannot be marked successful. The next step
-is only to obtain a genuine cave-entrance frame or episode, then review the
-candidate decision and approach action. Do not add a paper-style A/B runner,
-complex long-term memory, or another model backend.
+The earlier absence of a trustworthy positive has now been resolved by a
+human-operated, real MineRL session: seed 101 frame
+`runs/manual-findcave/20260723-110256/candidates/candidate-tick-03026.png`
+shows an enterable dark stone entrance. Qwen emitted `cave_visible=true` with
+the fixed entrance-evidence reason; its initial `left` wording did not match
+the directional image band, so the bounded local resolver selected the
+unambiguous overlapping `center` band and the full candidate gate passed with
+`cave_direction_source=local_dark_region`. Its review is recorded in
+`runs/manual-findcave/20260723-110256/positive_validation.md`.
+
+Phase 4 completed on 2026-07-23 in the real seed-101 episode
+`runs/phase4-true-entrance-approach/20260723-142315/episode-01`. The Agent
+autonomously established a target from a reviewed genuine entrance, executed
+114 real forward ticks, re-confirmed the same entrance at observation tick 235,
+and emitted exactly one locally gated `ESC=1` tick at environment tick 334.
+Manual review confirms both candidate frames are the same natural stone-bounded
+entrance; the model never controlled `ESC`. See
+`runs/phase4-true-entrance-approach/20260723-142315/episode-01/manual_review.md`.
+
+A post-jump 1,800-tick seed-101 closed loop
+(`runs/phase4-jump-validation/20260723-112335`) did exercise the entire local
+completion flow at tick 606, including one `ESC=1` tick after 56 recorded
+forward ticks. It is **not** a completion: manual review found that the prior
+broad darkness veto mistook shadowed grass for left-side cave evidence at the
+two decisive observations. An initial 2% neutral stone-context calibration
+also failed manual review at tick 704: a shallow trench and a dirt wall still
+passed as openings. The final completion-grade gate combines a 9% stone-context
+minimum with one coherent neutral-dark connected region; it rejects those false
+frames and retains the human-collected real entrance center band.
+Its real 800-tick seed-101 regression completed normally with 8 raw cave
+claims, zero validated candidates, and `ESC=0`. These are safety regressions,
+not success evidence. Reviews:
+`runs/phase4-jump-validation/20260723-112335/episode-01/manual_review.md`,
+`runs/phase4-stone-gate-regression/20260723-113052/episode-01/manual_review.md`,
+and `runs/phase4-stone-gate-final/20260723-113350/episode-01/review.md`.
+The final predicate also requires one coherent neutral-dark connected region;
+its separate real 800-tick regression again produced zero candidates and
+`ESC=0` despite six raw cave claims. See
+`runs/phase4-opening-geometry-regression/20260723-135401/episode-01/review.md`.
 
 Seed reconnaissance (`scripts/capture_findcave_starts.py`, camera-only panorama,
-no Qwen) has screened 144 seeds across nine batches. Nine candidate seeds have
+no Qwen) has screened 160 seeds across ten batches. Nine candidate seeds have
 since completed a full Qwen long episode and were manually reviewed frame by
 frame; eight remain negative and one (seed 101's first attempt) was
 inconclusive due to a camera-pitch runaway, described below:
@@ -151,23 +184,18 @@ inconclusive due to a camera-pitch runaway, described below:
 - Seed 101 (`runs/phase4-cave-search/20260721-224034` and `-230035`, two
   attempts): seed reconnaissance found the visually strongest candidate
   screened across all seven batches — a large mountain directly at spawn with
-  a distinctly darker, deeper recess visible in its exposed rock face, no
-  water in any of the four cardinal directions. Both independent attempts ran
-  the full 18000/18000 ticks (`accepted=true`, character survived both times)
-  but raised **zero** raw `cave_visible=true` claims in either run. Frame
-  sampling across both whole episodes shows the camera pitch drifted upward
-  starting around tick 640 and stayed locked on sky/clouds (later, night
-  stars) for essentially the rest of each run; the character never saw the
-  ground, the mountain, or any terrain again after the first ~2000 ticks. This
-  reproduced identically on a second independent attempt, so it is treated as
-  a repeatable behavior for this seed/scene rather than a transient glitch.
-  The mountain's dark recess was never re-examined with visual evidence in
-  either run, so it is neither confirmed nor rejected — it is marked as an
-  unusable candidate under the current agent behavior rather than counted as a
-  positive or negative sample, and no further long episodes are planned for
-  this seed. This is a further confirmation that `accepted=true` alone does
-  not indicate a meaningful search attempt, in the same spirit as
-  `cave_visible=true` alone not indicating success.
+  a distinctly darker recess in its exposed rock face, no water in any of the
+  four cardinal directions. Both 18,000-tick attempts suffered reproducible
+  camera-pitch drift and did not observe the terrain meaningfully. The later
+  cumulative camera-pitch guard corrected that failure: a guarded 1,800-tick
+  Qwen validation completed with 773 forward ticks and one guard correction,
+  but zero cave claims. Targeted no-Qwen collection then established a more
+  specific remaining limit. A 192-tick forward/sprint approach could not climb
+  the first one-block ledge; a separately bounded jump-assisted capture reached
+  the rock shelf but met a close wall rather than an enterable opening. Offline
+  Qwen review of the closest recess frame returned `cave_visible=false`.
+  Seed 101 is now a negative directed sample, not a cave positive. Its evidence
+  is recorded in `runs/phase4-target-approach/20260723-104621/review.md`.
 
 Drowning in an early water crossing (seeds 3, 30, and 54) and death by hostile
 mob at night (seeds 47, 75, and 92) are repeated failure modes that can end an
@@ -178,13 +206,13 @@ when reconnaissance finds a strong-looking target directly at spawn, the
 model's walking path during the long episode can drift away from it entirely
 before night falls. Seed 75 additionally shows that nighttime ambient darkness
 itself can be misread by the model as cave darkness, though the keyword
-evidence gate still filters out nearly all such claims. Seed 101 shows a
-distinct, reproducible failure mode across two independent attempts: the
-camera pitch itself can drift upward and stay locked on the sky for nearly an
-entire 18000-tick episode, which the run-statistics acceptance gate does not
-detect. These are noted as known limitations; no water-avoidance, combat,
-camera, or safety-boundary code was changed to address them without explicit
-user approval.
+evidence gate still filters out nearly all such claims. Seed 101's earlier
+camera-pitch failure has been repaired by the cumulative pitch guard and its
+guarded follow-up observed terrain normally; however, its targeted approach
+  exposed an independent step-height limit. The current Qwen policy now permits
+  a one-tick jump only alongside `move_forward` for a visibly one-block ledge
+  on an otherwise safe route; it is clamped off for every other macro. No model-generated ESC,
+water-safety, or completion boundary was relaxed during the research.
 
 Local evidence:
 
@@ -199,6 +227,21 @@ Local evidence:
 - `runs/cave-starts/20260721-223334/review.md` (seeds 97-112 reconnaissance)
 - `runs/cave-starts/20260722-213644/review.md` (seeds 113-128 reconnaissance)
 - `runs/cave-starts/20260722-214058/review.md` (seeds 129-144 reconnaissance)
+- `runs/cave-starts/20260723-103437/review.md` (seeds 145-160 reconnaissance)
+- `runs/phase4-target-approach/20260723-104621/review.md` (seed 101 directed
+  approach review)
+- `runs/manual-findcave/20260723-110256/positive_validation.md` (seed 101
+  human-operated genuine cave-positive validation)
+- `runs/phase4-jump-validation/20260723-112335/episode-01/manual_review.md`
+  (seed 101 automatic completion-flow false-positive regression)
+- `runs/phase4-stone-gate-regression/20260723-113052/episode-01/manual_review.md`
+  (intermediate stone-context false-positive regression)
+- `runs/phase4-stone-gate-final/20260723-113350/episode-01/review.md`
+  (final stone-context 800-tick no-ESC regression)
+- `runs/phase4-opening-geometry-regression/20260723-135401/episode-01/review.md`
+  (coherent-opening 800-tick no-ESC regression)
+- `runs/phase4-true-entrance-approach/20260723-142315/episode-01/manual_review.md`
+  (autonomous genuine cave completion)
 - `runs/phase4-cave-search/20260720-161104/manual_review.md` (seed 7)
 - `runs/phase4-cave-search/20260720-164452/manual_review.md` (seed 3)
 - `runs/phase4-cave-search/20260721-163330/manual_review.md` (seed 30)

@@ -16,7 +16,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from mc_agent.actions import is_cave_candidate  # noqa: E402
+from mc_agent.actions import (  # noqa: E402
+    has_directional_stone_bounded_dark_opening_region,
+    is_cave_candidate,
+    resolve_dark_opening_direction,
+    resolve_cave_direction,
+)
 from mc_agent.qwen import QwenPlannerWorker  # noqa: E402
 
 
@@ -88,6 +93,25 @@ def main() -> int:
             decision.episode_id,
             decision.observation_tick,
         )
+        cave_text_evidence_complete = is_cave_candidate(decision.action)
+        cave_direction = (
+            resolve_cave_direction(decision.action.reason)
+            if cave_text_evidence_complete
+            else None
+        )
+        cave_frame_plausible = bool(
+            cave_direction is not None
+            and has_directional_stone_bounded_dark_opening_region(pov, cave_direction)
+        )
+        cave_direction_source = "model_reason" if cave_direction is not None else None
+        if cave_text_evidence_complete and not cave_frame_plausible:
+            local_direction = resolve_dark_opening_direction(pov)
+            if local_direction is not None:
+                cave_direction = local_direction
+                cave_direction_source = "local_dark_region"
+                cave_frame_plausible = has_directional_stone_bounded_dark_opening_region(
+                    pov, cave_direction
+                )
         result = {
             "accepted": decision.accepted,
             "raw": decision.raw,
@@ -96,7 +120,13 @@ def main() -> int:
             "latency_seconds": decision.latency_seconds,
             "load_seconds": worker.load_seconds,
             "peak_mps_driver_bytes": worker.peak_mps_driver_bytes,
-            "cave_candidate_validated": is_cave_candidate(decision.action),
+            "cave_text_evidence_complete": cave_text_evidence_complete,
+            "cave_direction": cave_direction,
+            "cave_direction_source": cave_direction_source,
+            "cave_frame_plausible": cave_frame_plausible,
+            "cave_candidate_validated": bool(
+                cave_text_evidence_complete and cave_frame_plausible
+            ),
         }
         print(json.dumps(result, indent=2))
         if not decision.accepted:

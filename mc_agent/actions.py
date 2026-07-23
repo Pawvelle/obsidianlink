@@ -92,6 +92,10 @@ def limit_macro_action(action: MacroAction) -> MacroAction:
         jump = _boolean(action.jump, "jump")
         sprint = _boolean(action.sprint, "sprint")
         cave_visible = _boolean(action.cave_visible, "cave_visible")
+        # A hop may accompany forward progress over a visible small ledge;
+        # it is never available to escape or camera-only actions.
+        if action.action != "move_forward":
+            jump = False
         if action.action in ESCAPE_ACTIONS:
             pitch = 0.0
             yaw = 0.0
@@ -190,6 +194,11 @@ DARK_OPENING_LUMINANCE_THRESHOLD = 55.0
 DARK_OPENING_MIN_REGION_FRACTION = 0.03
 DARK_OPENING_GRID_ROWS = 9
 DARK_OPENING_GRID_COLS = 12
+STONE_CONTEXT_MIN_FRACTION = 0.09
+STONE_CONTEXT_MAX_CHROMA = 32.0
+NEUTRAL_DARK_CELL_MIN_FRACTION = 0.20
+NEUTRAL_DARK_MIN_COMPONENT_CELLS = 12
+NEUTRAL_DARK_MAX_COMPONENT_CELLS = 70
 
 
 def has_dark_opening_region(
@@ -310,6 +319,113 @@ def has_directional_dark_opening_region(
     return has_dark_opening_region(band, **kwargs)
 
 
+def has_directional_stone_bounded_dark_opening_region(
+    pov: np.ndarray,
+    direction: str,
+    *,
+    min_stone_fraction: float = STONE_CONTEXT_MIN_FRACTION,
+) -> bool:
+    """Require a claimed dark opening to include neutral stone-like context.
+
+    The broad darkness veto can pass a shadowed grass patch. Completion-grade
+    evidence therefore also requires neutral mid-tone terrain plus one
+    connected, substantial neutral-dark region in the same claimed third. It
+    remains a veto, never a cave detector: the model must still provide
+    complete cave evidence first.
+    """
+    if direction not in {"left", "center", "right"}:
+        raise ValueError("direction must be left, center, or right")
+    if not isinstance(pov, np.ndarray) or pov.ndim != 3 or pov.shape[2] != 3:
+        raise ValueError("pov must be an RGB image")
+    if not 0.0 < min_stone_fraction <= 1.0:
+        raise ValueError("min_stone_fraction must be within (0, 1]")
+    width = pov.shape[1]
+    third = width // 3
+    bounds = {
+        "left": (0, third),
+        "center": (third, 2 * third),
+        "right": (2 * third, width),
+    }
+    start, end = bounds[direction]
+    band = pov[:, start:end]
+    world_height = max(1, int(band.shape[0] * 0.85))
+    world = band[:world_height].astype(np.float32, copy=False)
+    luminance = world[..., 0] * 0.299 + world[..., 1] * 0.587 + world[..., 2] * 0.114
+    chroma = world.max(axis=2) - world.min(axis=2)
+    neutral_stone = (
+        (luminance >= DARK_OPENING_LUMINANCE_THRESHOLD)
+        & (luminance <= 190.0)
+        & (chroma <= STONE_CONTEXT_MAX_CHROMA)
+    )
+    dark_neutral = (
+        (luminance <= DARK_OPENING_LUMINANCE_THRESHOLD)
+        & (chroma <= STONE_CONTEXT_MAX_CHROMA)
+    )
+    if neutral_stone.mean() < min_stone_fraction:
+        return False
+    row_edges = np.linspace(0, dark_neutral.shape[0], DARK_OPENING_GRID_ROWS + 1).astype(int)
+    col_edges = np.linspace(0, dark_neutral.shape[1], DARK_OPENING_GRID_COLS + 1).astype(int)
+    dark_cells = np.zeros((DARK_OPENING_GRID_ROWS, DARK_OPENING_GRID_COLS), dtype=bool)
+    for row in range(DARK_OPENING_GRID_ROWS):
+        for col in range(DARK_OPENING_GRID_COLS):
+            cell = dark_neutral[
+                row_edges[row] : row_edges[row + 1],
+                col_edges[col] : col_edges[col + 1],
+            ]
+            dark_cells[row, col] = bool(
+                cell.size and cell.mean() >= NEUTRAL_DARK_CELL_MIN_FRACTION
+            )
+    visited = np.zeros_like(dark_cells)
+    largest_component = 0
+    for row in range(DARK_OPENING_GRID_ROWS):
+        for col in range(DARK_OPENING_GRID_COLS):
+            if not dark_cells[row, col] or visited[row, col]:
+                continue
+            stack = [(row, col)]
+            visited[row, col] = True
+            component_size = 0
+            while stack:
+                current_row, current_col = stack.pop()
+                component_size += 1
+                for delta_row, delta_col in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    next_row, next_col = current_row + delta_row, current_col + delta_col
+                    if (
+                        0 <= next_row < DARK_OPENING_GRID_ROWS
+                        and 0 <= next_col < DARK_OPENING_GRID_COLS
+                        and dark_cells[next_row, next_col]
+                        and not visited[next_row, next_col]
+                    ):
+                        visited[next_row, next_col] = True
+                        stack.append((next_row, next_col))
+            largest_component = max(largest_component, component_size)
+    return (
+        NEUTRAL_DARK_MIN_COMPONENT_CELLS
+        <= largest_component
+        <= NEUTRAL_DARK_MAX_COMPONENT_CELLS
+    )
+
+
+def resolve_dark_opening_direction(pov: np.ndarray) -> str | None:
+    """Return a conservative local direction for a visible dark opening.
+
+    This is used only after a model has already supplied complete cave evidence
+    but its stated direction fails the corresponding frame band. A single
+    passing band is unambiguous. If an opening straddles the center boundary,
+    center is the stable direction; separated left/right darkness remains
+    ambiguous and therefore fails closed.
+    """
+    passing = {
+        direction
+        for direction in ("left", "center", "right")
+        if has_directional_stone_bounded_dark_opening_region(pov, direction)
+    }
+    if len(passing) == 1:
+        return next(iter(passing))
+    if passing in ({"left", "center"}, {"center", "right"}):
+        return "center"
+    return None
+
+
 class LatestActionMailbox:
     """Capacity-one mailbox in which a newer action replaces the old one."""
 
@@ -425,7 +541,9 @@ class MacroExecutor:
                 [action.camera_pitch, action.camera_yaw], dtype=np.float32
             )
         tick["attack"] = int(action.attack)
-        tick["jump"] = int(action.jump)
+        # Never hold jump across a macro. One deterministic tick is enough to
+        # clear a one-block ledge and avoids an unbounded bunny-hop input.
+        tick["jump"] = int(action.jump and first_tick)
         tick["sprint"] = int(action.sprint and action.action == "move_forward")
         tick["ESC"] = 0
         self.elapsed_ticks += 1
@@ -608,6 +726,7 @@ __all__ = [
     "ESCAPE_ACTIONS",
     "has_dark_opening_region",
     "has_directional_dark_opening_region",
+    "has_directional_stone_bounded_dark_opening_region",
     "is_cave_candidate",
     "limit_macro_action",
     "parse_macro_action",

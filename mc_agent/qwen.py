@@ -136,7 +136,7 @@ def _prompt(
         "extra text. Use exactly this schema: "
         '{"action":"move_forward|retreat|sidestep_left|sidestep_right|turn|look|wait","duration_ticks":1..40,'
         '"camera":{"pitch":-30..30,"yaw":-30..30},"attack":false,'
-        '"jump":false,"sprint":true|false,"cave_visible":true|false,'
+        '"jump":true|false,"sprint":true|false,"cave_visible":true|false,'
         '"reason":"short visual reason"}. Before choosing the action, set cave_visible '
         "true ONLY when the image clearly shows an enterable dark opening bounded by exposed "
         "stone or terrain. Set it false for shadows, trees, water, dirt walls, depressions, "
@@ -146,10 +146,19 @@ def _prompt(
         "If cave_visible is true, use this exact reason pattern: 'dark stone opening on the "
         "left|center|right'. Never use 'route clear' as a cave reason. If any part is not "
         "plainly visible or you cannot use that pattern truthfully, set cave_visible false. "
+        "The cave_visible field is required even when false. A reason that says 'dark stone "
+        "opening' is valid ONLY with cave_visible true; never describe a cave in reason while "
+        "setting or omitting cave_visible false. "
+        "For this cave direction only, divide the image into equal vertical left, center, and "
+        "right thirds, then name the third containing the dark opening itself; do not name the "
+        "safest walking route or a direction you intend to turn. If the opening straddles a "
+        "boundary, use center. "
         "When true, safely align "
         "with or approach that opening. "
-        "For turn or look, use a meaningful non-zero pitch or yaw. Keep attack and jump "
-        "false in this baseline. Final validity check before returning JSON: look or turn "
+        "For turn or look, use a meaningful non-zero pitch or yaw. Keep attack false. Set "
+        "jump true ONLY with move_forward when a clearly visible one-block ledge blocks an "
+        "otherwise safe center route and no water or drop is visible; it creates one local "
+        "jump tick only. Otherwise jump must be false. Final validity check before returning JSON: look or turn "
         'with camera {"pitch":0,"yaw":0} is invalid; replace it with yaw -20 toward a safer '
         "left route or yaw 20 toward a safer right route. "
         f"Previous accepted action: {previous}"

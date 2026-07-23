@@ -57,6 +57,12 @@ class PlannerMailboxTests(unittest.TestCase):
         prompt = _prompt(None)
         self.assertIn("dark stone opening on the left|center|right", prompt)
         self.assertIn("Never use 'route clear' as a cave reason", prompt)
+        self.assertIn(
+            "divide the image into equal vertical left, center, and right thirds",
+            prompt,
+        )
+        self.assertIn("jump true ONLY with move_forward", prompt)
+        self.assertIn("The cave_visible field is required even when false", prompt)
 
     def test_prompt_carries_only_an_active_validated_cave_target(self):
         prompt = _prompt(
