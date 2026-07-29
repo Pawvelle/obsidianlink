@@ -40,6 +40,25 @@ def main() -> int:
         action="store_true",
         help="show a live MineRL POV window while the agent is running",
     )
+    parser.add_argument(
+        "--cave-entry-phase",
+        action="store_true",
+        help=(
+            "enable the optional Phase 5 bounded entry phase: after the "
+            "existing double-confirmed cave gate, run a short local forward "
+            "block into the validated opening, record a post-entry frame, "
+            "then emit the single local ESC tick"
+        ),
+    )
+    parser.add_argument(
+        "--cave-entry-phase-max-ticks",
+        type=int,
+        default=None,
+        help=(
+            "override the Phase 5 entry forward budget in ticks (default 30; "
+            "only meaningful together with --cave-entry-phase)"
+        ),
+    )
     args = parser.parse_args()
     run_agent(
         episodes=args.episodes,
@@ -50,6 +69,12 @@ def main() -> int:
         watch=args.watch,
         mission_max_ticks=args.mission_ticks,
         model_lock_path=args.model_lock,
+        cave_entry_phase_enabled=args.cave_entry_phase,
+        cave_entry_phase_max_ticks=(
+            args.cave_entry_phase_max_ticks
+            if args.cave_entry_phase_max_ticks is not None
+            else 30
+        ),
     )
     return 0
 

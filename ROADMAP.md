@@ -255,6 +255,220 @@ Local evidence:
 - `runs/phase4-cave-search/20260721-230035/manual_review.md` (seed 101, second
   attempt — camera-pitch runaway reproduced)
 
+## Phase 5 — Bounded cave-entry verification
+
+**Status: code complete and unit-tested; one real-MineRL 800-tick
+safety run was performed on 2026-07-29 (seed 101, `--cave-entry-phase`
+enabled). The entry phase stayed in its `idle` state, no `ESC` tick
+was emitted, and no post-entry evidence frame was written. The run
+validates that the new control layer does not trigger spuriously under
+real MineRL conditions; it does **not** constitute a Phase 5
+completion. A controlled true-entrance reproduction is still required
+before this phase can be marked complete.**
+
+The Phase 4 double-confirmation gate already proved that the agent can
+*find* a real cave entrance and stop. Phase 5 adds the next safe step:
+after the gate fires, walk a short, locally driven forward block into the
+validated opening, record one post-entry evidence frame, then emit the
+single local `ESC` tick. The current task is still
+`MineRLBasaltFindCave-v0`; the goal is evidence-grade entry proof, not
+general navigation or any model/dependency upgrade.
+
+### Design summary
+
+- The new layer is opt-in via `--cave-entry-phase` (default off). When
+  disabled, the agent behaves exactly as Phase 4. When enabled, the
+  reconfirmation path no longer immediately calls
+  `executor.request_cave_completion`; it instead activates a
+  `CaveEntryPhase` state machine.
+- `CaveEntryPhase` is a small, single-shot state machine with five
+  states: `idle` → `entering` → `entered` | `aborted` | `unverified`.
+  `entered` means the bounded forward block ran to completion **and**
+  the post-entry frame passed the local plausibility check; in that
+  case the single local `ESC` tick is emitted and
+  `cave_completion_requested` becomes `True`. `aborted` means a
+  safety guard tripped (water hazard, low-progress, turn-scan,
+  environment-done, watchdog, max-ticks) — the bounded block did
+  not run to completion, no `ESC` is emitted. `unverified` means the
+  bounded block ran to completion but the post-entry frame did
+  **not** pass the local plausibility check — the post-entry
+  evidence frame is still written for human review, but no `ESC` is
+  emitted and `cave_completion_requested` stays `False`. All three
+  terminal states are non-recoverable: re-activation is forbidden
+  after any of them.
+- Activation requires (a) the existing `cave_target_reconfirmations
+  ≥ 1` gate, (b) the same `forward_ticks_after_acquisition ≥
+  CAVE_COMPLETION_MIN_FORWARD_TICKS` precondition, and (c)
+  `cave_completion_requested` still `False`. Re-activation is
+  forbidden.
+- The entry block borrows the deterministic forward-continuation
+  pattern: a bounded local forward macro runs in the executor while
+  per-tick safety guards (water hazard, low-progress, turn-scan,
+  environment-done, watchdog, max-ticks) remain in force. If any
+  guard trips, the entry phase is `aborted` and `ESC` is **not**
+  emitted. When the budget is exhausted cleanly (last macro
+  finished), the phase routes to one of two terminal states
+  depending on the post-entry frame: `entered` (plausibility passed)
+  triggers the single local `ESC` tick; `unverified` (plausibility
+  failed) leaves the phase sealed with the evidence frame saved
+  for human review and no `ESC` emitted.
+- The forward budget is hard-capped at
+  `CAVE_ENTRY_PHASE_MAX_TICKS = 30` ticks (≈ 1.5 s at 20 Hz, ≈ 3 m of
+  in-world travel) and is *not* configurable beyond that via the
+  model. A second command-line override
+  (`--cave-entry-phase-max-ticks`) is available for offline
+  experiments but never changes the protocol.
+- The model is never given a new privileged action. During the
+  entering phase any new model decision is acknowledged so the
+  planner worker never blocks, but it is dropped: it cannot turn,
+  jump, attack, extend the entry budget, or run its own forward
+  macro. Entry and `forward_continuation` are intentionally exclusive
+  in this window.
+- The single local `ESC` tick is emitted by
+  `executor.request_cave_completion()` **only** when the bounded
+  block ran to completion **and** the post-entry frame passed the
+  local plausibility check; otherwise no `ESC` is emitted and
+  `cave_completion_requested` stays `False`. The post-entry evidence
+  frame is always recorded before that decision is taken, in
+  `entry_evidence/post-tick-NNNN.png` next to `decision_frames/`,
+  regardless of which terminal state the phase lands in.
+
+### Acceptance criteria (covered by `tests/test_cave_entry.py` and
+`tests/test_memory.py`)
+
+1. `cave_entry_phase_enabled = False` preserves the Phase 4 path
+   bit-for-bit: same `cave_completion_requested`, same single `ESC`
+   tick, no `entry_evidence/` directory.
+2. `cave_entry_phase_enabled = True` with no double confirmation never
+   activates the entry phase: state stays `idle`, `esc_nonzero_ticks
+   == 0`.
+3. With double confirmation and sufficient forward progress, the
+   entry phase reaches `entered`, `entry_forward_ticks` equals the
+   configured budget, and exactly one local `ESC` tick fires.
+4. The post-entry evidence frame is written under `entry_evidence/`
+   and the run still terminates on a single `ESC` tick with
+   `termination_reason == "cave_completion_requested"`.
+5. A water hazard detected during entry aborts the phase; no `ESC` is
+   emitted; `cancellation_reason == "water_hazard"`.
+6. Two consecutive low-progress stalls during entry abort the phase
+   with `cancellation_reason` in `{low_progress, turn_scan}`; no
+   `ESC` is emitted.
+7. A second cave candidate that arrives after the entry phase has
+   reached `entered` does **not** re-activate the phase and does not
+   re-emit `ESC` (`esc_nonzero_ticks == 1`).
+8. A model decision that arrives during the entry phase is
+   acknowledged and counted but not executed, and it does not extend
+   the entry forward budget.
+9. `entry_forward_ticks` is always `≤ max_ticks` and `≤ forward_ticks`.
+10. **P1 — Local plausibility is a gate, not an annotation.** The
+    post-entry frame is checked against the coarse luminance rule
+    (post world luminance below `50` or at least 30% lower than the
+    pre-entry frame). When the rule fails, the phase lands in
+    `unverified`; the evidence frame is still written under
+    `entry_evidence/`, but `cave_completion_requested` stays
+    `False`, `request_cave_completion()` is **not** called, and
+    `esc_nonzero_ticks` stays `0`. The episode falls through to
+    `tick_budget` or `environment_done` for the termination reason.
+    The phase cannot be re-activated afterwards.
+11. The terminal state is `entered`, `aborted`, or `unverified`; once
+    any of them is reached, no further transition is possible. The
+    `unverified` state carries the same single-shot guarantee as
+    `entered` and `aborted`: `cave_entry_phase.activate()` raises if
+    called again.
+12. A reproduction of the `cave_completion_requested` path that calls
+    `request_cave_completion()` twice is impossible by construction
+    (entry phase owns the single ESC, Phase 4 path is suppressed
+    when the entry phase is in flight or terminal).
+13. Activating the entry phase interrupts any forward macro already
+    in flight in the executor (typically a leftover
+    `forward_continuation` block): the leftover macro's remaining
+    forward ticks are not counted toward `entry_forward_ticks` and
+    do not extend the entry phase beyond its configured budget.
+
+### Test surface
+
+- `tests/test_memory.py` — `CaveEntryPhaseTests`: state machine,
+  input validation, single-shot activation, abort idempotence,
+  plausibility routing to `entered` vs `unverified`, explicit
+  `mark_unverified` path, re-activation refusal from `unverified`.
+- `tests/test_cave_entry.py` — thirteen integration tests covering the
+  acceptance list above using a fake `MineRLEnvAdapter` and the same
+  `FakePlanner` / `_DelayedDecisionMailbox` machinery as
+  `tests/test_agent.py`. No real MineRL session, no Qwen inference,
+  no network.
+
+### Real-MineRL safety run — 2026-07-29
+
+A single 800-tick MineRL run was executed on seed 101 with
+`--cave-entry-phase` explicitly enabled. The run's purpose was to
+validate the new control layer end-to-end under real MineRL
+conditions; it was **not** a Phase 5 completion attempt, because no
+real entrance was found and the entry phase never activated.
+
+| Field | Value |
+|---|---|
+| Run dir | `runs/phase5-cave-entry-validation/20260729-220922/` |
+| Manual review | `runs/phase5-cave-entry-validation/20260729-220922/manual_review.md` |
+| Seed | 101 |
+| Tick budget | 800 |
+| Completed ticks | 800 / 800 |
+| `termination_reason` | **`tick_budget`** |
+| `esc_nonzero_ticks` | **0** |
+| `cave_completion_requested` | **`False`** |
+| `cave_target_acquisitions` | 1 |
+| `cave_target_reconfirmations` | **0** |
+| `cave_entry_phase.state` | **`idle`** (never activated) |
+| `cave_entry_phase.is_terminal` | `False` |
+| `cave_entry_phase.activation_tick` | `None` |
+| `cave_entry_phase.entry_forward_ticks` | 0 |
+| `cave_entry_phase.evidence_frame` | **`None`** (no `entry_evidence/` directory was created) |
+| `cave_entry_phase.plausible` | `None` |
+| Entry evidence frames written | **0** |
+| Cave-completion evidence frames | **0** |
+
+The agent walked 327 real forward ticks across a 40-tick
+observation interval; Qwen emitted 7 `cave_visible=true` claims. One
+of those claims passed the text + directional stone-bounded
+dark-opening frame gate as a `cave_candidate` at observation tick 0,
+but `target_before_decision.active` was `False` there, so it became
+a `cave_target.acquire` (not a reconfirmation) and accumulated only
+`forward_ticks_after_acquisition=1`, far below the
+`CAVE_COMPLETION_MIN_FORWARD_TICKS=12` gate. The remaining 5 claims
+were vetoed at the stone-bounded dark-opening frame gate; one further
+claim was rejected at the text-evidence step (missing direction
+word). No double confirmation ever occurred, so the entry phase
+preconditions were never met. No `ESC` tick was emitted, no
+post-entry evidence frame was written, and the `unverified` branch
+was never reached — the entry phase was correctly sealed in
+`idle` for the full 800 ticks.
+
+This run validates the Phase 5 control layer: the entry phase does
+not activate spuriously, the new ESC suppression on the
+`unverified` branch was never needed, and the existing Phase 4
+guards (water hazard, low-progress, turn-scan, environment-done,
+watchdog, max-ticks, camera-pitch guard) remained off for the
+whole episode. It does **not** constitute a Phase 5 completion: no
+`ESC` was emitted, no post-entry evidence was recorded, and no
+cave-completion evidence was produced. A controlled true-entrance
+reproduction is still the remaining step before Phase 5 can be
+marked complete.
+
+### What is *not* in this phase
+
+- No general navigation, combat, underwater, or path-planning work.
+- No model or dependency upgrade (MineRL, Qwen, Python, JDK, model
+  commit are all untouched).
+- No weakening of the existing text/frame/direction/stone-context
+  gates, the camera-pitch guard, the water-hazard guard, the
+  low-progress recovery, the ESC policy, or the
+  `forward_continuation` safety layer.
+- No new privileged action for the model.
+- No real MineRL run has been executed for the controlled
+  true-entrance reproduction itself; that step requires another
+  explicit user approval and would write to a new
+  `runs/phase5-controlled-real-entrance-repro/<timestamp>/`
+  directory.
+
 ## Long-term safety boundaries
 
 1. Model output must pass JSON parsing, an action allowlist, and numeric

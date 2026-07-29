@@ -508,6 +508,90 @@ class DirectionalDarkOpeningRegionTests(unittest.TestCase):
             has_directional_dark_opening_region(frame, "up")
 
 
+class DirtShadowFalsePositiveRegressionTests(unittest.TestCase):
+    """Regression: a real seed-101 dirt-terrace shadow must not pass the
+    completion-grade stone-bounded dark-opening gate on any band.
+
+    The frame ``tests/fixtures/seed101_t0_dirt_terrace_false_positive.png``
+    is the ``initial.png`` from the Phase 5 real-MineRL validation run
+    (seed 101, tick 0). The model claimed ``cave_visible=true`` and the
+    text+stone-context gate happened to admit a 12-cell dark region in
+    the center band; on manual review that "dark region" is a dirt-hill
+    shadow, not an enterable dark stone opening. The same shadow shape
+    also slipped through the original Phase 4 first-acquisition frame
+    (``runs/phase4-true-entrance-approach/20260723-142315/episode-01/decision_frames/tick-0000.png``),
+    so the threshold for the largest coherent neutral-dark component
+    is intentionally bumped from 12 to 14 cells; the genuine Phase 4
+    reconfirmation frame at ``tick-0235.png`` still passes (its largest
+    component is 16 cells in the right band) and so does the
+    ``tests/fixtures/genuine_cave_entrance/entrance.png`` synthetic
+    positive (largest 39 cells in the center band).
+    """
+
+    @staticmethod
+    def _load(name: str) -> np.ndarray:
+        from PIL import Image
+        return np.array(
+            Image.open(Path(__file__).parent / "fixtures" / name).convert("RGB"),
+            dtype=np.uint8,
+        )
+
+    def test_seed101_t0_dirt_terrace_shadow_fails_every_band(self):
+        frame = self._load("seed101_t0_dirt_terrace_false_positive.png")
+        self.assertEqual(frame.shape, (360, 640, 3))
+        for direction in ("left", "center", "right"):
+            with self.subTest(direction=direction):
+                self.assertFalse(
+                    has_directional_stone_bounded_dark_opening_region(
+                        frame, direction
+                    ),
+                    f"dirt-terrace shadow on {direction!r} band must not be "
+                    "treated as an enterable dark stone opening",
+                )
+
+    def test_seed101_t0_dirt_terrace_shadow_fails_resolved_local_direction(self):
+        # The local fallback ``resolve_dark_opening_direction`` is only
+        # consulted when the model-stated direction is undecidable; it
+        # must also refuse to lock on to the dirt-terrace shadow.
+        frame = self._load("seed101_t0_dirt_terrace_false_positive.png")
+        self.assertIsNone(resolve_dark_opening_direction(frame))
+
+    def test_phase4_reconfirmation_frame_still_passes(self):
+        # The Phase 4 second-acquisition frame carries the same dirt
+        # hill in the background but the actual dark opening in front
+        # of it is dark enough and large enough (largest=16 cells,
+        # right band) to still satisfy the tightened gate.
+        from pathlib import Path
+
+        p4_reconfirm = (
+            Path(__file__).parent.parent
+            / "runs"
+            / "phase4-true-entrance-approach"
+            / "20260723-142315"
+            / "episode-01"
+            / "decision_frames"
+            / "tick-0235.png"
+        )
+        if not p4_reconfirm.exists():
+            self.skipTest(f"Phase 4 reconfirmation frame not present: {p4_reconfirm}")
+        from PIL import Image
+
+        frame = np.array(Image.open(p4_reconfirm).convert("RGB"), dtype=np.uint8)
+        self.assertTrue(
+            has_directional_stone_bounded_dark_opening_region(frame, "right")
+        )
+
+    def test_genuine_cave_entrance_fixture_still_passes(self):
+        # Sanity check: the synthetic genuine-cave fixture from the
+        # Phase 1 test suite still passes the tightened gate. Its
+        # largest connected neutral-dark component is 39 cells in the
+        # center band, well above the new 14-cell floor.
+        frame = self._load("genuine_cave_entrance/entrance.png")
+        self.assertTrue(
+            has_directional_stone_bounded_dark_opening_region(frame, "center")
+        )
+
+
 class ForwardContinuationRecoveryTests(unittest.TestCase):
     def test_single_macro_is_capped_at_forty_ticks(self):
         macro = safe_forward_continuation(120)
