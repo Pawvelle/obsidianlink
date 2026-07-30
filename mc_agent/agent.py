@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import signal
 import statistics
 import threading
@@ -306,6 +307,11 @@ def _run_episode(
     model_lock_path: Path | None = None,
     cave_entry_phase_enabled: bool = False,
     cave_entry_phase_max_ticks: int = CAVE_ENTRY_PHASE_MAX_TICKS,
+    planner_backend: str = "qwen",
+    planner_model: str | None = None,
+    planner_thinking: str | None = None,
+    planner_prompt_config: str | None = None,
+    planner_max_decision_age_ticks: int | None = None,
 ) -> dict[str, Any]:
     episode_id = episode_id_override or f"episode-{episode_index:02d}"
     run_dir = session_dir / episode_id
@@ -319,7 +325,18 @@ def _run_episode(
             "mission_max_ticks": mission_max_ticks,
             "observation_interval": observation_interval,
             "target_ticks_per_second": TARGET_TICKS_PER_SECOND,
-            "planner": "Qwen3-VL-2B-Instruct MPS/FP16, asynchronous",
+            "planner": (
+                "Qwen3-VL-2B-Instruct MPS/FP16, asynchronous"
+                if planner_backend == "qwen"
+                else f"{planner_model} via {planner_backend}, asynchronous HTTP"
+            ),
+            "planner_backend": planner_backend,
+            "planner_model": planner_model or (
+                "Qwen3-VL-2B-Instruct" if planner_backend == "qwen" else None
+            ),
+            "planner_thinking": planner_thinking,
+            "planner_prompt_config": planner_prompt_config,
+            "planner_max_decision_age_ticks": planner_max_decision_age_ticks,
             "model_lock_path": str(model_lock_path) if model_lock_path else "model.lock.json",
             "live_view": watch,
             "visual_change_feedback": True,
@@ -376,6 +393,7 @@ def _run_episode(
     ineffective_decisions = 0
     executed_ineffective_decisions = 0
     stale_decisions = 0
+    stale_age_discarded = 0
     completed_ticks = 0
     reward_sum = 0.0
     early_done = False
@@ -534,334 +552,359 @@ def _run_episode(
                         observation_tick=decision.observation_tick,
                     )
                 else:
-                    decision_applied_this_tick = True
-                    decisions += 1
-                    decision_latencies.append(decision.latency_seconds)
+                    staleness_ticks = completed_ticks - decision.observation_tick
+                    if (
+                        planner_max_decision_age_ticks is not None
+                        and staleness_ticks > planner_max_decision_age_ticks
+                    ):
+                        # The remote API decision is too old to act on: the
+                        # MineRL step loop has already advanced past the world
+                        # the model saw. Still acknowledge so the planner can
+                        # take a fresh observation, but never execute the
+                        # stale payload and never mark it as a model-driven
+                        # decision.
+                        stale_age_discarded += 1
+                        logger.event(
+                            "decision_age_exceeded",
+                            applied_tick=completed_ticks,
+                            observation_tick=decision.observation_tick,
+                            staleness_ticks=staleness_ticks,
+                            max_decision_age_ticks=planner_max_decision_age_ticks,
+                            accepted=decision.accepted,
+                            error=decision.error,
+                            latency_seconds=decision.latency_seconds,
+                            raw=decision.raw,
+                        )
+                    else:
+                        decision_applied_this_tick = True
+                        decisions += 1
+                        decision_latencies.append(decision.latency_seconds)
                     # A real planner decision always takes priority over the
                     # local forward-continuation safety layer; abandon any
                     # active session rather than resume it out of context.
-                    _cancel_forward_continuation(
-                        "planner_decision", tick=completed_ticks
-                    )
-                    target_before_decision = cave_target.snapshot()
-                    action_to_execute = decision.action
-                    recovery_applied = False
-                    camera_pitch_guard_applied = False
-                    cave_candidate_validated = False
-                    cave_text_evidence_complete = False
-                    cave_frame_plausible: bool | None = None
-                    candidate_gate_direction: str | None = None
-                    candidate_direction_source: str | None = None
-                    candidate_gate_frame_tick: int | None = None
-                    if decision.accepted:
-                        accepted_decisions += 1
-                        has_effect = _macro_action_has_effect(decision.action)
-                        ineffective_decisions += int(not has_effect)
-                        if has_effect:
-                            action_signatures.append(_action_signature(decision))
-                        model_forward_decisions += int(
-                            decision.action.action == "move_forward"
+                    if decision_applied_this_tick:
+                        _cancel_forward_continuation(
+                            "planner_decision", tick=completed_ticks
                         )
-                        raw_cave_visible_decisions += int(
-                            decision.action.cave_visible
-                        )
-                        # Text evidence alone can be a model hallucination (e.g.
-                        # a sunlit sandstone wall described as a "dark stone
-                        # opening"). A candidate must also survive a local,
-                        # deterministic frame veto -- applied to the exact frame
-                        # published at decision.observation_tick, restricted to
-                        # the claimed left/center/right band -- before it is
-                        # counted. This still never auto-confirms a cave, it
-                        # only avoids counting obviously implausible frames.
-                        cave_text_evidence_complete = is_cave_candidate(
-                            decision.action
-                        )
-                        if cave_text_evidence_complete:
-                            candidate_gate_direction = resolve_cave_direction(
-                                decision.action.reason
+                        target_before_decision = cave_target.snapshot()
+                        action_to_execute = decision.action
+                        recovery_applied = False
+                        camera_pitch_guard_applied = False
+                        cave_candidate_validated = False
+                        cave_text_evidence_complete = False
+                        cave_frame_plausible: bool | None = None
+                        candidate_gate_direction: str | None = None
+                        candidate_direction_source: str | None = None
+                        candidate_gate_frame_tick: int | None = None
+                        if decision.accepted:
+                            accepted_decisions += 1
+                            has_effect = _macro_action_has_effect(decision.action)
+                            ineffective_decisions += int(not has_effect)
+                            if has_effect:
+                                action_signatures.append(_action_signature(decision))
+                            model_forward_decisions += int(
+                                decision.action.action == "move_forward"
                             )
-                            evidence_frame = frame_cache.get(
-                                episode_id, decision.observation_tick
+                            raw_cave_visible_decisions += int(
+                                decision.action.cave_visible
                             )
-                            if evidence_frame is None:
-                                cave_candidate_frame_missing += 1
-                                cave_frame_plausible = False
-                                logger.event(
-                                    "cave_candidate_frame_missing",
-                                    tick=completed_ticks,
-                                    observation_tick=decision.observation_tick,
-                                    reason=decision.action.reason,
+                            # Text evidence alone can be a model hallucination (e.g.
+                            # a sunlit sandstone wall described as a "dark stone
+                            # opening"). A candidate must also survive a local,
+                            # deterministic frame veto -- applied to the exact frame
+                            # published at decision.observation_tick, restricted to
+                            # the claimed left/center/right band -- before it is
+                            # counted. This still never auto-confirms a cave, it
+                            # only avoids counting obviously implausible frames.
+                            cave_text_evidence_complete = is_cave_candidate(
+                                decision.action
+                            )
+                            if cave_text_evidence_complete:
+                                candidate_gate_direction = resolve_cave_direction(
+                                    decision.action.reason
                                 )
-                            elif candidate_gate_direction is None:
-                                # Ambiguous or unstated direction: fail
-                                # closed instead of accepting a dark patch
-                                # anywhere in the frame.
-                                cave_frame_plausible = False
-                            else:
-                                candidate_gate_frame_tick = decision.observation_tick
-                                cave_frame_plausible = (
-                                    has_directional_stone_bounded_dark_opening_region(
-                                        evidence_frame, candidate_gate_direction
-                                    )
+                                evidence_frame = frame_cache.get(
+                                    episode_id, decision.observation_tick
                                 )
-                                candidate_direction_source = "model_reason"
-                                if not cave_frame_plausible:
-                                    local_direction = resolve_dark_opening_direction(
-                                        evidence_frame
-                                    )
-                                    if local_direction is not None:
-                                        candidate_gate_direction = local_direction
-                                        candidate_direction_source = "local_dark_region"
-                                        cave_frame_plausible = (
-                                            has_directional_stone_bounded_dark_opening_region(
-                                                evidence_frame, local_direction
-                                            )
-                                        )
-                                if not cave_frame_plausible:
-                                    cave_candidate_frame_vetoes += 1
+                                if evidence_frame is None:
+                                    cave_candidate_frame_missing += 1
+                                    cave_frame_plausible = False
                                     logger.event(
-                                        "cave_candidate_frame_vetoed",
+                                        "cave_candidate_frame_missing",
                                         tick=completed_ticks,
                                         observation_tick=decision.observation_tick,
-                                        direction=candidate_gate_direction,
                                         reason=decision.action.reason,
                                     )
-                            cave_candidate_validated = bool(cave_frame_plausible)
-                        if cave_candidate_validated:
-                            cave_candidate_decisions += 1
-                            cave_candidate_observation_ticks.append(
-                                decision.observation_tick
-                            )
-                            cave_candidate_evidence.append(
-                                "decision_frames/"
-                                f"tick-{decision.observation_tick:04d}.png"
-                            )
-                            if (
-                                target_before_decision.active
-                                and target_before_decision.direction
-                                == candidate_gate_direction
-                                and target_before_decision.forward_ticks_after_acquisition
-                                >= CAVE_COMPLETION_MIN_FORWARD_TICKS
-                            ):
-                                cave_target_reconfirmations += 1
-                                cave_completion_evidence.append(
+                                elif candidate_gate_direction is None:
+                                    # Ambiguous or unstated direction: fail
+                                    # closed instead of accepting a dark patch
+                                    # anywhere in the frame.
+                                    cave_frame_plausible = False
+                                else:
+                                    candidate_gate_frame_tick = decision.observation_tick
+                                    cave_frame_plausible = (
+                                        has_directional_stone_bounded_dark_opening_region(
+                                            evidence_frame, candidate_gate_direction
+                                        )
+                                    )
+                                    candidate_direction_source = "model_reason"
+                                    if not cave_frame_plausible:
+                                        local_direction = resolve_dark_opening_direction(
+                                            evidence_frame
+                                        )
+                                        if local_direction is not None:
+                                            candidate_gate_direction = local_direction
+                                            candidate_direction_source = "local_dark_region"
+                                            cave_frame_plausible = (
+                                                has_directional_stone_bounded_dark_opening_region(
+                                                    evidence_frame, local_direction
+                                                )
+                                            )
+                                    if not cave_frame_plausible:
+                                        cave_candidate_frame_vetoes += 1
+                                        logger.event(
+                                            "cave_candidate_frame_vetoed",
+                                            tick=completed_ticks,
+                                            observation_tick=decision.observation_tick,
+                                            direction=candidate_gate_direction,
+                                            reason=decision.action.reason,
+                                        )
+                                cave_candidate_validated = bool(cave_frame_plausible)
+                            if cave_candidate_validated:
+                                cave_candidate_decisions += 1
+                                cave_candidate_observation_ticks.append(
+                                    decision.observation_tick
+                                )
+                                cave_candidate_evidence.append(
                                     "decision_frames/"
                                     f"tick-{decision.observation_tick:04d}.png"
                                 )
-                                if cave_entry_phase.can_activate(
-                                    cave_target_reconfirmations=cave_target_reconfirmations,
-                                    forward_ticks_after_acquisition=(
-                                        target_before_decision.forward_ticks_after_acquisition
-                                    ),
-                                    cave_completion_requested=cave_completion_requested,
+                                if (
+                                    target_before_decision.active
+                                    and target_before_decision.direction
+                                    == candidate_gate_direction
+                                    and target_before_decision.forward_ticks_after_acquisition
+                                    >= CAVE_COMPLETION_MIN_FORWARD_TICKS
                                 ):
-                                    # Phase 5: replace the immediate local ESC
-                                    # with a bounded, locally driven forward
-                                    # block. The environment owner will emit
-                                    # exactly one ESC tick when that block
-                                    # finishes or is aborted.
-                                    cave_entry_phase_activated = True
-                                    entry_snapshot = cave_entry_phase.activate(
-                                        decision.observation_tick
+                                    cave_target_reconfirmations += 1
+                                    cave_completion_evidence.append(
+                                        "decision_frames/"
+                                        f"tick-{decision.observation_tick:04d}.png"
                                     )
-                                    # Stop any macro the executor is already
-                                    # running (typically a leftover forward-
-                                    # continuation block) so the very next
-                                    # tick is the first one of the entry
-                                    # phase's own forward budget. Without this
-                                    # interrupt the leftover macro would keep
-                                    # running forward and inflate the entry
-                                    # forward-tick counter.
-                                    executor.interrupt(
-                                        "cave entry phase activated"
-                                    )
-                                    cave_entry_pre_luminance = (
-                                        _world_strip_mean_luminance(
-                                            observation["pov"]
-                                        )
-                                    )
-                                    cave_entry_phase.record_pre_entry_luminance(
-                                        cave_entry_pre_luminance
-                                    )
-                                    entry_evidence_dir.mkdir(exist_ok=True)
-                                    logger.event(
-                                        "cave_entry_phase_activated",
-                                        tick=completed_ticks,
-                                        observation_tick=decision.observation_tick,
-                                        target=target_before_decision.to_log_dict(),
-                                        snapshot=entry_snapshot.to_log_dict(),
-                                    )
-                                else:
-                                    blocker = cave_entry_phase.activation_blocker(
+                                    if cave_entry_phase.can_activate(
                                         cave_target_reconfirmations=cave_target_reconfirmations,
                                         forward_ticks_after_acquisition=(
                                             target_before_decision.forward_ticks_after_acquisition
                                         ),
                                         cave_completion_requested=cave_completion_requested,
+                                    ):
+                                        # Phase 5: replace the immediate local ESC
+                                        # with a bounded, locally driven forward
+                                        # block. The environment owner will emit
+                                        # exactly one ESC tick when that block
+                                        # finishes or is aborted.
+                                        cave_entry_phase_activated = True
+                                        entry_snapshot = cave_entry_phase.activate(
+                                            decision.observation_tick
+                                        )
+                                        # Stop any macro the executor is already
+                                        # running (typically a leftover forward-
+                                        # continuation block) so the very next
+                                        # tick is the first one of the entry
+                                        # phase's own forward budget. Without this
+                                        # interrupt the leftover macro would keep
+                                        # running forward and inflate the entry
+                                        # forward-tick counter.
+                                        executor.interrupt(
+                                            "cave entry phase activated"
+                                        )
+                                        cave_entry_pre_luminance = (
+                                            _world_strip_mean_luminance(
+                                                observation["pov"]
+                                            )
+                                        )
+                                        cave_entry_phase.record_pre_entry_luminance(
+                                            cave_entry_pre_luminance
+                                        )
+                                        entry_evidence_dir.mkdir(exist_ok=True)
+                                        logger.event(
+                                            "cave_entry_phase_activated",
+                                            tick=completed_ticks,
+                                            observation_tick=decision.observation_tick,
+                                            target=target_before_decision.to_log_dict(),
+                                            snapshot=entry_snapshot.to_log_dict(),
+                                        )
+                                    else:
+                                        blocker = cave_entry_phase.activation_blocker(
+                                            cave_target_reconfirmations=cave_target_reconfirmations,
+                                            forward_ticks_after_acquisition=(
+                                                target_before_decision.forward_ticks_after_acquisition
+                                            ),
+                                            cave_completion_requested=cave_completion_requested,
+                                        )
+                                        # Only fall back to the Phase 4 immediate
+                                        # local ESC when the entry phase has not
+                                        # already taken over. If the entry phase
+                                        # is in flight (or terminal) it will
+                                        # issue its own single ESC tick; calling
+                                        # ``request_cave_completion`` again here
+                                        # would raise.
+                                        if not cave_entry_phase.is_active and not cave_entry_phase.is_terminal:
+                                            cave_completion_requested = True
+                                        logger.event(
+                                            "cave_entry_phase_blocked",
+                                            tick=completed_ticks,
+                                            observation_tick=decision.observation_tick,
+                                            blocker=blocker,
+                                        )
+                                elif candidate_gate_direction is not None:
+                                    cave_target.acquire(
+                                        candidate_gate_direction,
+                                        decision.observation_tick,
                                     )
-                                    # Only fall back to the Phase 4 immediate
-                                    # local ESC when the entry phase has not
-                                    # already taken over. If the entry phase
-                                    # is in flight (or terminal) it will
-                                    # issue its own single ESC tick; calling
-                                    # ``request_cave_completion`` again here
-                                    # would raise.
-                                    if not cave_entry_phase.is_active and not cave_entry_phase.is_terminal:
-                                        cave_completion_requested = True
+                                    cave_target_acquisitions += 1
                                     logger.event(
-                                        "cave_entry_phase_blocked",
+                                        "cave_target_acquired",
                                         tick=completed_ticks,
                                         observation_tick=decision.observation_tick,
-                                        blocker=blocker,
+                                        target=cave_target.snapshot().to_log_dict(),
                                     )
-                            elif candidate_gate_direction is not None:
-                                cave_target.acquire(
-                                    candidate_gate_direction,
-                                    decision.observation_tick,
+                            elif target_before_decision.active:
+                                cave_target.consume_decision()
+                            # Phase 5: while the bounded entry phase is active the
+                            # model only steers the cave gate. The environment
+                            # owner runs the local forward block, so any model
+                            # decision is recorded but not executed -- a turn,
+                            # jump, or new move_forward here would destroy the
+                            # evidence frame we are trying to capture.
+                            if cave_entry_phase.is_active and not cave_completion_requested:
+                                cave_entry_decisions_during_phase += 1
+                                cave_entry_decisions_suppressed += 1
+                                action_to_execute = MacroAction.no_op(
+                                    "suppressed during cave entry phase"
                                 )
-                                cave_target_acquisitions += 1
-                                logger.event(
-                                    "cave_target_acquired",
-                                    tick=completed_ticks,
-                                    observation_tick=decision.observation_tick,
-                                    target=cave_target.snapshot().to_log_dict(),
+                                recovery_applied = False
+                                water_override = False
+                                water_direction = None
+                                has_effect = False
+                                executed_has_effect = False
+                                camera_pitch_guard_applied = False
+                            if recovery_followup_pending:
+                                recovery_followup_decisions += 1
+                                recovery_followup_effective_decisions += int(has_effect)
+                                recovery_followup_pending = False
+                            if not has_effect:
+                                recovery_opportunities += 1
+                                action_to_execute, recovery_applied = _select_executed_action(
+                                    decision.action,
+                                    recovery_actions_applied,
                                 )
-                        elif target_before_decision.active:
-                            cave_target.consume_decision()
-                        # Phase 5: while the bounded entry phase is active the
-                        # model only steers the cave gate. The environment
-                        # owner runs the local forward block, so any model
-                        # decision is recorded but not executed -- a turn,
-                        # jump, or new move_forward here would destroy the
-                        # evidence frame we are trying to capture.
-                        if cave_entry_phase.is_active and not cave_completion_requested:
-                            cave_entry_decisions_during_phase += 1
-                            cave_entry_decisions_suppressed += 1
-                            action_to_execute = MacroAction.no_op(
-                                "suppressed during cave entry phase"
+                                recovery_actions_applied += 1
+                                recovery_followup_pending = True
+                                recovery_action_signatures.append(
+                                    json.dumps(
+                                        action_to_execute.to_log_dict(),
+                                        sort_keys=True,
+                                    )
+                                )
+                            water_direction = water_hazard_direction(observation["pov"])
+                            water_override = (
+                                action_to_execute.action == "move_forward"
+                                and water_direction is not None
                             )
-                            recovery_applied = False
-                            water_override = False
-                            water_direction = None
+                            if water_override:
+                                action_to_execute = safe_water_recovery(
+                                    water_direction,
+                                    water_hazard_overrides,
+                                )
+                                water_hazard_overrides += 1
+                                water_hazard_directions.append(water_direction)
+                            (
+                                action_to_execute,
+                                camera_pitch_guard_applied,
+                            ) = _guard_camera_pitch(
+                                action_to_execute, commanded_camera_pitch_degrees
+                            )
+                            camera_pitch_guard_overrides += int(camera_pitch_guard_applied)
+                            executed_has_effect = _macro_action_has_effect(action_to_execute)
+                            executed_ineffective_decisions += int(not executed_has_effect)
+                            previous_action_context = _action_context(action_to_execute)
+                            # Only an accepted move_forward decision that survived
+                            # untouched (no water-hazard or ineffective-action
+                            # override) may open a bounded local continuation
+                            # window; Qwen still chooses direction, the local
+                            # safety layer only avoids idling while it waits.
+                            # Phase 5: the entry phase owns the local forward
+                            # budget; we must not open a forward-continuation
+                            # session that would race with it.
+                            if (
+                                not cave_entry_phase.is_active
+                                and _forward_continuation_is_eligible(
+                                    decision_accepted=decision.accepted,
+                                    decision_action=decision.action.action,
+                                    executed_action=action_to_execute.action,
+                                )
+                            ):
+                                forward_continuation_eligible = True
+                                forward_continuation_session_active = False
+                                forward_continuation_macro_pending = False
+                                forward_continuation_remaining_ticks = (
+                                    LOCAL_FORWARD_CONTINUATION_MAX_TICKS
+                                )
+                        else:
+                            rejected_decisions += 1
                             has_effect = False
                             executed_has_effect = False
-                            camera_pitch_guard_applied = False
-                        if recovery_followup_pending:
-                            recovery_followup_decisions += 1
-                            recovery_followup_effective_decisions += int(has_effect)
-                            recovery_followup_pending = False
-                        if not has_effect:
-                            recovery_opportunities += 1
-                            action_to_execute, recovery_applied = _select_executed_action(
-                                decision.action,
-                                recovery_actions_applied,
+                        # A real planner decision always takes priority over a
+                        # short local recovery scan; abandon any unfinished scan
+                        # rather than resume it later out of context.
+                        pending_turn_scan_actions = []
+                        awaiting_turn_scan_observation = False
+                        if cave_completion_requested:
+                            _cancel_forward_continuation(
+                                "cave_completion", tick=completed_ticks
                             )
-                            recovery_actions_applied += 1
-                            recovery_followup_pending = True
-                            recovery_action_signatures.append(
-                                json.dumps(
-                                    action_to_execute.to_log_dict(),
-                                    sort_keys=True,
-                                )
+                            executor.request_cave_completion()
+                            logger.event(
+                                "cave_completion_requested",
+                                tick=completed_ticks,
+                                observation_tick=decision.observation_tick,
+                                target=target_before_decision.to_log_dict(),
+                                evidence=cave_completion_evidence[-1],
                             )
-                        water_direction = water_hazard_direction(observation["pov"])
-                        water_override = (
-                            action_to_execute.action == "move_forward"
-                            and water_direction is not None
-                        )
-                        if water_override:
-                            action_to_execute = safe_water_recovery(
-                                water_direction,
-                                water_hazard_overrides,
-                            )
-                            water_hazard_overrides += 1
-                            water_hazard_directions.append(water_direction)
-                        (
-                            action_to_execute,
-                            camera_pitch_guard_applied,
-                        ) = _guard_camera_pitch(
-                            action_to_execute, commanded_camera_pitch_degrees
-                        )
-                        camera_pitch_guard_overrides += int(camera_pitch_guard_applied)
-                        executed_has_effect = _macro_action_has_effect(action_to_execute)
-                        executed_ineffective_decisions += int(not executed_has_effect)
-                        previous_action_context = _action_context(action_to_execute)
-                        # Only an accepted move_forward decision that survived
-                        # untouched (no water-hazard or ineffective-action
-                        # override) may open a bounded local continuation
-                        # window; Qwen still chooses direction, the local
-                        # safety layer only avoids idling while it waits.
-                        # Phase 5: the entry phase owns the local forward
-                        # budget; we must not open a forward-continuation
-                        # session that would race with it.
-                        if (
-                            not cave_entry_phase.is_active
-                            and _forward_continuation_is_eligible(
-                                decision_accepted=decision.accepted,
-                                decision_action=decision.action.action,
-                                executed_action=action_to_execute.action,
-                            )
-                        ):
-                            forward_continuation_eligible = True
-                            forward_continuation_session_active = False
-                            forward_continuation_macro_pending = False
-                            forward_continuation_remaining_ticks = (
-                                LOCAL_FORWARD_CONTINUATION_MAX_TICKS
-                            )
-                    else:
-                        rejected_decisions += 1
-                        has_effect = False
-                        executed_has_effect = False
-                    # A real planner decision always takes priority over a
-                    # short local recovery scan; abandon any unfinished scan
-                    # rather than resume it later out of context.
-                    pending_turn_scan_actions = []
-                    awaiting_turn_scan_observation = False
-                    if cave_completion_requested:
-                        _cancel_forward_continuation(
-                            "cave_completion", tick=completed_ticks
-                        )
-                        executor.request_cave_completion()
+                        elif cave_entry_phase.is_active:
+                            # The environment owner is running the local entry
+                            # forward block; we must not submit the (suppressed)
+                            # model decision into the executor on top of it.
+                            pass
+                        else:
+                            _submit_action(action_to_execute)
                         logger.event(
-                            "cave_completion_requested",
-                            tick=completed_ticks,
+                            "planner_decision",
+                            applied_tick=completed_ticks,
                             observation_tick=decision.observation_tick,
-                            target=target_before_decision.to_log_dict(),
-                            evidence=cave_completion_evidence[-1],
-                        )
-                    elif cave_entry_phase.is_active:
-                        # The environment owner is running the local entry
-                        # forward block; we must not submit the (suppressed)
-                        # model decision into the executor on top of it.
-                        pass
-                    else:
-                        _submit_action(action_to_execute)
-                    logger.event(
-                        "planner_decision",
-                        applied_tick=completed_ticks,
-                        observation_tick=decision.observation_tick,
-                        staleness_ticks=completed_ticks - decision.observation_tick,
-                        latency_seconds=decision.latency_seconds,
-                        accepted=decision.accepted,
-                        error=decision.error,
-                        has_effect=has_effect,
-                        executed_has_effect=executed_has_effect,
-                        recovery_opportunity=decision.accepted and not has_effect,
-                        recovery_applied=recovery_applied,
-                        water_hazard_override=water_override if decision.accepted else False,
-                        water_hazard_direction=water_direction if decision.accepted else None,
-                        camera_pitch_guard_applied=camera_pitch_guard_applied,
-                        commanded_camera_pitch_degrees=commanded_camera_pitch_degrees,
-                        cave_visible=decision.action.cave_visible,
-                        cave_text_evidence_complete=cave_text_evidence_complete,
-                        cave_frame_plausible=cave_frame_plausible,
-                        cave_candidate_validated=cave_candidate_validated,
-                        candidate_gate_direction=candidate_gate_direction,
-                        candidate_direction_source=candidate_direction_source,
-                        candidate_gate_frame_tick=candidate_gate_frame_tick,
-                        raw=decision.raw,
-                        parsed=decision.action.to_log_dict(),
-                        executed=action_to_execute.to_log_dict(),
+                            staleness_ticks=completed_ticks - decision.observation_tick,
+                            latency_seconds=decision.latency_seconds,
+                            accepted=decision.accepted,
+                            error=decision.error,
+                            has_effect=has_effect,
+                            executed_has_effect=executed_has_effect,
+                            recovery_opportunity=decision.accepted and not has_effect,
+                            recovery_applied=recovery_applied,
+                            water_hazard_override=water_override if decision.accepted else False,
+                            water_hazard_direction=water_direction if decision.accepted else None,
+                            camera_pitch_guard_applied=camera_pitch_guard_applied,
+                            commanded_camera_pitch_degrees=commanded_camera_pitch_degrees,
+                            cave_visible=decision.action.cave_visible,
+                            cave_text_evidence_complete=cave_text_evidence_complete,
+                            cave_frame_plausible=cave_frame_plausible,
+                            cave_candidate_validated=cave_candidate_validated,
+                            candidate_gate_direction=candidate_gate_direction,
+                            candidate_direction_source=candidate_direction_source,
+                            candidate_gate_frame_tick=candidate_gate_frame_tick,
+                            raw=decision.raw,
+                            parsed=decision.action.to_log_dict(),
+                            executed=action_to_execute.to_log_dict(),
                     )
 
             if completed_ticks > 0 and completed_ticks % observation_interval == 0:
@@ -1419,6 +1462,8 @@ def _run_episode(
             ineffective_decisions / accepted_decisions if accepted_decisions else None
         ),
         "stale_decisions": stale_decisions,
+        "stale_age_discarded": stale_age_discarded,
+        "planner_max_decision_age_ticks": planner_max_decision_age_ticks,
         "episode_barrier_seconds": barrier_seconds,
         "unique_action_signatures": sorted(set(action_signatures)),
         "decision_latency_mean": (
@@ -1569,6 +1614,14 @@ def run_agent(
     model_lock_path: Path | None = None,
     cave_entry_phase_enabled: bool = False,
     cave_entry_phase_max_ticks: int = CAVE_ENTRY_PHASE_MAX_TICKS,
+    planner_backend: str = "qwen",
+    minimax_endpoint: str = "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+    minimax_model: str = "MiniMax-M3",
+    minimax_thinking: str = "disabled",
+    minimax_prompt_config: str = "prompt_v2_cave_salience",
+    minimax_timeout_seconds: float = 30.0,
+    minimax_api_key: str | None = None,
+    max_decision_age_ticks: int | None = None,
 ) -> dict[str, Any]:
     if episodes < 1 or ticks < 1 or observation_interval < 1:
         raise ValueError("episodes, ticks, and observation_interval must be positive")
@@ -1587,17 +1640,62 @@ def run_agent(
         or cave_entry_phase_max_ticks < 1
     ):
         raise ValueError("cave_entry_phase_max_ticks must be a positive integer")
+    if planner_backend not in {"qwen", "minimax"}:
+        raise ValueError(
+            f"planner_backend must be 'qwen' or 'minimax' (got {planner_backend!r})"
+        )
+    if minimax_thinking not in {"disabled", "adaptive", "enabled"}:
+        raise ValueError(
+            "minimax_thinking must be one of: disabled, adaptive, enabled"
+        )
+    if minimax_prompt_config not in {"baseline", "prompt_v2_cave_salience"}:
+        raise ValueError(
+            "minimax_prompt_config must be 'baseline' or 'prompt_v2_cave_salience'"
+        )
+    if minimax_timeout_seconds <= 0:
+        raise ValueError("minimax_timeout_seconds must be positive")
+    if max_decision_age_ticks is not None and (
+        type(max_decision_age_ticks) is not int or max_decision_age_ticks < 1
+    ):
+        raise ValueError("max_decision_age_ticks must be a positive integer or None")
+    if planner_backend == "minimax" and max_decision_age_ticks is None:
+        # The remote provider's real P95 latency is several seconds; a late
+        # decision must not be silently treated as the current frame. The
+        # smoke defaults to 100 ticks purely to validate end-to-end
+        # integration; it is not a long-term policy.
+        max_decision_age_ticks = 100
+
     output_root = output_root or ROOT / "runs" / "episodes"
     session_dir = output_root / datetime.now().strftime("%Y%m%d-%H%M%S")
     session_dir.mkdir(parents=True, exist_ok=False)
     stop_all = threading.Event()
     signal.signal(signal.SIGINT, lambda *_: stop_all.set())
-    planner = QwenPlannerWorker(lock_path=model_lock_path)
+    if planner_backend == "qwen":
+        planner: QwenPlannerWorker = QwenPlannerWorker(lock_path=model_lock_path)
+    else:
+        from mc_agent.minimax import MiniMaxPlannerWorker
+
+        api_key = minimax_api_key or os.environ.get("MINIMAX_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "MINIMAX_API_KEY is required for the minimax planner backend; "
+                "export it in the environment or pass minimax_api_key=..."
+            )
+        planner = MiniMaxPlannerWorker(
+            api_key=api_key,
+            endpoint=minimax_endpoint,
+            model=minimax_model,
+            thinking=minimax_thinking,
+            timeout_seconds=minimax_timeout_seconds,
+            prompt_config=minimax_prompt_config,
+        )
     results: list[dict[str, Any]] = []
     planner.start()
     try:
         if not planner.ready.wait(30):
-            raise TimeoutError("Qwen planner did not load within 30 seconds")
+            raise TimeoutError(
+                f"{planner_backend} planner did not become ready within 30 seconds"
+            )
         if planner.error:
             raise RuntimeError(planner.error)
         with MineRLEnvAdapter(max_episode_steps=mission_max_ticks) as adapter:
@@ -1619,6 +1717,19 @@ def run_agent(
                         model_lock_path=model_lock_path,
                         cave_entry_phase_enabled=cave_entry_phase_enabled,
                         cave_entry_phase_max_ticks=cave_entry_phase_max_ticks,
+                        planner_backend=planner_backend,
+                        planner_model=(
+                            "Qwen3-VL-2B-Instruct"
+                            if planner_backend == "qwen"
+                            else minimax_model
+                        ),
+                        planner_thinking=(
+                            None if planner_backend == "qwen" else minimax_thinking
+                        ),
+                        planner_prompt_config=(
+                            None if planner_backend == "qwen" else minimax_prompt_config
+                        ),
+                        planner_max_decision_age_ticks=max_decision_age_ticks,
                     )
                 )
     finally:
@@ -1645,11 +1756,51 @@ def run_agent(
     total_cave_candidate_decisions = sum(
         result.get("cave_candidate_decisions", 0) for result in results
     )
+    total_stale_age_discarded = sum(
+        result.get("stale_age_discarded", 0) for result in results
+    )
     cave_candidate_episodes = [
         result["episode_id"]
         for result in results
         if result.get("cave_candidate_decisions", 0) > 0
     ]
+    minimax_diagnostics: dict[str, Any] = {}
+    if planner_backend == "minimax":
+        from mc_agent.minimax import (
+            DEFAULT_ENDPOINT as _MM_EP,
+            DEFAULT_MODEL as _MM_MODEL,
+            DEFAULT_THINKING as _MM_THINKING,
+        )
+
+        minimax_diagnostics = {
+            "endpoint": planner.endpoint if hasattr(planner, "endpoint") else _MM_EP,
+            "model": planner.model if hasattr(planner, "model") else _MM_MODEL,
+            "thinking": planner.thinking if hasattr(planner, "thinking") else _MM_THINKING,
+            "prompt_config": (
+                planner.prompt_config if hasattr(planner, "prompt_config") else None
+            ),
+            "total_requests": getattr(planner, "total_requests", 0),
+            "failed_requests": getattr(planner, "failed_requests", 0),
+            "error_categories": getattr(planner, "error_categories", {}),
+            "last_request_error": getattr(planner, "last_request_error", None),
+            "max_decision_age_ticks": max_decision_age_ticks,
+            "stale_age_discarded": total_stale_age_discarded,
+        }
+        request_diagnostics = getattr(planner, "request_diagnostics", [])
+        if request_diagnostics:
+            successful_latencies = sorted(
+                d["latency_seconds"]
+                for d in request_diagnostics
+                if d.get("error_category") is None and d.get("latency_seconds") is not None
+            )
+            if successful_latencies:
+                minimax_diagnostics["latency_p50_seconds"] = _percentile(
+                    successful_latencies, 0.5
+                )
+                minimax_diagnostics["latency_p95_seconds"] = _percentile(
+                    successful_latencies, 0.95
+                )
+            minimax_diagnostics["requests"] = request_diagnostics
     summary = {
         "accepted": (
             len(results) == episodes
@@ -1667,15 +1818,30 @@ def run_agent(
         "mission_max_ticks": mission_max_ticks,
         "model_lock_path": str(model_lock_path) if model_lock_path else "model.lock.json",
         "observation_interval": observation_interval,
+        "planner_backend": planner_backend,
+        "planner_model": (
+            "Qwen3-VL-2B-Instruct"
+            if planner_backend == "qwen"
+            else minimax_model
+        ),
+        "planner_thinking": (
+            None if planner_backend == "qwen" else minimax_thinking
+        ),
+        "planner_prompt_config": (
+            None if planner_backend == "qwen" else minimax_prompt_config
+        ),
+        "planner_max_decision_age_ticks": max_decision_age_ticks,
         "planner_load_seconds": planner.load_seconds,
         "planner_peak_mps_driver_bytes": planner.peak_mps_driver_bytes,
         "planner_error": planner.error,
+        "minimax": minimax_diagnostics,
         "total_planner_decisions": total_decisions,
         "total_accepted_decisions": total_accepted_decisions,
         "total_effective_decisions": total_effective_decisions,
         "total_model_forward_decisions": total_model_forward_decisions,
         "total_forward_ticks": total_forward_ticks,
         "total_cave_candidate_decisions": total_cave_candidate_decisions,
+        "total_stale_age_discarded": total_stale_age_discarded,
         "cave_candidate_episodes": cave_candidate_episodes,
         "unique_action_signatures": signatures,
         "model_changed_action": len(signatures) >= 2,

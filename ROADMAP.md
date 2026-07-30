@@ -469,13 +469,264 @@ marked complete.
   `runs/phase5-controlled-real-entrance-repro/<timestamp>/`
   directory.
 
+## Phase 6 — Multi-model visual-planner framework and comparison
+
+**Status: planned.**
+
+The long-term goal is a reproducible framework for comparing publicly
+available, image-capable language models on the same constrained Minecraft
+visual-control task. The framework must not weaken the existing environment
+owner, action-schema, or cave-completion safeguards. A model provider only
+interprets one first-person image and proposes one existing JSON macro action;
+it never controls the MineRL environment directly.
+
+Phase 6 begins with a MiniMax third-generation multimodal model as the first
+remote-provider trial. That single-provider trial is deliberately a narrow
+compatibility experiment, not evidence that all remote models are suitable and
+not a reason to replace the local Qwen planner before comparable evidence is
+available.
+
+### 6.1 — MiniMax minimum viability test
+
+- Record the exact public model identifier, API endpoint/version, image-input
+  representation, account region, and rate/cost limits used for the test.
+- Read the API key only from `MINIMAX_API_KEY` in the process environment. It
+  must not be committed, printed, stored in a run artifact, or placed in a
+  prompt.
+- Send one fixed, non-sensitive MineRL POV frame and the existing planner
+  prompt. Verify that the third-generation model accepts the image and returns
+  a response that the existing strict macro-action parser can accept.
+- Capture only non-secret diagnostics: model identifier, request result class,
+  elapsed time, output length, parser result, and any provider request ID that
+  is safe to retain.
+- Stop after this one request if image input, authentication, response shape,
+  or parser compliance fails. Do not start Minecraft and do not change the
+  default planner as part of this test.
+
+### 6.2 — Provider contract and MiniMax adapter
+
+- Extract a model-neutral planner-worker contract while preserving the current
+  capacity-one latest-observation/latest-decision mailboxes, episode-generation
+  barrier, acknowledgement lifecycle, and `PlannerDecision` record.
+- Keep `QwenPlannerWorker` as a supported local provider. Add a separate
+  `MiniMaxPlannerWorker`; selecting a provider must be explicit configuration,
+  never a silent fallback.
+- Keep the existing prompt and canonical JSON action schema provider-neutral.
+  Raw provider output always passes the same parser, action allowlist, numeric
+  clamps, and safe no-op fallback used by Qwen.
+- Run HTTP work only in the planner worker. The MineRL step loop must never
+  wait for network I/O. Bound connection/read/total timeouts and retries;
+  network failure, rate limiting, malformed output, and a late response must
+  result in a logged rejected decision or safe no-op, never an uncontrolled
+  action.
+- Retain the local Qwen provider as an explicit rollback option while MiniMax
+  is being evaluated. No API provider may invoke tools, code, shell commands,
+  attack, or `ESC`.
+
+### 6.3 — Fixed offline visual benchmark
+
+Before any live MineRL comparison, evaluate every provider against the same
+versioned, local frame set. It must include a manually reviewed natural
+entrance and confirmed negatives representing shadow, dirt wall/pit,
+sunlit sandstone, water/riverbed, nighttime ambient darkness, and ordinary
+walkable terrain.
+
+For each frame, retain the raw model response and parsed decision, then report:
+
+- strict JSON/action-schema compliance and safe-parser rejection rate;
+- cave-visible recall on reviewed positive frames, plus false-positive rate on
+  reviewed negatives;
+- claimed cave direction versus the reviewed image band;
+- action validity and effective-action rate on ordinary navigation frames;
+- request success/timeout/rate-limit/error rates, P50/P95 latency, response
+  staleness/rejection rate, and provider-reported or documented request cost.
+
+The prompt, action schema, image preprocessing, frame set, sampling policy,
+and acceptance thresholds must be committed to the benchmark before comparing
+providers. Provider-specific prompt tuning is allowed only when recorded as a
+separate named configuration; it must not be mixed into the common baseline.
+
+#### 6.3.1 — Round 1 baseline (MiniMax-M3, thinking=disabled)
+
+A first round of the offline visual benchmark was executed on
+2026-07-30 against MiniMax-M3 with `thinking=disabled` and the unchanged
+baseline planner prompt (`mc_agent.qwen._prompt(None)`).
+
+- Provider / model / endpoint: `minimax` / `MiniMax-M3` /
+  `https://api.minimaxi.com/v1/text/chatcompletion_v2`.
+- Thinking: `disabled`.
+- Fixture set: 1 positive + 4 negatives, each repeated 3 times → 15 real
+  API calls. The positive fixture
+  (`tests/fixtures/genuine_cave_entrance/entrance.png`) is a verified
+  byte-for-byte copy of
+  `runs/manual-findcave/20260723-110256/candidates/candidate-tick-03026.png`
+  (MD5 `a5cf9195457f25a17d1bc527f4b08651`, 144431 bytes); provenance is
+  recorded in `tests/fixtures/genuine_cave_entrance/README.md`.
+- Run directory: `runs/phase6-minimax-benchmark/20260730-124956/`.
+
+Observed metrics:
+
+- 15 / 15 strict parser success.
+- 12 / 12 negative samples: zero false positives (`cave_visible=false`).
+- Positive recall: **2 / 3** (one repeat classified the genuine entrance
+  as a "stone depression with a small drop").
+- Detected-positive direction accuracy: **1 / 2** (one recall reported
+  `right` instead of `center`).
+- **Positive-correct-detection-and-direction rate**: **1 / 3** (positive
+  repeats that have both `cave_visible=true` AND a `center` reason,
+  divided by all positive repeats). This is the strictest pass metric
+  for the Worker gate.
+- Latency: P50 = 1.433 s, P95 = 3.369 s.
+- Total tokens: 20,185.
+- `all_thresholds_met`: **false**.
+
+Interpretation: the technical integration and the safe-JSON path both
+passed under `thinking=disabled`, but the model does not yet meet the
+visual-recognition bar required to enter Phase 6.2 Worker design. A
+preregistered follow-up prompt variant (`prompt_v2_cave_salience`) was
+run on the same fixture set on 2026-07-30; see
+`runs/phase6-minimax-benchmark/<timestamp>-prompt_v2_cave_salience/`
+for the comparison.
+
+#### 6.3.2 — `prompt_v2_cave_salience` small-fixture result (round 1 fixtures)
+
+The first preregistered follow-up prompt variant,
+`prompt_v2_cave_salience`, was evaluated on the same round-1 fixture
+set (1 positive + 4 negatives × 3 repeats = 15 real API calls). The
+prompt was registered in
+`scripts/benchmark_minimax.py::PROMPT_V2_CAVE_SALIENCE_SUFFIX` and was
+the **only** thing that changed between round 1 baseline and this
+follow-up. No model, endpoint, temperature, top_p,
+`max_completion_tokens`, `thinking` setting, image encoding, or local
+parse logic changed.
+
+- Provider / model / endpoint: `minimax` / `MiniMax-M3` /
+  `https://api.minimaxi.com/v1/text/chatcompletion_v2`.
+- Thinking: `disabled`.
+- Prompt config: `prompt_v2_cave_salience` (baseline + 1 visual
+  cave-salience paragraph, observable visual description only, no
+  numeric thresholds).
+- Run directory: `runs/phase6-minimax-benchmark/20260730-125605-prompt_v2_cave_salience/`.
+
+Observed metrics:
+
+- 15 / 15 strict parser success.
+- 12 / 12 negative samples: zero false positives.
+- Positive recall: **3 / 3**.
+- Positive direction accuracy: **3 / 3** (`center`).
+- Positive-correct-detection-and-direction rate: **3 / 3**.
+- Latency: P50 = 1.561 s, P95 = 4.002 s.
+- Total tokens: 22,137.
+- `all_thresholds_met`: **true** on the strict-parse / recall /
+  direction / negative-FP threshold set defined for round 1.
+
+Caveat: the small-fixture round is **a single positive image repeated
+three times**. It demonstrates that the model can produce valid JSON,
+hit the right direction word, and follow the canonical reason pattern
+on the same input repeatedly, but it does **not** demonstrate
+generalization across viewpoints, lighting, distance, or framing. The
+expanded-fixture round (6.3.3) is the one that exercises a second
+positive view and the project's full candidate-gate pipeline.
+
+#### 6.3.3 — `prompt_v2_cave_salience` expanded-fixture result
+
+A second positive fixture was added to the benchmark to test
+cross-viewpoint generalization. The new positive is a manually-reviewed
+post-approach view of the same seed-101 entrance from
+`runs/phase4-true-entrance-approach/20260723-142315/episode-01/decision_frames/tick-0235.png`,
+recorded as `tests/fixtures/genuine_cave_entrance/after_approach_right.png`
+(byte-verified MD5 `8d814f039bfb2983a5e8c1022a04b559`, SHA-256
+`e1d4e1318d06be6ba82ea1dbeb40fe000d1e8e282ee97b332437f75a5627d6e9`,
+207870 bytes). The fixture's expected direction is `right` because
+the opening sits in the right band of the view at that tick. Provenance
+is recorded in `tests/fixtures/genuine_cave_entrance/README.md`.
+
+The expanded benchmark also runs the project's full cave-candidate
+gate on the exact fixture frame the model "saw": text evidence
+(`is_cave_candidate`), claimed-direction resolution
+(`resolve_cave_direction`), stone-bounded dark-opening geometry
+(`has_directional_stone_bounded_dark_opening_region`), and a local
+fallback resolver (`resolve_dark_opening_direction`) that re-tests the
+geometry with a conservative frame-derived direction. None of the
+gate constants, text rules, direction rules, geometry rules, or ESC
+rules were relaxed; the script only reuses the existing
+`mc_agent.actions` functions.
+
+- Fixture set: 2 positives (`center`, `right`) + 4 negatives.
+- Repeats: 3 → **18 real API calls**, no retries, no `thinking=enabled`
+  control.
+- Prompt config: `prompt_v2_cave_salience` (text unchanged from 6.3.2).
+- Run directory pattern:
+  `runs/phase6-minimax-benchmark/<timestamp>-prompt_v2_cave_salience-expanded-fixtures/`.
+
+Pass criteria for Phase 6.2 Worker design after the expanded round:
+
+- 18 / 18 strict parser success.
+- 12 / 12 negatives: `cave_visible=false` AND
+  `candidate_gate_passed=false`.
+- 6 / 6 positives: `cave_visible=true` AND reason contains the
+  expected direction AND `candidate_gate_passed=true`.
+
+The expanded-fixture result is recorded at the run directory above. If
+the expanded round fails any of the three pass criteria, the result is
+reported but Phase 6.2 Worker design is not entered; the next move
+must be a separately-named follow-up (e.g. a third preregistered
+prompt variant or a larger fixture set) and not a retry of this
+benchmark.
+
+### 6.4 — Controlled MineRL validation
+
+- A provider that passes the offline safety and visual benchmark may run one
+  short, bounded MineRL episode using the existing tick budget, seeds, safety
+  guards, and artifact layout. New results belong in
+  `runs/phase6-<provider>-<timestamp>/`.
+- Review the episode's decision frames, events, `summary.json`, latency/cost
+  diagnostics, stale/rejected decisions, automatic close, and all `ESC`
+  ticks. The live validation must show that the step loop did not wait on API
+  inference and that no model-originated privileged action was possible.
+- A short episode validates integration and control safety only. It does not
+  by itself establish cave-entry success or replace the separate Phase 5
+  evidence requirement.
+- Do not run MineRL Gradle builds as part of provider work without explicit
+  user approval.
+
+### 6.5 — Provider expansion and comparative report
+
+- Add further providers one at a time only when they offer publicly callable
+  image understanding. Text-only models may be documented separately but are
+  not comparable on raw POV interpretation.
+- Each provider must pass the same adapter tests, offline benchmark, and
+  bounded live validation before joining the comparison table.
+- Compare providers by separate dimensions rather than one opaque score:
+  visual precision/recall, action-schema reliability, live control stability,
+  P50/P95 latency, timeout/error/staleness rate, and cost per request and per
+  episode.
+- Publish the exact provider/model/version, configuration, dates, frame-set
+  revision, seeds, run directories, and exclusions with each report. Never
+  claim a current "best model" from runs made with different prompts, frame
+  sets, tick budgets, or safety policies.
+- Change the default provider only after it has passed the common gates and a
+  documented comparison shows a clear benefit. Keep prior providers available
+  as explicit, reproducible configurations.
+
+### Relationship to Phase 5
+
+Phase 6 does not cancel or redefine the remaining Phase 5 controlled
+true-entrance reproduction. The one-image MiniMax viability test and the
+offline benchmark are safe to perform independently. Any live API-backed
+episode remains bounded validation work and cannot be used to declare Phase 5
+complete unless it separately meets every Phase 5 evidence and manual-review
+criterion.
+
 ## Long-term safety boundaries
 
 1. Model output must pass JSON parsing, an action allowlist, and numeric
    clamping.
 2. Only the thread running the step loop may operate the MineRL environment.
-3. The Qwen worker must not block a running MineRL step loop.
-4. Model weights and MineRL, Python, and JDK versions remain pinned.
+3. No planner worker, local or remote, may block a running MineRL step loop.
+4. Local model weights and MineRL, Python, and JDK versions remain pinned.
+   Each remote provider's exact model identifier and API configuration must be
+   recorded with its evaluation; it may not silently drift between comparisons.
 5. `vendor/minerl` is an independent Git repository; the outer repository must
    not commit or rewrite its history.
 6. MineRL Gradle builds execute third-party code and require explicit user

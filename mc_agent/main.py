@@ -59,6 +59,61 @@ def main() -> int:
             "only meaningful together with --cave-entry-phase)"
         ),
     )
+    parser.add_argument(
+        "--planner-backend",
+        choices=("qwen", "minimax"),
+        default="qwen",
+        help=(
+            "select the planner backend. 'qwen' uses the local Qwen3-VL "
+            "model (default). 'minimax' uses the MiniMax-M3 remote API. "
+            "Selection is explicit: there is no silent fallback."
+        ),
+    )
+    parser.add_argument(
+        "--minimax-endpoint",
+        default="https://api.minimaxi.com/v1/text/chatcompletion_v2",
+        help="MiniMax chat completion endpoint (default: production v2).",
+    )
+    parser.add_argument(
+        "--minimax-model",
+        default="MiniMax-M3",
+        help="MiniMax model identifier (default: MiniMax-M3).",
+    )
+    parser.add_argument(
+        "--minimax-thinking",
+        choices=("disabled", "adaptive", "enabled"),
+        default="disabled",
+        help="MiniMax thinking setting (default: disabled).",
+    )
+    parser.add_argument(
+        "--minimax-prompt-config",
+        choices=("baseline", "prompt_v2_cave_salience"),
+        default="prompt_v2_cave_salience",
+        help=(
+            "preregistered MiniMax prompt configuration. The default is the "
+            "V2 cave-salience prompt; 'baseline' uses the unmodified Qwen "
+            "prompt with no extra suffix."
+        ),
+    )
+    parser.add_argument(
+        "--minimax-timeout-seconds",
+        type=float,
+        default=30.0,
+        help="MiniMax HTTP request timeout in seconds (default: 30).",
+    )
+    parser.add_argument(
+        "--max-decision-age-ticks",
+        type=int,
+        default=None,
+        help=(
+            "explicit decision-age guard in MineRL ticks. A planner decision "
+            "whose observation tick is more than this many ticks in the past "
+            "is dropped without being executed. Defaults to 100 only when "
+            "--planner-backend minimax; otherwise no limit. The 100-tick "
+            "default exists solely to validate end-to-end MiniMax "
+            "integration and is not a long-term policy."
+        ),
+    )
     args = parser.parse_args()
     run_agent(
         episodes=args.episodes,
@@ -75,6 +130,13 @@ def main() -> int:
             if args.cave_entry_phase_max_ticks is not None
             else 30
         ),
+        planner_backend=args.planner_backend,
+        minimax_endpoint=args.minimax_endpoint,
+        minimax_model=args.minimax_model,
+        minimax_thinking=args.minimax_thinking,
+        minimax_prompt_config=args.minimax_prompt_config,
+        minimax_timeout_seconds=args.minimax_timeout_seconds,
+        max_decision_age_ticks=args.max_decision_age_ticks,
     )
     return 0
 

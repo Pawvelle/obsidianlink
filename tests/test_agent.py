@@ -822,5 +822,193 @@ class ForwardContinuationIntegrationTests(unittest.TestCase):
         )
 
 
+class DecisionAgeGuardTests(unittest.TestCase):
+    """The MiniMax API's real P95 latency is several seconds; a late
+    decision must not be silently treated as the current frame. The
+    agent discards any planner decision whose observation tick is more
+    than ``planner_max_decision_age_ticks`` in the past, logs a
+    ``decision_age_exceeded`` event, and still acknowledges the planner
+    so it can take a fresh observation.
+    """
+
+    def test_stale_decision_is_dropped_and_planner_is_still_acked(self):
+        fake_env = FakeEnv()
+        adapter = MineRLEnvAdapter(env_factory=lambda _: fake_env).open()
+        self.addCleanup(adapter.close)
+
+        accepted = PlannerDecision(
+            episode_id="episode-test",
+            observation_tick=0,
+            raw=(
+                '{"action":"move_forward","duration_ticks":6,'
+                '"camera":{"pitch":0,"yaw":0},"attack":false,'
+                '"jump":false,"sprint":false,"cave_visible":false,'
+                '"reason":"center route is clear"}'
+            ),
+            action=MacroAction(action="move_forward", duration_ticks=6),
+            accepted=True,
+            error=None,
+            latency_seconds=2.5,
+        )
+        planner = FakePlanner([accepted])
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = _run_episode(
+                adapter,
+                planner,
+                Path(directory),
+                1,
+                tick_budget=12,
+                observation_interval=1,
+                stop_all=threading.Event(),
+                episode_id_override="episode-test",
+                planner_backend="minimax",
+                planner_model="MiniMax-M3",
+                planner_thinking="disabled",
+                planner_prompt_config="prompt_v2_cave_salience",
+                planner_max_decision_age_ticks=2,
+            )
+
+        # The decision was taken (its observation_tick=0) at completed_ticks
+        # 0, so staleness == 0 and the age guard does NOT fire on this
+        # very first decision: it must still count as a model-driven
+        # decision and a forward macro.
+        self.assertEqual(result["planner_decisions"], 1)
+        self.assertEqual(result["accepted_decisions"], 1)
+        self.assertEqual(result["model_forward_decisions"], 1)
+        self.assertEqual(result["stale_age_discarded"], 0)
+
+    def test_aged_decision_is_discarded_without_executing(self):
+        fake_env = FakeEnv()
+        adapter = MineRLEnvAdapter(env_factory=lambda _: fake_env).open()
+        self.addCleanup(adapter.close)
+
+        # Submit a move_forward decision whose observation_tick (0) is far
+        # behind the loop's completed_ticks by the time it is taken.
+        # With observation_interval=1 the first accepted decision is
+        # picked up around tick 0 (no staleness), but a follow-up
+        # decision whose observation tick is 0 placed into a mailbox
+        # that is only drained after the loop advanced past tick >=
+        # max_age+1 will be discarded.
+        first = PlannerDecision(
+            episode_id="episode-test",
+            observation_tick=0,
+            raw=(
+                '{"action":"look","duration_ticks":1,'
+                '"camera":{"pitch":0,"yaw":-20},"attack":false,'
+                '"jump":false,"sprint":false,"cave_visible":false,'
+                '"reason":"scan left"}'
+            ),
+            action=MacroAction(action="look", camera_yaw=-20.0),
+            accepted=True,
+            error=None,
+            latency_seconds=0.1,
+        )
+        # A very late decision whose observation_tick is 0 but is taken
+        # at completed_ticks==5 -> staleness 5 > max_age 2.
+        late = PlannerDecision(
+            episode_id="episode-test",
+            observation_tick=0,
+            raw=(
+                '{"action":"move_forward","duration_ticks":6,'
+                '"camera":{"pitch":0,"yaw":0},"attack":false,'
+                '"jump":false,"sprint":false,"cave_visible":false,'
+                '"reason":"obsolete"}'
+            ),
+            action=MacroAction(action="move_forward", duration_ticks=6),
+            accepted=True,
+            error=None,
+            latency_seconds=0.1,
+        )
+        planner = FakePlanner(
+            mailbox=_DelayedDecisionMailbox(
+                immediate_decisions=[first],
+                delayed_decision=late,
+                delay_calls=6,  # released after the loop advanced past tick 5
+            )
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            run_dir = Path(directory)
+            result = _run_episode(
+                adapter,
+                planner,
+                run_dir,
+                1,
+                tick_budget=20,
+                observation_interval=1,
+                stop_all=threading.Event(),
+                episode_id_override="episode-test",
+                planner_backend="minimax",
+                planner_model="MiniMax-M3",
+                planner_thinking="disabled",
+                planner_prompt_config="prompt_v2_cave_salience",
+                planner_max_decision_age_ticks=2,
+            )
+
+            # First decision is applied (look, accepted, no move_forward).
+            # The second decision was rejected by the age guard, so it does
+            # NOT count as a planner_decisions entry -- only the applied
+            # ones do. The discard is counted separately in stale_age_discarded.
+            self.assertEqual(result["planner_decisions"], 1)
+            self.assertEqual(result["accepted_decisions"], 1)
+            self.assertEqual(result["model_forward_decisions"], 0)
+            # Second decision was beyond the age guard.
+            self.assertEqual(result["stale_age_discarded"], 1)
+            # Config / summary entries reflect the new fields.
+            self.assertEqual(result["planner_max_decision_age_ticks"], 2)
+            # The event log records the discard.
+            events = [
+                json.loads(line)
+                for line in (run_dir / "episode-test" / "events.jsonl").read_text().splitlines()
+            ]
+            kinds = [event["kind"] for event in events]
+            self.assertIn("decision_age_exceeded", kinds)
+            discard = next(
+                event for event in events if event["kind"] == "decision_age_exceeded"
+            )
+            self.assertEqual(discard["observation_tick"], 0)
+            self.assertEqual(discard["max_decision_age_ticks"], 2)
+            self.assertGreaterEqual(discard["staleness_ticks"], 3)
+
+    def test_age_guard_disabled_by_default_for_qwen(self):
+        fake_env = FakeEnv()
+        adapter = MineRLEnvAdapter(env_factory=lambda _: fake_env).open()
+        self.addCleanup(adapter.close)
+
+        decision = PlannerDecision(
+            episode_id="episode-test",
+            observation_tick=0,
+            raw='{"action":"move_forward","duration_ticks":4}',
+            action=MacroAction(action="move_forward", duration_ticks=4),
+            accepted=True,
+            error=None,
+            latency_seconds=0.0,
+        )
+        planner = FakePlanner([decision])
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = _run_episode(
+                adapter,
+                planner,
+                Path(directory),
+                1,
+                tick_budget=8,
+                observation_interval=1000,
+                stop_all=threading.Event(),
+                episode_id_override="episode-test",
+                planner_backend="qwen",
+                planner_model="Qwen3-VL-2B-Instruct",
+                planner_thinking=None,
+                planner_prompt_config=None,
+                planner_max_decision_age_ticks=None,
+            )
+
+        # Without the age guard, the move_forward decision is always accepted.
+        self.assertEqual(result["stale_age_discarded"], 0)
+        self.assertEqual(result["planner_max_decision_age_ticks"], None)
+        self.assertEqual(result["model_forward_decisions"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
