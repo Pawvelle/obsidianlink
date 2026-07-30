@@ -1,0 +1,229 @@
+{
+  "action_results": [
+    {
+      "action_type": "look",
+      "target": null,
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 10
+      }
+    },
+    {
+      "action_type": "look",
+      "target": null,
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 10
+      }
+    },
+    {
+      "action_type": "equip_item",
+      "target": "obsidian",
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 10
+      }
+    },
+    {
+      "action_type": "wait",
+      "target": null,
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 10
+      }
+    },
+    {
+      "action_type": "place_block",
+      "target": "obsidian",
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "wait",
+      "target": null,
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "equip_item",
+      "target": "flint_and_steel",
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "wait",
+      "target": null,
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "use_item",
+      "target": "flint_and_steel",
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "wait",
+      "target": null,
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "equip_item",
+      "target": "obsidian",
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "wait",
+      "target": null,
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "mine_target",
+      "target": "aimed_block",
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    },
+    {
+      "action_type": "wait",
+      "target": null,
+      "translation_accepted": true,
+      "translation_error": null,
+      "visible_inventory": {
+        "flint_and_steel": 1,
+        "obsidian": 9
+      }
+    }
+  ],
+  "blocked_reason": null,
+  "capabilities": {
+    "dimension_truth": true,
+    "fixed_spawn_matches": true,
+    "inventory": true,
+    "low_level_action_transport": true,
+    "observed_spawn": [
+      0.5,
+      4.0,
+      0.5
+    ],
+    "portal_grid_transport": true,
+    "pov": true,
+    "requested_spawn": [
+      0,
+      4,
+      0
+    ],
+    "reset_step_close": true
+  },
+  "env_name": "ObsidianLinkPortalA0-v0",
+  "evaluation_evidence": {
+    "dimension": "minecraft:overworld",
+    "malmo_info_keys": [
+      "biome_downfall",
+      "biome_name",
+      "biome_temperature",
+      "can_see_sky",
+      "custom",
+      "dimension",
+      "equipped_items",
+      "inventory",
+      "isGuiOpen",
+      "is_raining",
+      "life_stats",
+      "light_level",
+      "pitch",
+      "portal_build_region",
+      "pov",
+      "sea_level",
+      "use_item",
+      "xpos",
+      "yaw",
+      "ypos",
+      "zpos"
+    ],
+    "nether_portal_blocks": 0,
+    "obsidian_added": 1,
+    "portal_grid_counts": {
+      "air": 292,
+      "fire": 1,
+      "grass_block": 49,
+      "obsidian": 1
+    },
+    "portal_grid_payload_present": true,
+    "portal_grid_size": 343,
+    "portal_grid_unknown_blocks": [],
+    "position": {
+      "pitch": 45.000004,
+      "xpos": 0.5,
+      "yaw": 0.0,
+      "ypos": 4.0,
+      "zpos": 0.5
+    },
+    "use_item_stats": {
+      "flint_and_steel": 1,
+      "obsidian": 1
+    },
+    "valid_portal_frame_pending_phase_2": true
+  },
+  "frame_shape": [
+    360,
+    640,
+    3
+  ],
+  "mode": "real",
+  "real_minerl_started": true,
+  "status": "passed",
+  "steps_completed": 14,
+  "steps_requested": 14,
+  "terminated": false,
+  "visible_inventory": {
+    "flint_and_steel": 1,
+    "obsidian": 10
+  }
+}

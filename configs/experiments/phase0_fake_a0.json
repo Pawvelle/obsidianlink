@@ -1,0 +1,9 @@
+{
+  "experiment_id": "phase0_fake_a0",
+  "backend": "fake",
+  "task_instance": "benchmark/instances/route_a_a0_development.json",
+  "planner": null,
+  "evaluator": "portal_v0",
+  "event_schema_version": "0.1",
+  "notes": "Contract validation only. This configuration must not be reported as a MineRL task result."
+}

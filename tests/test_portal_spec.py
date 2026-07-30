@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+import unittest
+from xml.etree import ElementTree
+
+import numpy as np
+
+from obsidianlink.env.portal_spec import (
+    PORTAL_GRID_NAME,
+    PORTAL_GRID_BLOCKS,
+    PORTAL_GRID_SIZE,
+    PORTAL_GRID_UNKNOWN_ID,
+    PortalA0EnvSpec,
+    PortalGridObservation,
+)
+
+
+class PortalA0EnvSpecTests(unittest.TestCase):
+    def test_spec_exposes_required_observation_and_action_capabilities(self) -> None:
+        specification = PortalA0EnvSpec(max_episode_steps=500)
+        self.assertEqual(specification.resolution, (640, 360))
+        self.assertTrue(
+            {
+                "pov",
+                "inventory",
+                "portal_grid",
+                "portal_dimension",
+            }.issubset(specification.observation_space.spaces)
+        )
+        self.assertTrue(
+            {
+                "forward",
+                "back",
+                "left",
+                "right",
+                "camera",
+                "attack",
+                "use",
+                "hotbar.1",
+                "hotbar.2",
+            }.issubset(specification.action_space.spaces)
+        )
+        self.assertNotIn("equip", specification.action_space.spaces)
+        self.assertNotIn("place", specification.action_space.spaces)
+        self.assertNotIn("craft", specification.action_space.spaces)
+
+    def test_xml_contains_controlled_world_inventory_and_evaluator_grid(self) -> None:
+        xml = PortalA0EnvSpec(max_episode_steps=500).to_xml()
+        ElementTree.fromstring(xml)
+        self.assertIn("<FlatWorldGenerator", xml)
+        self.assertIn('type="obsidian"', xml)
+        self.assertIn('type="flint_and_steel"', xml)
+        self.assertIn(f'name="{PORTAL_GRID_NAME}"', xml)
+        self.assertIn('atSpawn="true"', xml)
+        self.assertIn(
+            '<Placement x="0.5" y="4.0" z="0.5" yaw="0.0" pitch="0.0"/>',
+            xml,
+        )
+        self.assertIn("<AllowSpawning>false</AllowSpawning>", xml)
+        self.assertIn("<Weather>clear</Weather>", xml)
+        self.assertNotIn("DrawingDecorator", xml)
+
+    def test_grid_observation_maps_known_and_unknown_blocks(self) -> None:
+        blocks = ["minecraft:air"] * PORTAL_GRID_SIZE
+        blocks[0] = "minecraft:obsidian"
+        blocks[1] = "minecraft:unexpected_block"
+        result = PortalGridObservation().from_hero({PORTAL_GRID_NAME: blocks})
+        self.assertEqual(result.shape, (PORTAL_GRID_SIZE,))
+        self.assertEqual(
+            int(result[0]), PORTAL_GRID_BLOCKS.index("obsidian")
+        )
+        self.assertEqual(int(result[1]), PORTAL_GRID_UNKNOWN_ID)
+        self.assertEqual(result.dtype, np.int32)
+
+    def test_invalid_tick_budget_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            PortalA0EnvSpec(max_episode_steps=0)
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            PortalA0EnvSpec(max_game_time_seconds=0)
+
+    def test_server_time_limit_uses_wall_clock_budget(self) -> None:
+        xml = PortalA0EnvSpec(
+            max_episode_steps=500,
+            max_game_time_seconds=120,
+        ).to_xml()
+        self.assertIn('timeLimitMs="120000"', xml)
+
+    def test_inventory_can_be_supplied_from_task_configuration(self) -> None:
+        specification = PortalA0EnvSpec(
+            initial_inventory=(
+                {"type": "obsidian", "quantity": 12},
+                {"type": "flint_and_steel", "quantity": 1},
+            )
+        )
+        xml = specification.to_xml()
+        self.assertIn('type="obsidian" quantity="12"', xml)
+
+    def test_empty_inventory_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must not be empty"):
+            PortalA0EnvSpec(initial_inventory=())
+
+    def test_invalid_initial_position_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "integer"):
+            PortalA0EnvSpec(initial_position=(0, 4.0, 0))
+
+
+if __name__ == "__main__":
+    unittest.main()

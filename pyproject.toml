@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "obsidianlink"
+version = "0.1.0"
+description = "A reproducible Minecraft benchmark for Nether portal construction"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+license = {text = "Private research project"}
+authors = [{name = "ObsidianLink contributors"}]
+dependencies = []
+
+[project.scripts]
+obsidianlink = "obsidianlink.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["obsidianlink*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true

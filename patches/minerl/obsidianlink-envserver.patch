@@ -1,0 +1,250 @@
+--- a/src/main/java/com/minerl/multiagent/env/EnvServer.java
++++ b/src/main/java/com/minerl/multiagent/env/EnvServer.java
+@@ -15,6 +15,7 @@
+ import net.minecraft.client.gui.screen.MainMenuScreen;
+ import net.minecraft.client.multiplayer.ServerAddress;
+ import net.minecraft.client.multiplayer.ServerData;
++import net.minecraft.block.Blocks;
+ import net.minecraft.entity.player.PlayerEntity;
+ import net.minecraft.entity.player.PlayerInventory;
+ import net.minecraft.inventory.EquipmentSlotType;
+@@ -23,6 +24,7 @@
+ import net.minecraft.profiler.IResultableProfiler;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.util.ResourceLocation;
++import net.minecraft.util.math.BlockPos;
+ import net.minecraft.util.datafix.codec.DatapackCodec;
+ import net.minecraft.util.registry.DynamicRegistries;
+ import net.minecraft.util.registry.Registry;
+@@ -30,8 +32,10 @@
+ import net.minecraft.world.Difficulty;
+ import net.minecraft.world.GameRules;
+ import net.minecraft.world.GameType;
++import net.minecraft.world.World;
+ import net.minecraft.world.WorldSettings;
+ import net.minecraft.world.gen.settings.DimensionGeneratorSettings;
++import net.minecraft.world.server.ServerWorld;
+ import org.apache.logging.log4j.Level;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+@@ -265,6 +269,8 @@
+             Thread.sleep(10);
+         }
+ 
++        applyServerInitialConditions(mc, missionInit);
++        prepareControlledBuildArea(mc, missionInit);
+         mc.execute(() -> setAgentInventory(mc.player, missionInit));
+         mc.execute(() -> setAgentPosition(mc.player, missionInit));
+         envTickCounter = PlayRecorder.getInstance().getTickCounter();
+@@ -315,9 +321,118 @@
+         if (startPos == null) {
+             return;
+         }
++        Minecraft mc = Minecraft.getInstance();
++        MinecraftServer server = mc.getIntegratedServer();
++        if (server != null) {
++            server.execute(() -> {
++                for (net.minecraft.entity.player.ServerPlayerEntity serverPlayer
++                        : server.getPlayerList().getPlayers()) {
++                    serverPlayer.connection.setPlayerLocation(
++                            startPos.getX(),
++                            startPos.getY(),
++                            startPos.getZ(),
++                            startPos.getYaw(),
++                            startPos.getPitch());
++                    ServerWorld serverWorld = serverPlayer.getServerWorld();
++                    serverWorld.func_241124_a__(
++                            new BlockPos(
++                                    Math.floor(startPos.getX()),
++                                    Math.floor(startPos.getY()),
++                                    Math.floor(startPos.getZ())),
++                            startPos.getYaw());
++                }
++            });
++        }
+         player.setPosition(startPos.getX(), startPos.getY(), startPos.getZ());
+         player.rotationYaw = startPos.getYaw();
+         player.rotationPitch = startPos.getPitch();
++    }
++
++    private void applyServerInitialConditions(Minecraft mc, MissionInit missionInit) {
++        MinecraftServer server = mc.getIntegratedServer();
++        ServerInitialConditions conditions = getServerInit(missionInit);
++        if (server == null || conditions == null) {
++            return;
++        }
++        server.execute(() -> {
++            for (ServerWorld world : server.getWorlds()) {
++                Time time = conditions.getTime();
++                if (time != null) {
++                    if (time.getStartTime() != null) {
++                        world.setDayTime(time.getStartTime());
++                    }
++                    if (time.isAllowPassageOfTime() != null) {
++                        world.getGameRules().get(GameRules.DO_DAYLIGHT_CYCLE)
++                                .set(time.isAllowPassageOfTime(), server);
++                    }
++                }
++                if (conditions.isAllowSpawning() != null) {
++                    world.getGameRules().get(GameRules.DO_MOB_SPAWNING)
++                            .set(conditions.isAllowSpawning(), server);
++                }
++                String weather = conditions.getWeather();
++                if ("clear".equals(weather)) {
++                    world.func_241113_a_(1000000000, 0, false, false);
++                    world.getGameRules().get(GameRules.DO_WEATHER_CYCLE)
++                            .set(false, server);
++                } else if ("rain".equals(weather)) {
++                    world.func_241113_a_(0, 1000000000, true, false);
++                } else if ("thunder".equals(weather)) {
++                    world.func_241113_a_(0, 1000000000, true, true);
++                }
++            }
++        });
++    }
++
++    private void prepareControlledBuildArea(Minecraft mc, MissionInit missionInit) {
++        Object worldGenerator = missionInit.getMission().getServerSection()
++                .getServerHandlers().getWorldGenerator();
++        PosAndDirection startPos = getAgentStart(missionInit).getPlacement();
++        MinecraftServer server = mc.getIntegratedServer();
++        if (!(worldGenerator instanceof FlatWorldGenerator)
++                || startPos == null
++                || server == null) {
++            return;
++        }
++        server.execute(() -> {
++            ServerWorld world = server.getWorld(World.OVERWORLD);
++            if (world == null) {
++                throw new IllegalStateException("Overworld is unavailable");
++            }
++            int centerX = (int) Math.floor(startPos.getX());
++            int feetY = (int) Math.floor(startPos.getY());
++            int centerZ = (int) Math.floor(startPos.getZ());
++            int radius = 12;
++            for (int x = centerX - radius; x <= centerX + radius; x++) {
++                for (int z = centerZ - radius; z <= centerZ + radius; z++) {
++                    world.setBlockState(
++                            new BlockPos(x, feetY - 4, z),
++                            Blocks.BEDROCK.getDefaultState(),
++                            2);
++                    world.setBlockState(
++                            new BlockPos(x, feetY - 3, z),
++                            Blocks.DIRT.getDefaultState(),
++                            2);
++                    world.setBlockState(
++                            new BlockPos(x, feetY - 2, z),
++                            Blocks.DIRT.getDefaultState(),
++                            2);
++                    world.setBlockState(
++                            new BlockPos(x, feetY - 1, z),
++                            Blocks.GRASS_BLOCK.getDefaultState(),
++                            2);
++                    for (int y = feetY; y <= feetY + 8; y++) {
++                        world.setBlockState(
++                                new BlockPos(x, y, z),
++                                Blocks.AIR.getDefaultState(),
++                                2);
++                    }
++                }
++            }
++            world.func_241124_a__(
++                    new BlockPos(centerX, feetY, centerZ),
++                    startPos.getYaw());
++        });
+     }
+ 
+     private String getSaveFile(MissionInit missionInit) {
+@@ -420,7 +535,12 @@
+ 
+ 
+         WorldSettings worldSettings = new WorldSettings(worldName, GameType.SURVIVAL, false, Difficulty.HARD, false, new GameRules(), DatapackCodec.VANILLA_CODEC);
+-        DimensionGeneratorSettings dms = DimensionGeneratorSettings.fromDynamicRegistries(DynamicRegistries.getImpl(), seed, generateFeatures, bonusChest);
++        DimensionGeneratorSettings dms =
++                DimensionGeneratorSettings.fromDynamicRegistries(
++                        DynamicRegistries.getImpl(),
++                        seed,
++                        generateFeatures,
++                        bonusChest);
+         mc.createWorld(worldName, worldSettings, DynamicRegistries.getImpl(), dms);
+     }
+ 
+@@ -554,12 +674,78 @@
+ 		    .forEach(h -> {
+ 		        infoJson.add("equipped_items", getEquippedItemJson());
+ 		    });
++            getAgentHandlers().filter(h -> h instanceof ObservationFromGrid)
++                    .map(h -> (ObservationFromGrid) h)
++                    .forEach(h -> addGridObservations(infoJson, mc.player, h));
++            infoJson.addProperty(
++                    "dimension",
++                    mc.player.world.getDimensionKey().getLocation().toString());
+         }
+ 
+         infoJson.addProperty("isGuiOpen", mc.currentScreen != null);
+         return infoJson.toString();
+     }
+ 
++    private void addGridObservations(
++            JsonObject infoJson,
++            ClientPlayerEntity player,
++            ObservationFromGrid observation) {
++        for (GridDefinition grid : observation.getGrid()) {
++            if (grid.isProjectDown()) {
++                LOGGER.warn(
++                        "ObservationFromGrid projectDown is not supported by "
++                                + "the MineRL EnvServer bridge: " + grid.getName());
++                continue;
++            }
++            BlockPos origin;
++            if (grid.isAbsoluteCoords()) {
++                origin = BlockPos.ZERO;
++            } else if (grid.isAtSpawn()) {
++                origin = getMissionSpawnOrigin(player);
++            } else {
++                origin = player.getPosition();
++            }
++            int xMin = origin.getX() + (int) Math.floor(grid.getMin().getX());
++            int xMax = origin.getX() + (int) Math.floor(grid.getMax().getX());
++            int yMin = origin.getY() + (int) Math.floor(grid.getMin().getY());
++            int yMax = origin.getY() + (int) Math.floor(grid.getMax().getY());
++            int zMin = origin.getZ() + (int) Math.floor(grid.getMin().getZ());
++            int zMax = origin.getZ() + (int) Math.floor(grid.getMax().getZ());
++            JsonArray blocks = new JsonArray();
++            for (int y = yMin; y <= yMax; y++) {
++                for (int z = zMin; z <= zMax; z++) {
++                    for (int x = xMin; x <= xMax; x++) {
++                        BlockPos position = new BlockPos(x, y, z);
++                        blocks.add(
++                                Registry.BLOCK.getKey(
++                                        player.world.getBlockState(position)
++                                                .getBlock())
++                                        .toString());
++                    }
++                }
++            }
++            infoJson.add(grid.getName(), blocks);
++        }
++    }
++
++    private BlockPos getMissionSpawnOrigin(ClientPlayerEntity player) {
++        PosAndDirection startPos = getAgentStart(missionInit).getPlacement();
++        if (startPos != null) {
++            return new BlockPos(
++                    Math.floor(startPos.getX()),
++                    Math.floor(startPos.getY()),
++                    Math.floor(startPos.getZ()));
++        }
++        MinecraftServer server = Minecraft.getInstance().getIntegratedServer();
++        if (server != null) {
++            ServerWorld world = server.getWorld(player.world.getDimensionKey());
++            if (world != null) {
++                return world.getSpawnPoint();
++            }
++        }
++        return player.getPosition();
++    }
++
+     public static JsonArray getInventoryJson() {
+         JsonArray result = new JsonArray();
+         PlayerInventory inventory = Minecraft.getInstance().player.inventory;

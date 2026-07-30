@@ -1,0 +1,1 @@
+"""ObsidianLink tests."""

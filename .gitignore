@@ -4,14 +4,22 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+.venv/
+build/
+dist/
+*.egg-info/
 
-# Local model weights and generated runs
-/models/Qwen3-VL-2B-Instruct/
-/models/Qwen3-VL-4B-Instruct/
+# Local model weights, generated runs, and Minecraft logs.
+/models/
 /runs/*
 !/runs/history/
 /runs/history/*
-!/runs/history/EXECUTION_LOG.md
+!/runs/history/phase1-scripted-a0/
+!/runs/history/phase1-scripted-a0/**
+!/runs/history/phase1-portal-env-smoke/
+!/runs/history/phase1-portal-env-smoke/**
+/results/
 /logs/
 
 # MineRL is an independent upstream checkout with its own history.
