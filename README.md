@@ -6,8 +6,9 @@ ObsidianLink 是一个面向 Minecraft 长程任务的研究平台与评测基�
 分工能否带来足以抵消额外推理成本的协作收益。
 
 项目代号为 **ObsidianLink-Bench**，计划发布的数据集称为
-**ObsidianLink Dataset**。总体设计来源于
-[`../ObsidianLink_项目总体规划.docx`](../ObsidianLink_项目总体规划.docx)。
+**ObsidianLink Dataset**。总体设计已经整理为仓库内可直接查看的
+[开发路线图](ROADMAP.md)、[基准规范](BENCHMARK_SPEC.md)和
+[数据集说明](DATASET_CARD.md)。
 
 > 当前唯一优先级：先让单智能体路线 A 在可控场景中稳定运行、完整记录，并被
 > 自动评测器正确评分。路线 B、多角色和大规模实验必须建立在这个基础上。
