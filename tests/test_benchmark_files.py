@@ -25,6 +25,33 @@ class BenchmarkFileTests(unittest.TestCase):
         self.assertTrue((ROOT / config["task_instance"]).is_file())
         self.assertIsNone(config["planner"])
 
+    def test_phase_three_scripted_config_freezes_a0_instance(self) -> None:
+        path = ROOT / "configs/experiments/phase3_scripted_a0.json"
+        config = json.loads(path.read_text(encoding="utf-8"))
+        task_path = ROOT / config["task_instance"]
+        task = TaskInstance.from_dict(json.loads(task_path.read_text(encoding="utf-8")))
+        self.assertEqual(config["planner"], "scripted_a0")
+        self.assertIsNone(config["failure_injection"])
+        self.assertEqual(config["max_placement_retries"], 0)
+        self.assertEqual(config["step_timeout_seconds"], 30.0)
+        self.assertEqual(task.task_id, "route_a_a0_phase3_seed_0")
+        self.assertEqual(task.initial_inventories["agent_1"]["obsidian"], 14)
+
+    def test_phase_three_vlm_configs_share_the_frozen_a0_task(self) -> None:
+        for filename in (
+            "phase3_single_workflow_a0.json",
+            "phase3_single_direct_a0.json",
+        ):
+            with self.subTest(filename=filename):
+                path = ROOT / "configs/experiments" / filename
+                config = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    config["task_instance"],
+                    "benchmark/instances/route_a_a0_phase3.json",
+                )
+                self.assertTrue((ROOT / config["model_lock"]).is_file())
+                self.assertEqual(config["evaluator"], "portal_v0")
+
 
 if __name__ == "__main__":
     unittest.main()

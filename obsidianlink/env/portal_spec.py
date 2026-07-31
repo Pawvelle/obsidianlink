@@ -11,6 +11,8 @@ from minerl.herobraine.hero.handlers.translation import KeymapTranslationHandler
 
 PORTAL_ENV_NAME = "ObsidianLinkPortalA0-v0"
 PORTAL_GRID_NAME = "portal_build_region"
+PORTAL_GRID_ORIGIN_NAME = f"{PORTAL_GRID_NAME}_origin"
+PORTAL_TRANSITION_NAME = "portal_transition"
 # The MineRL 1.0.2 bridge does not reliably apply absolute AgentStart
 # placement. The fixed world seed still gives a repeatable world spawn, and
 # the evaluator grid is anchored to that spawn instead of hardcoded world
@@ -170,6 +172,125 @@ class PortalDimensionObservation(KeymapTranslationHandler):
         return ""
 
 
+class PortalGridOriginObservation(KeymapTranslationHandler):
+    """World-space anchor used by the bridge for the atSpawn grid."""
+
+    _MISSING = np.iinfo(np.int32).min
+
+    def __init__(self) -> None:
+        super().__init__(
+            hero_keys=[PORTAL_GRID_ORIGIN_NAME],
+            univ_keys=[PORTAL_GRID_ORIGIN_NAME],
+            space=spaces.Box(
+                low=-30_000_000,
+                high=30_000_000,
+                shape=(3,),
+                dtype=np.int32,
+            ),
+            default_if_missing=np.full((3,), self._MISSING, dtype=np.int32),
+            to_string="portal_grid_origin",
+        )
+
+    def xml_template(self) -> str:
+        return ""
+
+
+class PortalTransitionObservation(KeymapTranslationHandler):
+    """Typed, evaluator-only server evidence for a portal dimension change."""
+
+    _DIMENSIONS = (
+        "minecraft:overworld",
+        "minecraft:the_nether",
+        "minecraft:the_end",
+        "unknown",
+    )
+
+    def __init__(self) -> None:
+        super().__init__(
+            hero_keys=[PORTAL_TRANSITION_NAME],
+            univ_keys=[PORTAL_TRANSITION_NAME],
+            space=spaces.Dict(
+                {
+                    "present": spaces.Box(
+                        low=0, high=1, shape=(), dtype=np.bool_
+                    ),
+                    "entered_via_portal": spaces.Box(
+                        low=0, high=1, shape=(), dtype=np.bool_
+                    ),
+                    "sequence": spaces.Box(
+                        low=0,
+                        high=np.iinfo(np.int64).max,
+                        shape=(),
+                        dtype=np.int64,
+                    ),
+                    "source_portal_block_world_position": spaces.Box(
+                        low=-30_000_000,
+                        high=30_000_000,
+                        shape=(3,),
+                        dtype=np.int32,
+                    ),
+                    "from_dimension": spaces.Enum(
+                        *self._DIMENSIONS, default="unknown"
+                    ),
+                    "to_dimension": spaces.Enum(
+                        *self._DIMENSIONS, default="unknown"
+                    ),
+                }
+            ),
+            to_string=PORTAL_TRANSITION_NAME,
+        )
+
+    @classmethod
+    def _missing(cls) -> dict[str, Any]:
+        return {
+            "present": np.asarray(False, dtype=np.bool_),
+            "entered_via_portal": np.asarray(False, dtype=np.bool_),
+            "sequence": np.asarray(0, dtype=np.int64),
+            "source_portal_block_world_position": np.zeros(
+                (3,), dtype=np.int32
+            ),
+            "from_dimension": "unknown",
+            "to_dimension": "unknown",
+        }
+
+    def from_hero(self, hero_dict: dict[str, Any]) -> dict[str, Any]:
+        value = hero_dict.get(PORTAL_TRANSITION_NAME)
+        if not isinstance(value, dict):
+            return self._missing()
+        entered = value.get("entered_via_portal")
+        sequence = value.get("sequence")
+        source = value.get("source_portal_block_world_position")
+        from_dimension = value.get("from_dimension")
+        to_dimension = value.get("to_dimension")
+        if (
+            type(entered) is not bool
+            or type(sequence) is not int
+            or sequence < 1
+            or not isinstance(source, list)
+            or len(source) != 3
+            or any(type(item) is not int for item in source)
+            or from_dimension not in self._DIMENSIONS
+            or to_dimension not in self._DIMENSIONS
+        ):
+            return self._missing()
+        return {
+            "present": np.asarray(True, dtype=np.bool_),
+            "entered_via_portal": np.asarray(entered, dtype=np.bool_),
+            "sequence": np.asarray(sequence, dtype=np.int64),
+            "source_portal_block_world_position": np.asarray(
+                source, dtype=np.int32
+            ),
+            "from_dimension": from_dimension,
+            "to_dimension": to_dimension,
+        }
+
+    def from_universal(self, universal_dict: dict[str, Any]) -> dict[str, Any]:
+        return self.from_hero(universal_dict)
+
+    def xml_template(self) -> str:
+        return ""
+
+
 class PortalA0EnvSpec(HumanSurvival):
     """Controlled single-agent environment for the first portal task slice."""
 
@@ -221,6 +342,8 @@ class PortalA0EnvSpec(HumanSurvival):
         return super().create_observables() + [
             PortalGridObservation(),
             PortalDimensionObservation(),
+            PortalGridOriginObservation(),
+            PortalTransitionObservation(),
         ]
 
     def create_actionables(self):

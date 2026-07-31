@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import math
+import signal
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
@@ -15,6 +18,37 @@ TOWER_JUMP_PLAYER_EYE = (0.5, 8.80, 0.5)
 PORTAL_Z = 1.0
 MAX_CAMERA_DELTA = 30.0
 NETHER_DIMENSION = "minecraft:the_nether"
+FAILURE_INJECTIONS = frozenset(
+    {
+        "placement_failure",
+        "view_offset",
+        "target_occupied",
+        "ignition_no_effect",
+    }
+)
+
+
+@contextmanager
+def _step_deadline(timeout_seconds: float):
+    """Interrupt a stalled environment step when running on the main thread."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def _raise_timeout(signum: int, frame: Any) -> None:
+        del signum, frame
+        raise TimeoutError(
+            f"environment step exceeded {timeout_seconds:.1f} seconds"
+        )
+
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 @dataclass(frozen=True)
@@ -336,23 +370,115 @@ def run_scripted_a0(
     *,
     max_portal_wait_steps: int = 120,
     max_placement_retries: int = 0,
+    step_timeout_seconds: float = 30.0,
+    failure_injection: str | None = None,
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+    observation_sink: (
+        Callable[[Observation, Mapping[str, Any]], None] | None
+    ) = None,
 ) -> ScriptedA0Result:
     if type(max_portal_wait_steps) is not int or max_portal_wait_steps < 1:
         raise ValueError("max_portal_wait_steps must be a positive integer")
     if type(max_placement_retries) is not int or max_placement_retries < 0:
         raise ValueError("max_placement_retries must be a non-negative integer")
+    if (
+        type(step_timeout_seconds) not in {int, float}
+        or not math.isfinite(float(step_timeout_seconds))
+        or step_timeout_seconds <= 0
+    ):
+        raise ValueError("step_timeout_seconds must be a positive finite number")
+    if failure_injection is not None and failure_injection not in FAILURE_INJECTIONS:
+        raise ValueError(
+            "failure_injection must be one of "
+            + ", ".join(sorted(FAILURE_INJECTIONS))
+        )
 
     observations = backend.reset(task)
     final_observation = observations[AGENT_ID]
     events: list[Mapping[str, Any]] = []
     terminated = False
     plan = build_portal_action_plan()
+    injection_applied = False
+
+    def injected_action(item: PortalPlanStep) -> tuple[MacroAction, str | None]:
+        """Apply one bounded negative-path perturbation without evaluator truth."""
+        nonlocal injection_applied
+        if injection_applied or failure_injection is None:
+            return item.action, None
+        if (
+            failure_injection in {"placement_failure", "target_occupied"}
+            and item.action.action_type == "place_block"
+            and item.action.target == "obsidian"
+        ):
+            injection_applied = True
+            return MacroAction.wait(), failure_injection
+        if (
+            failure_injection == "ignition_no_effect"
+            and item.action.action_type == "use_item"
+            and item.action.target == "flint_and_steel"
+        ):
+            injection_applied = True
+            return MacroAction.wait(), failure_injection
+        if failure_injection == "view_offset" and item.action.action_type == "look":
+            injection_applied = True
+            parameters = dict(item.action.parameters)
+            parameters["yaw"] = max(
+                -MAX_CAMERA_DELTA,
+                min(MAX_CAMERA_DELTA, float(parameters.get("yaw", 0.0)) + 15.0),
+            )
+            return (
+                MacroAction(
+                    "look",
+                    duration_ticks=item.action.duration_ticks,
+                    parameters=parameters,
+                ),
+                failure_injection,
+            )
+        return item.action, None
+
+    def run_step(action: MacroAction):
+        with _step_deadline(float(step_timeout_seconds)):
+            return backend.step({AGENT_ID: action})
+
+    def publish_observation(
+        observation: Observation,
+        *,
+        label: str,
+        phase: str,
+        action_type: str,
+    ) -> None:
+        if observation_sink is not None:
+            observation_sink(
+                observation,
+                {
+                    "label": label,
+                    "phase": phase,
+                    "action_type": action_type,
+                },
+            )
+
+    publish_observation(
+        final_observation,
+        label="environment.reset",
+        phase="prepare",
+        action_type="wait",
+    )
+
+    def record_event(event: Mapping[str, Any]) -> None:
+        identified_event = {
+            "episode_id": task.task_id,
+            "agent_id": AGENT_ID,
+            **dict(event),
+        }
+        events.append(identified_event)
+        if event_sink is not None:
+            event_sink(identified_event)
 
     for item in plan:
         inventory_before = dict(final_observation.visible_inventory or {})
+        action, applied_injection = injected_action(item)
         try:
-            step = backend.step({AGENT_ID: item.action})
+            step = run_step(action)
         except Exception as error:
             state = backend.get_evaluation_state()
             event = {
@@ -361,12 +487,11 @@ def run_scripted_a0(
                 "phase": item.phase,
                 "action_type": item.action.action_type,
                 "target": item.action.target,
+                "failure_injection": applied_injection,
                 "error_type": type(error).__name__,
                 "error": str(error),
             }
-            events.append(event)
-            if event_sink is not None:
-                event_sink(event)
+            record_event(event)
             return ScriptedA0Result(
                 status="failed",
                 steps_completed=state.step_id,
@@ -382,19 +507,24 @@ def run_scripted_a0(
                 blocked_reason=f"{type(error).__name__} at {item.label}: {error}",
             )
         final_observation = step.observations[AGENT_ID]
+        publish_observation(
+            final_observation,
+            label=item.label,
+            phase=item.phase,
+            action_type=item.action.action_type,
+        )
         event = {
             "step_id": step.step_id,
             "label": item.label,
             "phase": item.phase,
             "action_type": item.action.action_type,
             "target": item.action.target,
+            "failure_injection": applied_injection,
             "translation_accepted": bool(step.info["translation_accepted"]),
             "translation_error": step.info["translation_error"],
             "visible_inventory": dict(final_observation.visible_inventory or {}),
         }
-        events.append(event)
-        if event_sink is not None:
-            event_sink(event)
+        record_event(event)
         retry_allowed = (
             item.action.action_type == "place_block"
             and item.action.target in {"obsidian", "dirt"}
@@ -416,8 +546,17 @@ def run_scripted_a0(
         ):
             retry_index += 1
             for release_index in range(4):
-                recovery_step = backend.step({AGENT_ID: MacroAction.wait()})
+                recovery_step = run_step(MacroAction.wait())
                 final_observation = recovery_step.observations[AGENT_ID]
+                publish_observation(
+                    final_observation,
+                    label=(
+                        f"{item.label}.retry.{retry_index}.release."
+                        f"{release_index + 1}"
+                    ),
+                    phase=item.phase,
+                    action_type="wait",
+                )
                 recovery_event = {
                     "step_id": recovery_step.step_id,
                     "label": (
@@ -427,6 +566,7 @@ def run_scripted_a0(
                     "phase": item.phase,
                     "action_type": "wait",
                     "target": None,
+                    "failure_injection": None,
                     "translation_accepted": bool(
                         recovery_step.info["translation_accepted"]
                     ),
@@ -437,17 +577,22 @@ def run_scripted_a0(
                         final_observation.visible_inventory or {}
                     ),
                 }
-                events.append(recovery_event)
-                if event_sink is not None:
-                    event_sink(recovery_event)
-            retry_step = backend.step({AGENT_ID: item.action})
+                record_event(recovery_event)
+            retry_step = run_step(item.action)
             final_observation = retry_step.observations[AGENT_ID]
+            publish_observation(
+                final_observation,
+                label=f"{item.label}.retry.{retry_index}",
+                phase=item.phase,
+                action_type=item.action.action_type,
+            )
             retry_event = {
                 "step_id": retry_step.step_id,
                 "label": f"{item.label}.retry.{retry_index}",
                 "phase": item.phase,
                 "action_type": item.action.action_type,
                 "target": item.action.target,
+                "failure_injection": None,
                 "translation_accepted": bool(
                     retry_step.info["translation_accepted"]
                 ),
@@ -456,9 +601,7 @@ def run_scripted_a0(
                     final_observation.visible_inventory or {}
                 ),
             }
-            events.append(retry_event)
-            if event_sink is not None:
-                event_sink(retry_event)
+            record_event(retry_event)
             inventory_after = dict(final_observation.visible_inventory or {})
             placement_changed_inventory = (
                 inventory_after.get(item_name, 0)
@@ -493,7 +636,7 @@ def run_scripted_a0(
         and wait_steps < max_portal_wait_steps
     ):
         try:
-            step = backend.step({AGENT_ID: MacroAction.wait()})
+            step = run_step(MacroAction.wait())
         except Exception as error:
             event = {
                 "step_id": state.step_id,
@@ -501,12 +644,11 @@ def run_scripted_a0(
                 "phase": "wait_for_transition",
                 "action_type": "wait",
                 "target": None,
+                "failure_injection": None,
                 "error_type": type(error).__name__,
                 "error": str(error),
             }
-            events.append(event)
-            if event_sink is not None:
-                event_sink(event)
+            record_event(event)
             return ScriptedA0Result(
                 status="failed",
                 steps_completed=state.step_id,
@@ -525,14 +667,21 @@ def run_scripted_a0(
                 ),
             )
         final_observation = step.observations[AGENT_ID]
+        publish_observation(
+            final_observation,
+            label=f"portal.wait.{wait_steps + 1}",
+            phase="wait_for_transition",
+            action_type="wait",
+        )
         wait_steps += 1
-        events.append(
+        record_event(
             {
                 "step_id": step.step_id,
                 "label": f"portal.wait.{wait_steps}",
                 "phase": "wait_for_transition",
                 "action_type": "wait",
                 "target": None,
+                "failure_injection": None,
                 "translation_accepted": bool(step.info["translation_accepted"]),
                 "translation_error": step.info["translation_error"],
                 "visible_inventory": dict(
@@ -540,8 +689,6 @@ def run_scripted_a0(
                 ),
             }
         )
-        if event_sink is not None:
-            event_sink(events[-1])
         terminated = step.terminated
         state = backend.get_evaluation_state()
 

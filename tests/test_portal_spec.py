@@ -7,11 +7,14 @@ import numpy as np
 
 from obsidianlink.env.portal_spec import (
     PORTAL_GRID_NAME,
+    PORTAL_GRID_ORIGIN_NAME,
     PORTAL_GRID_BLOCKS,
     PORTAL_GRID_SIZE,
     PORTAL_GRID_UNKNOWN_ID,
     PortalA0EnvSpec,
     PortalGridObservation,
+    PortalGridOriginObservation,
+    PortalTransitionObservation,
 )
 
 
@@ -24,7 +27,9 @@ class PortalA0EnvSpecTests(unittest.TestCase):
                 "pov",
                 "inventory",
                 "portal_grid",
+                "portal_grid_origin",
                 "portal_dimension",
+                "portal_transition",
             }.issubset(specification.observation_space.spaces)
         )
         self.assertTrue(
@@ -71,6 +76,43 @@ class PortalA0EnvSpecTests(unittest.TestCase):
         )
         self.assertEqual(int(result[1]), PORTAL_GRID_UNKNOWN_ID)
         self.assertEqual(result.dtype, np.int32)
+
+    def test_grid_origin_observation_preserves_world_anchor(self) -> None:
+        result = PortalGridOriginObservation().from_hero(
+            {PORTAL_GRID_ORIGIN_NAME: [0, 64, 0]}
+        )
+        np.testing.assert_array_equal(
+            result, np.asarray((0, 64, 0), dtype=np.int32)
+        )
+
+    def test_portal_transition_observation_is_typed_and_fail_closed(self) -> None:
+        handler = PortalTransitionObservation()
+        result = handler.from_hero(
+            {
+                "portal_transition": {
+                    "entered_via_portal": True,
+                    "sequence": 1,
+                    "source_portal_block_world_position": [-2, 64, 1],
+                    "from_dimension": "minecraft:overworld",
+                    "to_dimension": "minecraft:the_nether",
+                }
+            }
+        )
+        self.assertTrue(bool(result["present"]))
+        self.assertTrue(bool(result["entered_via_portal"]))
+        np.testing.assert_array_equal(
+            result["source_portal_block_world_position"],
+            np.asarray((-2, 64, 1), dtype=np.int32),
+        )
+        missing = handler.from_hero(
+            {
+                "portal_transition": {
+                    "entered_via_portal": "yes",
+                    "sequence": 1,
+                }
+            }
+        )
+        self.assertFalse(bool(missing["present"]))
 
     def test_invalid_tick_budget_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "positive integer"):

@@ -208,49 +208,57 @@ python scripts/run_scripted_a0.py
 
 ## 当前状态
 
-**Phase 0：完成。Phase 1：完成。下一阶段为 Phase 2 Portal Evaluator。**
+**Phase 0：完成。Phase 1：完成。Phase 2：完成。Phase 3：进行中。**
 
-2026-07-30 的框架与环境验证结果：
+- Phase 0 / Phase 1 验证结果保持不变（72 个测试套件中的 Phase 0/1 部分
+  全部通过、Scripted-A0 真实 MineRL 闭环已存档）。
+- Phase 2 离线几何、契约和负例测试已扩展（见
+  [`docs/decisions/0002-portal-frame-rules.md`](docs/decisions/0002-portal-frame-rules.md)、
+  [`obsidianlink/evaluation/frame_geometry.py`](obsidianlink/evaluation/frame_geometry.py)、
+  [`tests/test_frame_geometry.py`](tests/test_frame_geometry.py)）。
+- 历史 Scripted-A0 运行仍因缺少每步 grid 与精确 transition evidence
+  正确报告 `status=insufficient_evidence`；它没有被事后升级为 Phase 2
+  证据。
+- Phase 2 审计（2026-07-30 Round 3）已落地的 7 项修复：
+  - 外部生成完整门框（带或不带 nether_portal、dimension flip）→ terminal
+    failure 升级为 `frame_not_built_by_episode`（`external_structure_candidate_count`
+    由 backend 计算并暴露给 evaluator）；
+  - accepted `place_block(obsidian)` credit 仅在当前 post-step observation
+    有效；fresh delta 数与 credit 数不完全相等时全部 fail closed 为
+    external，credit 不得跨 observation 存活，且 external cell 永不重新归因；
+    该边界由
+    `regression_single_place_block_is_one_obsidian` 守护；
+  - 仅有门框邻近位置不能证明进入因果；必须同时有精确 latched-frame
+    identity 的显式 bridge transition evidence。缺失证据为 unknown，
+    外部/其他 portal 证据为 false，两者均 `success=False`；
+  - `atSpawn` grid offset 通过 reset 时实际 world position 锚定，避免把
+    y=64 的门框错误映射到 y=0；
+  - 三块分布在不同边的 obsidian 不再触发 `build_site_selected`；
+  - 缺失 `latched_timestamps` 键的 `EvaluationState` 构造直接 raise；
+  - 全 missing grid → `has_missing_truth=True`；
+  - `EvaluationState.milestone_events()` 严格只读 `latched_timestamps`，
+    emission-time 不再回填 `time.time()`，重复 emission 返回完全相同的
+    timestamp。
+- 2026-07-31 离线验证：121 / 121 tests 通过；经用户单次批准执行
+  `./gradlew compileJava`，但该进程从默认 PATH 取得 Java 25，ForgeGradle
+  在配置阶段因要求 Java 8 而终止，未进入 Java 编译，也未启动 Minecraft。
+  随后使用 `/opt/anaconda3/envs/mc-agent` 的固定 OpenJDK 8.0.472
+  重新执行，`compileJava` 成功（5 个任务：4 executed、1 up-to-date）。
+  两次构建均未启动 Minecraft。
+- Phase 2 bridge source 已加入可重建 patch：输出 atSpawn grid world origin、
+  dimension，以及由 server-side portal change guard 产生的 typed
+  `portal_transition` source block。该 Java 改动已通过 `compileJava` 和
+  `shadowJar`。
+- Phase 2 canonical 真实证据位于
+  [`runs/phase2-scripted-a0/20260731-173302/`](runs/phase2-scripted-a0/20260731-173302/)：
+  251 条动作记录全部带身份字段，14 块 obsidian 全部归因、0 external，
+  门框 step 148、激活 step 162、typed transition/Nether entry step 251；
+  正式 `PortalEvaluator` 报告 `success=true`、
+  `entered_via_episode_portal=true`、无 blocking condition，并有显式终止
+  和人工复核。
 
-- 38 个单元测试全部通过；
-- `python -m obsidianlink --check` 通过；
-- Python 语法编译通过；
-- 3 个 JSON Schema/实例/配置文件均可解析；
-- `git diff --check` 通过；
-- 固定解释器 `/opt/anaconda3/envs/mc-agent/bin/python` 为 Python 3.10.20；
-- 固定运行时版本为 Gym 0.23.1、NumPy 1.23.5、Torch 2.13.0 和
-  Transformers 4.57.6。
-- `PortalA0EnvSpec`、真实 MineRL backend 和低层动作翻译已经实现；
-- 真实运行完成 14/14 tick，POV、物品栏、装备、放置、打火石使用和关闭链路通过；
-- 黑曜石由 10 减到 9，MineRL 统计记录了黑曜石和打火石的各一次使用。
-
-MineRL 1.0.2 Java `EnvServer` 桥接已经扩展并重新构建：
-
-- 固定出生点和 25x25 确定性平整平台生效；
-- evaluator grid 回传 343 个方块；
-- dimension 真值正常回传；
-- 放置一块黑曜石后，inventory 和 grid 同时记录变化；
-- 打火石使用后 grid 记录到 fire；
-- Gradle `compileJava` 和 `shadowJar` 通过。
-
-确定性 Scripted-A0 端到端验证已经通过：
-
-- 使用 14 块黑曜石和 2 块泥土，在生存模式完成 4x5 完整门框；
-- 门框激活真值被锁存为 `portal_activated_latched=true`；
-- 角色在门内等待 84 tick 后进入 `minecraft:the_nether`；
-- 运行共完成 251 environment step，未提前终止；
-- 运行证据位于
-  [`runs/history/phase1-scripted-a0/20260730-214356/`](runs/history/phase1-scripted-a0/20260730-214356/)。
-
-Scripted-A0 已证明环境闭环，但 Phase 2 的门框几何评测、负例和证据里程碑仍未实现，
-因此不能把当前结果扩展为 VLM Agent 成功。
-
-可复现补丁位于
-[`patches/minerl/obsidianlink-envserver.patch`](patches/minerl/obsidianlink-envserver.patch)。
-真实成功证据位于
-[`runs/history/phase1-portal-env-smoke/20260730-203826-real/summary.json`](runs/history/phase1-portal-env-smoke/20260730-203826-real/summary.json)。
-
-当前已经完成确定性策略下的合法门框构造和 overworld→the_nether 维度切换。
-尚未完成的是 Phase 2 Portal Evaluator、VLM Agent 和双角色运行时；下一步从
-Phase 2 开始。后端决策见
-[`docs/decisions/0001-portal-environment-backend.md`](docs/decisions/0001-portal-environment-backend.md)。
+Phase 2 退出条件已满足。Phase 3 的 Scripted-A0 已完成正式 evaluator
+闭环；本地 Qwen 已能在 MPS 完成隔离预加载，但与 MineRL 同时常驻的实际运行仍在
+底层提前终止，尚缺一份受控、可评分的 VLM 运行记录（参见 `ROADMAP.md`）。
+MiniMax-M3 可作为不依赖本地模型常驻的远程视觉 planner；密钥仅从
+`MINIMAX_API_KEY` 读取，首个实验固定为单帧、一次调用和标准服务档。

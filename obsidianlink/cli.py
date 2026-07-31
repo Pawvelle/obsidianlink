@@ -56,6 +56,7 @@ def _phase_zero_check() -> dict[str, object]:
                 valid_portal_frame=True,
                 portal_activated=True,
                 agents_in_nether=frozenset({"agent_1"}),
+                entered_via_episode_portal_by_agent={"agent_1": True},
             )
         )
         result = PortalEvaluator().evaluate(backend.get_evaluation_state())

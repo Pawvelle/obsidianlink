@@ -1,0 +1,11 @@
+{
+  "experiment_id": "phase3_single_workflow_a0",
+  "backend": "minerl_portal_a0",
+  "task_instance": "benchmark/instances/route_a_a0_phase3.json",
+  "planner": "qwen3_vl_2b_instruct_workflow_a0",
+  "model_lock": "model.lock.json",
+  "evaluator": "portal_v0",
+  "max_model_calls": 1,
+  "event_schema_version": "0.1",
+  "notes": "Phase 3 workflow-guided VLM contract. Invoke only after the Scripted-A0 MineRL baseline is stable."
+}

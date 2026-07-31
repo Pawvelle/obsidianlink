@@ -1,0 +1,27 @@
+{
+  "agreed_with_manual_review": false,
+  "missing_evidence": [
+    "portal_grid_changes preserves obsidian / fire block names (currently normalised to 'other')",
+    "per-action obsidian cell coordinates so each place_block(obsidian) can be attributed to its target cell (the historical events only record the action step, not the resulting cell)",
+    "agent pre-transition Overworld position for Nether-entry portal correlation (events.jsonl only records the final dimension, not when the transition happened or where the agent was standing)"
+  ],
+  "phase1_manual_review_path": "manual_review.md",
+  "phase1_manual_review_unaffected": true,
+  "phase2_evaluator_replay_supported": false,
+  "rationale": "Phase 2 evaluator refuses to attribute episode-built frames to unattributed obsidian, refuses to confirm Nether entry without a pre-transition Overworld position, and refuses to classify a failure without an explicit termination signal. The historical events / summary do not provide per-step grid snapshots, obsidian / fire block names, or pre-transition positions, so the new evaluator cannot honestly verify this run.",
+  "recorded_facts": {
+    "dirt_placements": 2,
+    "evidence_final_dimension": "minecraft:the_nether",
+    "evidence_max_obsidian_added": 14,
+    "evidence_portal_activated_latched": true,
+    "first_flint_step": 158,
+    "first_obsidian_step": 6,
+    "flint_and_steel_uses": 1,
+    "last_obsidian_step": 148,
+    "last_step": 251,
+    "obsidian_placements": 14,
+    "summary_entered_nether": true
+  },
+  "run_dir": "runs/history/phase1-scripted-a0/20260730-214356",
+  "status": "insufficient_evidence"
+}

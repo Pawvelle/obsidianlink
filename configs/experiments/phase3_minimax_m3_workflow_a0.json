@@ -1,0 +1,16 @@
+{
+  "experiment_id": "phase3_minimax_m3_workflow_a0",
+  "backend": "minerl_portal_a0",
+  "task_instance": "benchmark/instances/route_a_a0_phase3.json",
+  "planner": "MiniMax-M3",
+  "planner_backend": "minimax_m3",
+  "api_format": "anthropic_messages",
+  "endpoint": "https://api.minimax.io/anthropic/v1/messages",
+  "evaluator": "portal_v0",
+  "max_model_calls": 1,
+  "max_output_tokens": 96,
+  "thinking": "disabled",
+  "service_tier": "standard",
+  "event_schema_version": "0.1",
+  "notes": "Phase 3 cost-bounded M3 workflow trial. API key is read only from MINIMAX_API_KEY and never recorded."
+}

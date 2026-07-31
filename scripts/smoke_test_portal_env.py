@@ -9,8 +9,10 @@ from typing import Any, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+VENDORED_MINERL = ROOT / "vendor/minerl"
+for import_root in (ROOT, VENDORED_MINERL):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
 from obsidianlink.core.types import MacroAction, TaskInstance
 from obsidianlink.env.minerl_backend import MineRLEnvironmentBackend

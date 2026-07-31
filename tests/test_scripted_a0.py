@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import time
 
 from obsidianlink.drivers.scripted_a0 import (
     MAX_CAMERA_DELTA,
@@ -8,6 +9,7 @@ from obsidianlink.drivers.scripted_a0 import (
     run_scripted_a0,
 )
 from obsidianlink.env.minerl_backend import MineRLEnvironmentBackend
+from obsidianlink.evaluation import PortalEvaluator
 from tests.helpers import sample_task
 from tests.test_minerl_backend import _ControlledMineRLEnv
 
@@ -56,7 +58,10 @@ class ScriptedA0PlanTests(unittest.TestCase):
     def test_driver_records_success_without_exposing_evaluator_to_actions(
         self,
     ) -> None:
-        environment = _ControlledMineRLEnv()
+        environment = _ControlledMineRLEnv(
+            build_full_frame=True,
+            ignite_after_frame=True,
+        )
         backend = MineRLEnvironmentBackend(
             env_factory=lambda task: environment,
             reset_warmup_steps=0,
@@ -69,6 +74,13 @@ class ScriptedA0PlanTests(unittest.TestCase):
                 max_portal_wait_steps=2,
                 max_placement_retries=0,
             )
+            backend.mark_terminated(
+                step_id=result.steps_completed,
+                reason="scripted_a0_driver_complete",
+            )
+            evaluation = PortalEvaluator().evaluate(
+                backend.get_evaluation_state()
+            )
         finally:
             backend.close()
 
@@ -79,6 +91,19 @@ class ScriptedA0PlanTests(unittest.TestCase):
         self.assertEqual(len(result.events), result.planned_steps)
         self.assertTrue(
             all(event["translation_accepted"] for event in result.events)
+        )
+        self.assertTrue(
+            all(
+                event["episode_id"] == "test_episode"
+                and event["agent_id"] == "agent_1"
+                for event in result.events
+            )
+        )
+        self.assertTrue(evaluation.success)
+        self.assertTrue(evaluation.episode_terminated)
+        self.assertEqual(
+            evaluation.entered_via_episode_portal,
+            True,
         )
 
     def test_wait_budget_is_strict(self) -> None:
@@ -94,6 +119,96 @@ class ScriptedA0PlanTests(unittest.TestCase):
                 sample_task(),
                 max_placement_retries=-1,
             )
+
+    def test_failure_injections_are_bounded_and_recorded(self) -> None:
+        for injection in (
+            "placement_failure",
+            "target_occupied",
+            "ignition_no_effect",
+            "view_offset",
+        ):
+            with self.subTest(injection=injection):
+                environment = _ControlledMineRLEnv(
+                    build_full_frame=True,
+                    ignite_after_frame=True,
+                )
+                backend = MineRLEnvironmentBackend(
+                    env_factory=lambda task: environment,
+                    reset_warmup_steps=0,
+                )
+                backend.open()
+                try:
+                    result = run_scripted_a0(
+                        backend,
+                        sample_task(),
+                        max_portal_wait_steps=2,
+                        failure_injection=injection,
+                    )
+                finally:
+                    backend.close()
+
+                injected_events = [
+                    event
+                    for event in result.events
+                    if event.get("failure_injection") == injection
+                ]
+                self.assertEqual(len(injected_events), 1)
+                self.assertLessEqual(
+                    result.steps_completed,
+                    result.planned_steps + 2,
+                )
+                self.assertTrue(
+                    all(
+                        event["episode_id"] == "test_episode"
+                        and event["agent_id"] == "agent_1"
+                        and type(event["step_id"]) is int
+                        for event in result.events
+                    )
+                )
+                if injection == "view_offset":
+                    self.assertEqual(result.status, "passed")
+                else:
+                    self.assertEqual(result.status, "blocked")
+
+    def test_unknown_failure_injection_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "failure_injection"):
+            run_scripted_a0(
+                MineRLEnvironmentBackend(),
+                sample_task(),
+                failure_injection="unbounded_input",
+            )
+
+    def test_step_timeout_requires_a_positive_finite_value(self) -> None:
+        with self.assertRaisesRegex(ValueError, "step_timeout_seconds"):
+            run_scripted_a0(
+                MineRLEnvironmentBackend(),
+                sample_task(),
+                step_timeout_seconds=0,
+            )
+
+    def test_step_timeout_interrupts_a_stalled_backend(self) -> None:
+        class _StallingEnvironment(_ControlledMineRLEnv):
+            def step(self, action):
+                time.sleep(0.05)
+                return super().step(action)
+
+        environment = _StallingEnvironment()
+        backend = MineRLEnvironmentBackend(
+            env_factory=lambda task: environment,
+            reset_warmup_steps=0,
+        )
+        backend.open()
+        try:
+            result = run_scripted_a0(
+                backend,
+                sample_task(),
+                step_timeout_seconds=0.01,
+            )
+        finally:
+            backend.close()
+        self.assertEqual(result.status, "failed")
+        self.assertIn("TimeoutError", result.blocked_reason or "")
+        self.assertEqual(result.events[-1]["error_type"], "TimeoutError")
 
 
 if __name__ == "__main__":

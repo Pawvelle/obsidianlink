@@ -202,61 +202,229 @@ Phase 2 必须先完成独立门框几何评测、负例和可追溯里程碑，
 
 ## Phase 2 - Portal Evaluator
 
-**状态：计划中。依赖 Phase 1。**
+**状态：完成。离线正负例、真实 attribution、typed portal-entry
+correlation、自动评测和人工复核均已通过。**
 
 ### 目标
 
 在任何 VLM Agent 参与前，建立可信、可测试、与决策逻辑隔离的自动评测器。
 
-### 实现内容
+### 冻结规则
 
-1. 定义门框几何：
-   - 最小有效 4x5 外框；
-   - 允许合法尺寸范围；
-   - 正确的黑曜石方块；
-   - 内部空间和朝向；
-   - 缺角门框是否接受必须写入规范。
-2. 跟踪本回合方块变化，证明门框由当前角色或团队产生。
-3. 检测传送门方块生成和激活时刻。
-4. 检测每个角色的维度切换。
-5. 输出标准里程碑：
-   - `task_reset`
-   - `build_site_selected`
-   - `first_obsidian_placed`
-   - `valid_portal_frame`
-   - `portal_activated`
-   - `agent_entered_nether`
-6. 输出失败分类和证据位置。
-7. 保证 evaluator-only 字段不会进入 Agent 观察或 Prompt。
+门框规则、尺寸、朝向、缺角、激活、attribution、portal-entry correlation
+全部冻结在 [`docs/decisions/0002-portal-frame-rules.md`](docs/decisions/0002-portal-frame-rules.md)；
+关键摘要：
 
-### 必测正例
+- 外宽 W、外高 H：4 ≤ W ≤ 23，5 ≤ H ≤ 23。
+- 两种水平朝向 `plane_z` / `plane_x`。
+- 缺角允许：边框非角 cell 数为 `2W + 2H - 8`（vanilla 1.16.5 合法形态）。
+- 内部必须只包含 `air` / `nether_portal` / `fire`；
+  `dirt` / `bedrock` / `obsidian` / `grass` / `grass_block` / `other` /
+  `missing` 都是阻挡。
+- 激活：某 frame 候选内部出现至少 1 个 `nether_portal` cell，且该 frame 必须
+  是本回合建造的。
+- Attribution：每个 obsidian 偏移必须能匹配到一次允许 agent 的
+  `place_block(obsidian)` 动作，否则归为 `external`。
+- Portal-entry correlation：Nether 进入必须有显式 bridge transition
+  evidence 指向 exact latched frame identity；interior 邻域检查仅是额外
+  sanity check，不能单独证明因果。
+- Termination：评测器只在 `episode_terminated=True` 时分类失败。
 
-- 标准尺寸门框；
-- 合法的较大门框；
-- 当前回合建造、激活并进入。
+### 已落地的实现
 
-### 必测负例
+1. 纯几何检测器 [`obsidianlink/evaluation/frame_geometry.py`](obsidianlink/evaluation/frame_geometry.py)：
+   无 MineRL 依赖，输入 `(x, y, z)` 3D grid + baseline，返回
+   `FrameDetectionResult`（五个互斥桶 + `has_missing_truth` 等真实聚合）。
+2. **Observation-bound attribution**：backend 只为翻译成功的
+   `place_block(obsidian)` 在当前 environment step 发放 credit。只有当前
+   post-step observation 首次出现的 obsidian cell 数与 credit 数完全相等
+   才归因；不相等时 fresh delta 全部 fail closed 为 external。未匹配 credit
+   在 observation boundary 失效，且 external cell 永远不能重新进入
+   attributed。`is_episode_built` 只有在
+   `selected.required_frame_blocks ⊆ attributed_obsidian_offsets` 时为
+   True。私有 `_credit_pending_place_block_for_test` 仅供直接改 grid 的
+   离线 fixture 使用，生产 driver 不得调用。
+3. **Partial 连续性**：`is_partial` 必须是"同一条边 ≥ 3 块 obsidian"或
+   "共享 corner 的 L 形"（每条 incident 边各 ≥ 1 块 obsidian）。预存
+   obsidian 不计入。所有缺角 obsidian 块必须先扣除 baseline 才是
+   episode 新增。
+4. `EvaluationState` 锁存 frame identity：一旦 `is_episode_built=True`
+   触发，`latched_frame_identity` 保存完整几何证据。Nether grid
+   替换后仍能输出正确 verdict。
+5. 激活绑定到 latched frame：只有 latched frame identity 的 interior
+   出现 `nether_portal` 才记 `portal_activated`。
+6. **Portal-entry correlation**：`pre_transition_position_by_agent` 在
+   dimension 从 overworld 变 nether 之前一刻锁存；只有 bridge 的 typed
+   `portal_transition` 明确为 true、其 interior offsets 精确匹配 latched
+   frame identity、且 pre-transition position 通过 world-anchor 邻域检查时
+   才记录 True。证据明确拒绝时为 False；证据缺失/不完整时字段保持 unset，
+   evaluator 输出 unknown。False/unknown 均不能成功。
+7. 终止信号：MineRL `done=True` 或 `mark_terminated(step_id, reason)`
+   设置 `episode_terminated=True`；只有此时 `failure_type` 才会输出。
+8. 失败分类优先级：attribution_failed > frame_never_valid >
+   portal_never_activated > no_agent_entered_nether >
+   nether_entry_not_via_episode_portal / nether_entry_portal_unknown。
+9. 里程碑事件使用 `StructuredEvent` 顶层契约，timestamp 锁存于首次
+   观察；`__post_init__` 强制每个 milestone step 必须有对应
+   `latched_timestamps` key。多 agent 用
+   `agent_entered_nether:<agent_id>` 避免 timestamp 冲突。
+10. `has_missing_truth` 是 detector 构造时基于 grid 整体 missing cell
+    数计算的属性，不是 placeholder。
+11. **外部结构检测（Round 3 新增）**：backend 计算
+    `external_structure_candidate_count`：
+    - 完全外部：candidate 的所有 required cells 全部在
+      `external_obsidian_offsets`；
+    - 混合：candidate 的 required cells 部分在 attributed、部分在 external
+      （即 episode 没有独立完成门框）。
+    两类都会被 `_derive_failure` 提升为
+    `FAILURE_FRAME_NOT_BUILT_BY_EPISODE`，不再误判为
+    `frame_never_valid`。`attribution_failed_candidate_count`（pre-existing
+    frame）也走同一通路。
 
-- 附近已有门框；
-- 找到已激活的自然/预置传送门；
-- 少一块黑曜石；
-- 方向错误或内部被阻挡；
-- 门框完整但未激活；
-- 已激活但无人进入；
-- 角色进入了由本回合外部因素产生的门。
+### 必测正例（已覆盖）
+
+- 标准 4x5 `plane_z` 含/缺角；
+- 标准 4x5 `plane_x`；
+- 合法的较大 6x7 门框；
+- `test_required_count_matches_documented_formula` 验证 2W+2H-8 公式；
+- 完整路径：`test_full_path_with_termination_succeeds` 与
+  `test_latched_frame_identity_survives_nether_grid_loss`；
+- `test_entered_via_episode_portal_true_with_explicit_transition` 验证
+  exact frame transition evidence + 邻近位置时 correlation 为 True。
+- `test_at_spawn_grid_bounds_include_world_anchor` 验证 y=64 spawn 不会被
+  错误映射到 y=0。
+
+### 必测负例（已覆盖）
+
+- 外部生成的完整门框：
+  `test_external_full_frame_is_not_attributed`（attribution 队列空
+  → 14 块全部 external → `portal_built_by_episode=False` →
+  `frame_not_built_by_episode`）。
+- 外部 dimension 切换：
+  `test_external_dimension_switch_is_not_success`（agent 站远处
+  → pre_trans 远离 frame → `entered_via_episode_portal=False` →
+  `success=False`）。
+- 走其他 portal 进入：`test_other_portal_entry_is_not_success`
+  （已建 B 激活 B 但 agent 站 C 位置 → `success=False`）。
+- 零散 obsidian 不触发 partial：
+  `test_isolated_obsidian_blocks_do_not_form_a_frame` /
+  `test_three_obsidian_on_different_edges_is_not_partial` /
+  `test_l_shape_partial` / `test_pre_existing_frame_does_not_trigger_build_site_selected`。
+- 内部阻挡：`test_dirt_inside_interior_blocks_frame` /
+  `test_bedrock_inside_interior_blocks_frame` /
+  `test_other_inside_interior_blocks_frame` /
+  `test_missing_inside_interior_blocks_frame`。
+- 缺角 + 错几何 + 缺必需 cell + 预存 frame / 预存已激活 portal。
+- `has_missing_truth` 真实聚合：全 missing grid → True；
+  frame/interior cell missing → True；正常 air grid → False。
+- Timestamp 一致性：milestone step 缺 timestamp → `EvaluationState`
+  构造失败；同一 state 多次 emission → timestamps 完全相同；
+  多 agent nether 各自 timestamp 不串号。
+
+### 审计后新增的回归测试（Round 3）
+
+`tests/test_minerl_backend.py` 新增两个回归测试类，所有测试名以
+`test_regression_*` 前缀方便 code review 时检索：
+
+- `AttributionRegressionTests`：
+  - `test_regression_external_full_frame_not_attributed` — 外部生成完整
+    门框 → `external_structure_candidate_count >= 1` →
+    `frame_not_built_by_episode`。
+  - `test_regression_single_place_block_is_one_obsidian` — 单次
+    `place_block(obsidian)` 只能归因一块，禁止把一次动作泛化为多块。
+  - `test_regression_external_dimension_switch` — 远点站立 + 维度切换
+    → `entered_via_episode_portal=False` → `success=False`。
+  - `test_regression_other_portal_entry` — 建 B 激活 B 但 agent 站 C
+    位置 → `success=False`。
+  - `test_regression_three_non_contiguous_obsidian_not_partial` — 三块
+    分布在不同边的 obsidian 不触发 `build_site_selected`。
+  - `test_regression_missing_timestamp_rejected` — 缺失
+    `latched_timestamps` 键时 `EvaluationState` 构造失败。
+  - `test_regression_full_missing_grid_has_missing_truth` — 全 missing
+    grid 暴露 `has_missing_truth_latched=True`。
+  - `test_regression_external_cell_is_never_reattributed` — 已分类 external
+    的旧 cell 永不重新归因。
+  - `test_regression_unmatched_credit_expires_at_step_boundary` — no-op
+    placement credit 不得污染后续 delta。
+  - `test_regression_nearby_external_dimension_flip_is_unknown` — 门旁外部
+    切维但无 typed transition evidence 时为 unknown、终止失败有明确类型。
+- `FrameGeometryRegressionTests`：用纯几何 detector 重做上述 6 个审计
+  场景，每条都对应 audit 编号。
 
 ### 退出条件
 
-- 人工完成轨迹的自动评分与人工结论一致。
-- 所有边界负例有自动测试。
-- 评分逻辑不依赖模型文本、Prompt 关键词或主观图像描述。
-- 每个成功判定能追溯到环境真值事件和证据帧。
+- 真实 MineRL 受控集成轨迹的回放证据（含每步 grid + per-action
+  obsidian attribution + 精确维度切换 step + pre-transition position
+  + explicit termination signal）：由
+  `runs/phase2-scripted-a0/20260731-173302/` 满足。历史 Phase 1 replay
+  仍保持 `status=insufficient_evidence`，未伪造升级。
+- 单元测试套件必须全通过；`python -m obsidianlink --check` 通过；
+  Python 语法、JSON、`git diff --check` 全部通过。
+- 离线代码契约（attribution, portal-entry correlation, terminal
+  failure, StructuredEvent, external structure）必须通过全部回归测试。
+
+### 2026-07-31 验证记录
+
+- Round 4 修复 old-external re-attribution、stale no-op credit、
+  atSpawn world-anchor 和 nearby external dimension flip；
+- 单元测试套件 121 / 121 通过；
+- 经用户单次批准执行 `./gradlew compileJava`；ForgeGradle 在项目配置阶段
+  从默认 PATH 检测到 Java 25.0.3，而固定工具链要求 Java 8，故构建在
+  Java 源码编译前失败。未启动 Minecraft，也没有产生真实 MineRL 证据；
+- 随后使用 `/opt/anaconda3/envs/mc-agent` 提供的固定 OpenJDK 8.0.472
+  重新执行，`compileJava` 成功（5 个任务：4 executed、1 up-to-date）；
+- `shadowJar` 使用相同固定 JDK 8 构建成功；
+- canonical 真实运行 `runs/phase2-scripted-a0/20260731-173302/`：
+  251 step、84 个 portal wait、14 个 attributed obsidian、0 external；
+  valid frame step 148、activation step 162、typed transition 和 Nether
+  entry step 251；
+- 正式 `PortalEvaluator` 返回 `success=true`、
+  `entered_via_episode_portal=true`、blocking conditions 为空；driver 在
+  step 251 以 `scripted_a0_driver_complete` 显式终止；
+- 251 条 action JSONL 全部包含 `episode_id`、`agent_id`、`step_id`；
+  六个结构化里程碑齐全并按 step 排序；
+- `manual_review.md` 接受该 run；`final.png` 可见 Nether 场景和
+  “We Need to Go Deeper” 成就。视觉证据仅作一致性检查，attribution 与
+  portal correlation 以 evaluator-only typed evidence 为准；
+- 真实运行后无 Minecraft、MineRL 或 Gradle 残留进程。Phase 2 退出条件
+  全部满足。
+
+### 2026-07-31 bridge source 准备
+
+- `patch_obsidianlink_phase2.py` 以幂等方式持久化生成 MCP tree 的改动，
+  `patch_mcp.sh` 在基础 patch 后自动应用；
+- `ObservationFromGrid` 同时返回 grid payload 与真实 world origin；
+- `ServerPlayerEntity.changeDimension()` 仅在
+  `Entity.updatePortal()` guard 生效且 source block 是
+  `Blocks.NETHER_PORTAL` 时递增 transition sequence；
+- EnvServer 输出 typed `portal_transition`：sequence、from/to dimension、
+  source portal block world position；Python handler 缺失或类型错误时
+  fail closed；
+- Java 源码已完成静态/幂等 patch 检查，并使用固定 JDK 8 通过
+  `compileJava` 与 `shadowJar`；canonical 真实运行已验证 origin、
+  dimension 和 typed `portal_transition`。
+
+### 2026-07-30 验证记录
+
+- 30 个 `test_frame_geometry` 测试 + 21 个 `test_evaluation` 测试 +
+  32 个 `test_minerl_backend` 测试（含 13 个新增 regression tests）+
+  32 个其他；
+- 单元测试套件 115 / 115 通过；
+- `scripts/replay_run_for_evaluator.py` 报告 `status=insufficient_evidence`：
+  历史 `runs/history/phase1-scripted-a0/20260730-214356/` 的
+  `events.jsonl` + `summary.json` 不足以重建 per-step grid、obsidian
+  attribution、pre-transition position 或 termination signal，新
+  evaluator 不会伪造成功状态。
+- 此记录形成时仍缺受控真实集成证据；该缺口已由 2026-07-31 canonical
+  Phase 2 run 补齐。
+- `vendor/minerl` 嵌套仓库状态：当前非 clean（多个 modified / untracked
+  文件），与本轮 Phase 2 无关，外层 diff 未触及该路径。
 
 ---
 
 ## Phase 3 - Route A0 Vertical Slice
 
-**状态：计划中。依赖 Phase 2。**
+**状态：进行中。Phase 2 前置条件已满足。**
 
 ### 目标
 
@@ -287,6 +455,73 @@ Phase 2 必须先完成独立门框几何评测、负例和可追溯里程碑，
    - 目标位置被占用；
    - 点火未生效。
 6. 错误必须有限重试或明确终止，不允许无限循环。
+
+### 2026-07-31 启动记录
+
+- 冻结 `benchmark/instances/route_a_a0_phase3.json` 与
+  `configs/experiments/phase3_scripted_a0.json`：单角色、seed 0、固定出生点、
+  14 块黑曜石、1 个打火石、2 块泥土，以及 320 step 上限；
+- Scripted-A0 增加四个一次性、确定性、可记录的负例入口：
+  `placement_failure`、`view_offset`、`target_occupied`、`ignition_no_effect`。
+  注入只会替换为 allowlist 内宏动作或改变受限的 look delta，绝不读取
+  evaluator-only truth，也不生成低层输入；
+- 基线配置的自动 placement retry 固定为 0：真实 MineRL 物品栏可能在放置后的
+  同一观察尚未反映扣减，不能据此推断放置失败。placement retry 只允许作为显式
+  负例实验参数；点火未生效会在 portal wait 预算耗尽后明确返回 `blocked`，不允许
+  无限循环。
+- Scripted-A0 为每一个 `backend.step` 设定 30 秒主线程 deadline；超时抛出并
+  记录 `TimeoutError`，以便把 EnvServer 通信卡住与动作/评测失败区分开。
+- 后端 reset 对握手/transport 的 `OSError`、`RuntimeError`、`TypeError` 最多
+  重建一次 MineRL 环境（共 2 次尝试），随后带原始异常链失败；它不修改
+  `vendor/minerl`，也不会无限重启 Minecraft。
+- 每次 Scripted-A0 运行会在独立目录写入冻结的任务和实验配置、commit/启动参数、
+  初始帧、所有非 wait 动作后的 agent-visible 决策帧、最终帧、动作 JSONL、
+  evaluator JSONL 与 summary；帧归档接口只接收 `Observation`，不会接收
+  `EvaluationState`。
+- `WorkflowA0Policy` 与 `DirectA0Policy` 已定义为纯 agent-visible prompt
+  适配器，二者都经严格 JSON action parser fail closed 到 `wait`；相应 Qwen
+  配置已冻结，但遵守 evaluator-first 顺序，必须等 Scripted-A0 真实基线稳定后
+  才能加载或运行模型。
+- `AsyncA0PolicyWorker` 使用容量为 1 的 request/decision mailbox；环境 owner
+  只 submit/poll，永不等待模型推理，过期或满队列结果会被丢弃而非复用到其他
+  observation。
+- `LocalQwenResponder` 使用 `model.lock.json` 中已锁定的本地 Qwen3-VL 模型，
+  延迟加载到 policy worker；禁止联网下载、远程 API 与模型生成代码。它最多生成
+  64 token，输出仍需经过 JSON action parser。运行时自动优先 MPS，MPS 不可用时
+  才回退 CPU；不会假设编译进 PyTorch 的 MPS 后端等同于设备可用。
+- `scripts/run_vlm_a0.py` 固定使用一条 Phase 3 VLM 实验配置和最多一次模型调用。
+  环境 owner 在推理期间按固定节奏执行安全 `wait`，只接受相同 episode/agent 且在
+  明确 step-age 上限内的决策；过期、拒绝和 worker 异常均单独计数或带 traceback
+  归档，不能影响环境 step。
+- `MiniMaxM3Responder` 通过官方 Anthropic-compatible Messages API 提供远程视觉
+  planner 选项：仅上传 agent-visible JPEG 和公开提示，禁用 thinking、工具和自动
+  重试；`MINIMAX_API_KEY` 仅从进程环境读取，响应摘要只记录 request ID、token 用量、
+  延迟和解析结果。`phase3_minimax_m3_workflow_a0` 冻结为 standard 服务档、96 输出
+  token 和最多 1 次调用，先验证单帧契约后才允许完整受控运行。
+- `scripts/probe_minimax_m3.py` 使用已经验收的 Scripted-A0 初始帧，且必须显式传入
+  `--allow-live-request` 才会发送唯一一笔 API 请求。它将 HTTP 成功与动作 JSON
+  合规分别报告；请求错误、解析错误均不是 portal 任务失败，也不会启动 Minecraft。
+  Token Plan 的 `sk-cp-...` Subscription Key 在 Anthropic-compatible endpoint 使用
+  `Authorization: Bearer` 认证；不可误用标准 Anthropic 的 `x-api-key` 头。
+- Canonical Scripted-A0 真实运行
+  `runs/phase3-scripted-a0/20260731-210140/` 已通过：251 step、14 块
+  attributed obsidian、0 external structure、valid frame step 148、activation
+  step 162、typed Nether entry step 251、正式 evaluator `success=true`；
+  `manual_review.md` 已接受该确定性基线。此前的 socket/timeout 运行均仍为
+  非 canonical 诊断产物。
+- `scripts/run_scripted_a0.py` 在导入 MineRL 前固定子进程的 `JAVA_HOME` 与
+  `PATH` 为锁定的 `/opt/anaconda3/envs/mc-agent` OpenJDK 8，避免 PATH 中的
+  非兼容 Java 启动 EnvServer 并缺失 JAXB。
+- 本阶段的真实闭环尚未验收：`runs/phase3-vlm-a0/20260731-210927/` 在受限执行
+  环境中因本机端口绑定被拒而正常写出失败摘要；获得本机端口权限后的运行可成功
+  reset 并归档 `initial.png`，但在模型与 MineRL 同时常驻时由底层进程提前终止，未
+  进入 Python 的失败处理，故没有模型动作、里程碑评分或可接受的负例结论。
+  隔离预检 `runs/phase3-vlm-a0-preflight/20260731-211357/` 已以 exit code 0 验证
+  锁定 Qwen 可加载到 MPS；使用预加载路径的真实受控重跑仍提前结束。由此可排除
+  模型缺失、MPS 不可用与端口权限，当前证据指向模型和 MineRL 组合进程的资源或
+  运行时冲突。这些仅是设备运行时诊断，不作为 Phase 3 的 VLM 通过或失败证据。
+  下一步是把模型推理隔离为可监督的子进程（父进程记录子进程 exit code、峰值资源
+  和请求/响应时间），再以该边界执行一次受控 VLM 运行。
 
 ### 模型接入顺序
 

@@ -1,0 +1,12 @@
+{
+  "experiment_id": "phase3_scripted_a0",
+  "backend": "minerl_portal_a0",
+  "task_instance": "benchmark/instances/route_a_a0_phase3.json",
+  "planner": "scripted_a0",
+  "evaluator": "portal_v0",
+  "failure_injection": null,
+  "max_placement_retries": 0,
+  "step_timeout_seconds": 30.0,
+  "event_schema_version": "0.1",
+  "notes": "Phase 3 deterministic A0 baseline. Negative-path runs select exactly one documented failure_injection."
+}
