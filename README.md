@@ -262,3 +262,36 @@ Phase 2 退出条件已满足。Phase 3 的 Scripted-A0 已完成正式 evaluato
 底层提前终止，尚缺一份受控、可评分的 VLM 运行记录（参见 `ROADMAP.md`）。
 MiniMax-M3 可作为不依赖本地模型常驻的远程视觉 planner；密钥仅从
 `MINIMAX_API_KEY` 读取，首个实验固定为单帧、一次调用和标准服务档。
+
+- 2026-08-03 受控 VLM A0 真实运行已落地（`runs/phase3-vlm-a0/20260803-215738/`）：
+  - 修复了
+    [`obsidianlink/agents/local_qwen.py`](obsidianlink/agents/local_qwen.py)
+    里的 PIL 衍生 numpy 负 stride bug（PIL 视图 → Qwen image processor
+    报 `ValueError: tensors with negative strides`），新加
+    `np.ascontiguousarray` 归一化与 4 个
+    [`tests/test_local_qwen.py`](tests/test_local_qwen.py) 回归测试；
+  - 单元测试套件 140 / 140 通过，`python -m obsidianlink --check` 通过；
+  - VLM A0 真实运行：320 step 全部跑完、Qwen 决策到达 owner 时已超过
+    `max-decision-age-steps=160` 窗口被丢弃为 stale，所有 action 为
+    `wait`，evaluator 输出 `failure_type=frame_never_valid`、
+    `last_successful_milestone=task_reset`；脚本语义下 `status=blocked`、
+    exit code 2；无 Minecraft / MineRL / Gradle 残留进程；
+  - **该 run 没有 owner 端推理延迟埋点**（instrumentation 是本轮新加的），
+    所以 episode 墙钟 81s 不能拆出 Qwen 推理耗时；新一轮干净提交下的
+    VLM run 的 `model_requests.jsonl` 才有真正的 `responder_latency_seconds`；
+  - 真实诊断：在 `0.25s` step 节奏 + capacity-1 mailbox 之下，
+    Qwen3-VL-2B 在 MPS 上的单次推理延迟 ≫ episode 预算，单帧单调用
+    契约无法影响 episode 走向；这是受控运行的设计边界，不是新 bug。
+- 本轮 VLM runner 增量（`scripts/run_vlm_a0.py`）：
+  - 每次 owner poll 写出 `model_requests.jsonl`，每条含
+    `source_step` / `return_step` / `decision_age_steps` /
+    `max_decision_age_steps` / `drop_reason` / `responder_*` 字段；
+  - `code_version.json` 新增 `working_tree_dirty` + `dirty_paths`；
+    `summary.json` 同步 `working_tree_dirty` /
+    `reproducible_from_clean_commit`，dirty 时一律不声称完全可复现。
+- Phase 3 退出条件进展（待人工 review 后方可定论）：
+  Scripted-A0 canonical 闭环、VLM 产生可诊断里程碑失败、Agent 不读
+  evaluator-only 状态、失败有明确类型和最后有效里程碑、可从配置与代码
+  版本复现——五项事实证据齐全，详见
+  [`ROADMAP.md`](ROADMAP.md) 2026-08-03 条目。本轮未授权启动 Phase 4；
+  本轮 VLM run 尚缺人工 `manual_review.md`。

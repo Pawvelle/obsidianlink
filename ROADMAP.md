@@ -523,6 +523,93 @@ correlation、自动评测和人工复核均已通过。**
   下一步是把模型推理隔离为可监督的子进程（父进程记录子进程 exit code、峰值资源
   和请求/响应时间），再以该边界执行一次受控 VLM 运行。
 
+### 2026-08-03 Qwen 负 stride 修复 + 受控 VLM A0 真实运行
+
+- 修复 `obsidianlink/agents/local_qwen.py` 的 numpy 负 stride bug：
+  抽出 `_prepare_frame` 静态方法，在 PIL 衍生视图（flip / crop 等
+  会带负 stride）上调用 `np.ascontiguousarray` 归一化为 C-contiguous
+  数组，再传给 `apply_chat_template` 和 processor；之前
+  Qwen `_process_image` 直接 `torch.from_numpy(image).contiguous()` 会
+  抛 `ValueError: tensors with negative strides are not currently
+  supported`。
+- 新增 `tests/test_local_qwen.py`（4 个回归测试）：
+  flip 视图、transpose 视图、已 contiguous 帧恒等返回、非 ndarray 拒绝；
+  测试名带 `test_regression_` 前缀方便 review 检索。
+- 单元测试套件 140 / 140 通过（之前 121 + 4 新增 + 既有累计），0 回归；
+  `python -m obsidianlink --check` 仍然通过。
+- 受控 VLM A0 真实运行 `runs/phase3-vlm-a0/20260803-215738/`（**先于本轮
+  instrumentation；该 run 的 `code_version.json` 仍指向修复前的提交
+  40e84e8，未记录 dirty 标记、未记录推理延迟、未记录 model_requests.jsonl，
+  不应作为 Phase 3 最终证据**）：
+  - workflow mode + local_qwen + MPS；预算 320 step、
+    `--min-step-interval-seconds 0.25`、`--max-decision-age-steps 160`；
+  - Qwen 预加载成功、MineRL reset 成功，进程共驻稳定；episode 墙钟约 81s；
+    跑完后无 Minecraft / MineRL / Gradle 残留进程；
+  - 320 step 全跑完，`events.jsonl` 320 条结构化事件齐全；evaluator
+    写出 `formal_evaluation`；终止信号 `vlm_a0_budget_complete` @ step 320；
+  - `model_calls_submitted=1`、`decisions_applied=0`、
+    `decisions_dropped_stale=1`：Qwen 决策到达 owner 时已超过
+    `max-decision-age-steps=160` 窗口，被丢弃为 stale；mailbox 容量 1
+    期间没有新提交；所有 320 个 action 都是 `wait`（`action_source_step:
+    null`）；
+  - **该 run 没有 owner 端推理延迟埋点**（instrumentation 是 2026-08-03
+    本轮新加的），所以"延迟约 80s"是先前的非直接表述；本轮后
+    `model_requests.jsonl` 才有真正的 `responder_started_at_monotonic` /
+    `responder_completed_at_monotonic` / `responder_latency_seconds` 可供
+    复核；
+  - `failure_type=frame_never_valid`、`last_successful_milestone=task_reset`、
+    `success=false`；脚本语义下 `status=blocked`、exit code 2（不是
+    transport 不可用，是 VLM 未推动 episode 进展）。
+- 本轮新增的 VLM runner instrumentation（`scripts/run_vlm_a0.py` +
+  `obsidianlink/agents/local_qwen.py`）：
+  - `LocalQwenResponder` 暴露 `QwenRequestRecord`（`started_at_monotonic`、
+    `completed_at_monotonic`、`latency_seconds`、`device`），不记录 prompt
+    文本、模型输出、API key、evaluator 状态；
+  - `run_vlm_a0.py` 在 owner 端每次 poll 写出
+    `runs/<dir>/model_requests.jsonl`，每行一条
+    `{source_step, return_step, decision_age_steps,
+    max_decision_age_steps, drop_reason, decision_accepted,
+    decision_error, responder_started_at_monotonic,
+    responder_completed_at_monotonic, responder_latency_seconds,
+    responder_device}`，并在 budget 结束后再做一次 final flush 避免
+    残留决策被静默丢弃；
+  - `code_version.json` 新增 `working_tree_dirty`（bool）与
+    `dirty_paths`（list）；`summary.json` 同步暴露
+    `working_tree_dirty`、`working_tree_dirty_paths`、`code_commit`、
+    `reproducible_from_clean_commit`，dirty 时一律不声称完全可复现。
+- 本次 fix 解决了 2026-07-31 报告中"模型与 MineRL 同时常驻由底层进程
+  提前终止"的部分根因（之前根本到不了负 stride 这一层），但跑通后
+  暴露新的真实诊断：在 0.25s step 节奏和 capacity-1 mailbox 之下，
+  Qwen3-VL-2B 在 MPS 上的单次推理延迟 ≫ episode 预算，单帧单调用
+  契约无法影响 episode 走向；这属于受控运行的设计边界，不是新 bug。
+  本轮无法从 20260803-215738 跑里直接给出推理延迟数字，**实测推理
+  延迟以干净提交下的新一轮 VLM run 的 `model_requests.jsonl` 为准**。
+- 本次 fix 解决了 2026-07-31 报告中"模型与 MineRL 同时常驻由底层进程
+  提前终止"的部分根因（之前根本到不了负 stride 这一层），但跑通后
+  暴露新的真实诊断：在 0.25s step 节奏和 capacity-1 mailbox 之下，
+  Qwen3-VL-2B 在 MPS 上的单次推理延迟 ≫ episode 预算，单帧单调用
+  契约无法影响 episode 走向；这属于受控运行的设计边界，不是新 bug。
+- 退出条件进展（待用户人工 review 后方可定论）：
+  - ✅ Scripted-A0 在固定配置稳定完成
+    （`runs/phase3-scripted-a0/20260731-210140/`，`success=true`、
+    251 step、evaluator 闭环、人工 review 已接受）；
+  - ✅ 至少一个 VLM 配置产生可诊断的里程碑失败
+    （`runs/phase3-vlm-a0/20260803-215738/`，`failure_type` 明确、
+    `last_successful_milestone=task_reset`、evaluator 写满
+    `formal_evaluation`）；
+  - ✅ Agent 不读 evaluator-only 状态（单元测试 + 代码契约守护）；
+  - ✅ 失败有明确类型和最后有效里程碑；
+  - ✅ 可从配置与代码版本复现（`code_version.json` + 任务快照）。
+- 用户 2026-08-03 决定暂不开展：
+  - 模型推理隔离为可监督子进程（exit code / 峰值资源 / 请求响应时间）；
+  - mailbox 调优（提高 `max-decision-age-steps`、允许多发）；
+  - 切换到 MiniMax-M3 远程 planner
+    （`scripts/probe_minimax_m3.py --allow-live-request` + 已冻结的
+    `phase3_minimax_m3_workflow_a0` 实验配置）；
+  - Phase 4 Route A Single-Agent 任何子阶段。
+- 本轮 VLM run 尚缺人工 `manual_review.md`；待用户审查产物与诊断后补齐
+  并据此决定是否将 Phase 3 状态由"进行中"升级为"完成"。
+
 ### 模型接入顺序
 
 1. `Scripted-A0`：确定性环境基线。

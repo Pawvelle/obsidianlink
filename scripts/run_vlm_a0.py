@@ -88,19 +88,29 @@ def _write_snapshot(run_dir: Path, args: argparse.Namespace, experiment: Path) -
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=False,
         capture_output=True, text=True,
     )
+    porcelain = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=ROOT, check=False,
+        capture_output=True, text=True,
+    )
+    dirty_paths = [
+        line[3:]
+        for line in porcelain.stdout.splitlines()
+        if line.strip()
+    ]
+    code_version = {
+        "commit": commit.stdout.strip() if commit.returncode == 0 else None,
+        "working_tree_dirty": bool(dirty_paths),
+        "dirty_paths": dirty_paths,
+        "runner_arguments": _json_ready(vars(args)),
+        "task_instance": str(TASK_PATH.relative_to(ROOT)),
+        "experiment_config": str(experiment.relative_to(ROOT)),
+        "model_path": str(MODEL_PATH.relative_to(ROOT)),
+    }
     (run_dir / "code_version.json").write_text(
-        json.dumps(
-            {
-                "commit": commit.stdout.strip() if commit.returncode == 0 else None,
-                "runner_arguments": _json_ready(vars(args)),
-                "task_instance": str(TASK_PATH.relative_to(ROOT)),
-                "experiment_config": str(experiment.relative_to(ROOT)),
-                "model_path": str(MODEL_PATH.relative_to(ROOT)),
-            },
-            ensure_ascii=False, indent=2, sort_keys=True,
-        ) + "\n",
+        json.dumps(code_version, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    return code_version
 
 
 def _evaluation_summary(backend: MineRLEnvironmentBackend) -> dict[str, Any]:
@@ -151,7 +161,7 @@ def main() -> int:
         raise RuntimeError("experiment and task model-call budgets disagree")
     run_dir = args.output_root / datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir.mkdir(parents=True, exist_ok=False)
-    _write_snapshot(run_dir, args, experiment)
+    code_version = _write_snapshot(run_dir, args, experiment)
 
     responder = (
         LocalQwenResponder(MODEL_PATH)
@@ -174,6 +184,7 @@ def main() -> int:
         decisions_dropped_stale = 0
         decisions_rejected = 0
         event_rows: list[dict[str, Any]] = []
+        model_request_records: list[dict[str, Any]] = []
         while observation.step_id < task.limits["max_environment_steps"]:
             iteration_started = time.monotonic()
             if worker.failure is not None:
@@ -190,14 +201,40 @@ def main() -> int:
             )
             if pending is not None:
                 age = observation.step_id - pending.step_id
+                drop_reason: str | None
                 if age < 0 or age > args.max_decision_age_steps:
                     decisions_dropped_stale += 1
+                    drop_reason = "stale_age_exceeded"
                 elif not pending.decision.accepted:
                     decisions_rejected += 1
+                    drop_reason = "parser_rejected"
                 else:
                     action = pending.decision.action
                     action_source_step = pending.step_id
                     decisions_applied += 1
+                    drop_reason = "applied"
+                request = responder.last_request
+                model_request_records.append(
+                    {
+                        "source_step": pending.step_id,
+                        "return_step": observation.step_id,
+                        "decision_age_steps": observation.step_id - pending.step_id,
+                        "max_decision_age_steps": args.max_decision_age_steps,
+                        "drop_reason": drop_reason,
+                        "decision_accepted": pending.decision.accepted,
+                        "decision_error": pending.decision.error,
+                        "responder_started_at_monotonic": (
+                            request.started_at_monotonic if request else None
+                        ),
+                        "responder_completed_at_monotonic": (
+                            request.completed_at_monotonic if request else None
+                        ),
+                        "responder_latency_seconds": (
+                            request.latency_seconds if request else None
+                        ),
+                        "responder_device": request.device if request else None,
+                    }
+                )
             with _step_deadline(args.step_timeout_seconds):
                 step = backend.step({"agent_1": action})
             event_rows.append(
@@ -237,7 +274,51 @@ def main() -> int:
         with (run_dir / "evaluator_events.jsonl").open("w", encoding="utf-8") as handle:
             for event in evaluator_state.milestone_events():
                 handle.write(json.dumps(event.to_dict(), ensure_ascii=False, sort_keys=True) + "\n")
+        # Final flush: if the worker still has a decision that was not
+        # consumed before the budget ended, record it with a
+        # "budget_exceeded" reason so the run is not silently missing
+        # telemetry. The owner stops polling after the budget; this
+        # captures whatever the responder already produced.
+        leftover = worker.poll(
+            episode_id=observation.episode_id, agent_id=observation.agent_id,
+        )
+        if leftover is not None and not any(
+            r["source_step"] == leftover.step_id for r in model_request_records
+        ):
+            request = responder.last_request
+            model_request_records.append(
+                {
+                    "source_step": leftover.step_id,
+                    "return_step": observation.step_id,
+                    "decision_age_steps": observation.step_id - leftover.step_id,
+                    "max_decision_age_steps": args.max_decision_age_steps,
+                    "drop_reason": "budget_exceeded_post_loop",
+                    "decision_accepted": leftover.decision.accepted,
+                    "decision_error": leftover.decision.error,
+                    "responder_started_at_monotonic": (
+                        request.started_at_monotonic if request else None
+                    ),
+                    "responder_completed_at_monotonic": (
+                        request.completed_at_monotonic if request else None
+                    ),
+                    "responder_latency_seconds": (
+                        request.latency_seconds if request else None
+                    ),
+                    "responder_device": request.device if request else None,
+                }
+            )
+        with (run_dir / "model_requests.jsonl").open("w", encoding="utf-8") as handle:
+            for record in model_request_records:
+                handle.write(
+                    json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
+                )
         status = "passed" if evaluation["success"] else "blocked"
+        local_qwen_request = (
+            asdict(responder.last_request)
+            if args.planner_backend == "local_qwen"
+            and responder.last_request is not None
+            else None
+        )
         summary = {
             "status": status,
             "mode": args.mode,
@@ -248,6 +329,14 @@ def main() -> int:
                 if args.planner_backend == "minimax_m3"
                 and responder.last_request is not None
                 else None
+            ),
+            "local_qwen_request": local_qwen_request,
+            "working_tree_dirty": code_version["working_tree_dirty"],
+            "working_tree_dirty_paths": code_version["dirty_paths"],
+            "code_commit": code_version["commit"],
+            "reproducible_from_clean_commit": (
+                not code_version["working_tree_dirty"]
+                and code_version["commit"] is not None
             ),
             "steps_completed": observation.step_id,
             "model_calls_submitted": calls_submitted,
@@ -261,6 +350,7 @@ def main() -> int:
                 "code_version": "code_version.json", "initial_frame": "initial.png",
                 "final_frame": "final.png", "action_events": "events.jsonl",
                 "evaluator_events": "evaluator_events.jsonl",
+                "model_requests": "model_requests.jsonl",
             },
         }
         (run_dir / "summary.json").write_text(
