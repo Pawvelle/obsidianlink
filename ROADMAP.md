@@ -424,7 +424,7 @@ correlation、自动评测和人工复核均已通过。**
 
 ## Phase 3 - Route A0 Vertical Slice
 
-**状态：进行中。Phase 2 前置条件已满足。**
+**状态：完成。**
 
 ### 目标
 
@@ -589,26 +589,72 @@ correlation、自动评测和人工复核均已通过。**
   暴露新的真实诊断：在 0.25s step 节奏和 capacity-1 mailbox 之下，
   Qwen3-VL-2B 在 MPS 上的单次推理延迟 ≫ episode 预算，单帧单调用
   契约无法影响 episode 走向；这属于受控运行的设计边界，不是新 bug。
-- 退出条件进展（待用户人工 review 后方可定论）：
-  - ✅ Scripted-A0 在固定配置稳定完成
-    （`runs/phase3-scripted-a0/20260731-210140/`，`success=true`、
-    251 step、evaluator 闭环、人工 review 已接受）；
-  - ✅ 至少一个 VLM 配置产生可诊断的里程碑失败
-    （`runs/phase3-vlm-a0/20260803-215738/`，`failure_type` 明确、
-    `last_successful_milestone=task_reset`、evaluator 写满
-    `formal_evaluation`）；
-  - ✅ Agent 不读 evaluator-only 状态（单元测试 + 代码契约守护）；
-  - ✅ 失败有明确类型和最后有效里程碑；
-  - ✅ 可从配置与代码版本复现（`code_version.json` + 任务快照）。
+
+### 2026-08-03 Phase 3 VLM close-out (干净提交)
+
+- 本地提交 `280ec920df963522355335137a57f0e2083c6fcd`（branch
+  `main`，未 push）；工作区在跑前为 clean（`git status --porcelain`
+  输出空）；`code_version.json.working_tree_dirty = false`、
+  `summary.json.reproducible_from_clean_commit = true`。
+- 受控 VLM A0 真实运行
+  [`runs/phase3-vlm-a0/20260803-222729/`](../../runs/phase3-vlm-a0/20260803-222729/)：
+  - 同一 workflow / local_qwen / MPS 配置，`min-step-interval 0.25s`、
+    `max-decision-age-steps 160`、预算 320 step；
+  - Qwen3-VL-2B-Instruct 在 MPS 上的**实测推理延迟**
+    `responder_latency_seconds = 41.47003112499806`（owner 端
+    `started_at_monotonic = 34646.38780725` →
+    `completed_at_monotonic = 34687.857838375`），设备 `mps`；
+  - 模型决策到达 owner 时 `source_step = 0`、`return_step = 164`、
+    `decision_age_steps = 164 > 160`，
+    `drop_reason = "stale_age_exceeded"`；额外附带
+    `decision_error = "Expecting value: line 1 column 1 (char 0)"`，
+    即模型输出为空文本，即便没有超龄也会被 parser fail-closed 到
+    `wait`；
+  - `decisions_applied = 0`、`decisions_dropped_stale = 1`、
+    `decisions_rejected = 0`；所有 320 个 action 都是
+    `wait`（`action_source_step: null`）；
+  - 终止信号 `vlm_a0_budget_complete` @ step 320；
+    `formal_evaluation.failure_type = "frame_never_valid"`、
+    `last_successful_milestone = "task_reset"`、`success = false`；
+  - 跑完无 Minecraft / MineRL / Gradle / run_vlm 残留进程；
+  - 人工 `manual_review.md`（同目录）记录运行 / 安全 / 模型应用 /
+    任务完成 / failure 原因四类结论，并接受此 run 作为 Phase 3
+    VLM close-out 证据。
+
+### 退出条件（全部满足）
+
+- ✅ Scripted-A0 在固定配置稳定完成
+  （`runs/phase3-scripted-a0/20260731-210140/`，`success=true`、
+  251 step、evaluator 闭环、人工 review 已接受）；
+- ✅ 至少一个 VLM 配置产生可诊断的里程碑失败
+  （`runs/phase3-vlm-a0/20260803-222729/`，来自干净提交
+  `280ec92`，`failure_type=frame_never_valid`、
+  `last_successful_milestone=task_reset`、`model_requests.jsonl`
+  提供 `responder_latency_seconds=41.47` 真实测量）；
+- ✅ Agent 不读 evaluator-only 状态（单元测试 + 代码契约守护）；
+- ✅ 失败有明确类型和最后有效里程碑（`formal_evaluation` 完整
+  记录，`blocking_conditions` 与 `failure_type` 一致）；
+- ✅ 可从配置与代码版本复现
+  （`code_version.json.working_tree_dirty=false`、
+  `summary.json.reproducible_from_clean_commit=true`）。
+
+### Phase 3 关闭、未启动 Phase 4
+
+- 收尾证据见
+  `runs/phase3-vlm-a0/20260803-222729/{summary,events,evaluator_events,
+  code_version,model_requests}.jsonl` + `initial.png` + `final.png` +
+  `manual_review.md`。
+- 旧 run `runs/phase3-vlm-a0/20260803-215738/` 保留为
+  pre-instrumentation 诊断产物；其 `manual_review.md` 也已落地，
+  明确它**不是** Phase 3 close-out 证据。
 - 用户 2026-08-03 决定暂不开展：
-  - 模型推理隔离为可监督子进程（exit code / 峰值资源 / 请求响应时间）；
+  - 模型推理隔离为可监督子进程（exit code / 峰值资源 / 请求响应
+    时间）；
   - mailbox 调优（提高 `max-decision-age-steps`、允许多发）；
   - 切换到 MiniMax-M3 远程 planner
-    （`scripts/probe_minimax_m3.py --allow-live-request` + 已冻结的
-    `phase3_minimax_m3_workflow_a0` 实验配置）；
+    （`scripts/probe_minimax_m3.py --allow-live-request` + 已冻结
+    的 `phase3_minimax_m3_workflow_a0` 实验配置）；
   - Phase 4 Route A Single-Agent 任何子阶段。
-- 本轮 VLM run 尚缺人工 `manual_review.md`；待用户审查产物与诊断后补齐
-  并据此决定是否将 Phase 3 状态由"进行中"升级为"完成"。
 
 ### 模型接入顺序
 
