@@ -16,6 +16,7 @@ from obsidianlink.env.portal_spec import (
     PORTAL_GRID_MISSING_ID,
     PORTAL_GRID_SIZE,
     PortalA0EnvSpec,
+    PortalA1EnvSpec,
     PortalGridObservation,
 )
 from obsidianlink.evaluation import EvaluationState
@@ -37,19 +38,28 @@ NETHER_PORTAL_ID = PORTAL_GRID_BLOCKS.index("nether_portal")
 MISSING_ID = PORTAL_GRID_BLOCKS.index("missing")
 
 
-def _default_env_factory(task: TaskInstance) -> Any:
+def _specification_for_task(task: TaskInstance) -> PortalA0EnvSpec:
     initial_inventory = tuple(
         {"type": item, "quantity": quantity}
         for item, quantity in task.initial_inventories["agent_1"].items()
         if quantity > 0
     )
-    specification = PortalA0EnvSpec(
+    specification_type = (
+        PortalA1EnvSpec
+        if task.workflow == "route_a_a1"
+        and task.scenario_parameters.get("variant") == "nearby_obsidian"
+        else PortalA0EnvSpec
+    )
+    return specification_type(
         max_episode_steps=task.limits["max_environment_steps"],
         max_game_time_seconds=task.limits["max_game_time_seconds"],
         initial_inventory=initial_inventory,
         initial_position=task.spawn_positions["agent_1"],
     )
-    return specification.make()
+
+
+def _default_env_factory(task: TaskInstance) -> Any:
+    return _specification_for_task(task).make()
 
 
 class MineRLEnvironmentBackend:
@@ -117,8 +127,14 @@ class MineRLEnvironmentBackend:
         self._assert_owner()
         if task.agent_ids != ("agent_1",):
             raise ValueError("PortalA0 currently supports exactly agent_1")
-        if task.route != "obsidian_mining" or task.difficulty != 1:
-            raise ValueError("PortalA0 currently supports Route A difficulty 1")
+        supported_a0 = task.difficulty == 1 and task.workflow == "route_a_a0"
+        supported_a1 = (
+            task.difficulty == 2
+            and task.workflow == "route_a_a1"
+            and task.scenario_parameters.get("variant") == "nearby_obsidian"
+        )
+        if task.route != "obsidian_mining" or not (supported_a0 or supported_a1):
+            raise ValueError("MineRL backend supports only frozen Route A0/A1 tasks")
         self._task = task
         raw: Mapping[str, Any] | None = None
         last_error: Exception | None = None

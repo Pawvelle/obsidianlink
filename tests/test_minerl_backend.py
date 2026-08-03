@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
+import json
 import unittest
+from pathlib import Path
 from typing import Any, Mapping
 
 import numpy as np
 
 from obsidianlink.core.interfaces import EnvironmentBackend
-from obsidianlink.core.types import MacroAction
-from obsidianlink.env.minerl_backend import MineRLEnvironmentBackend
+from obsidianlink.core.types import MacroAction, TaskInstance
+from obsidianlink.env.minerl_backend import (
+    MineRLEnvironmentBackend,
+    _specification_for_task,
+)
 from obsidianlink.env.portal_spec import (
     PORTAL_GRID_BLOCKS,
     PORTAL_GRID_SIZE,
     PortalA0EnvSpec,
+    PortalA1EnvSpec,
 )
 
 
@@ -31,6 +37,9 @@ from obsidianlink.evaluation import (
 )
 from obsidianlink.logging.events import StructuredEvent
 from tests.helpers import sample_task
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _frame_offsets() -> list[tuple[int, int, int]]:
@@ -239,6 +248,23 @@ class _BackendFactory:
 
 
 class MineRLEnvironmentBackendTests(unittest.TestCase):
+    def test_frozen_a1_task_selects_nearby_obsidian_spec(self) -> None:
+        task = TaskInstance.from_dict(
+            json.loads(
+                (ROOT / "benchmark/instances/route_a_a1_phase4.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        )
+        specification = _specification_for_task(task)
+
+        self.assertIsInstance(specification, PortalA1EnvSpec)
+        self.assertEqual(specification.max_episode_steps, 900)
+        self.assertEqual(
+            [item["type"] for item in specification.initial_inventory],
+            ["diamond_pickaxe", "flint_and_steel", "dirt"],
+        )
+
     def test_reset_recreates_environment_after_transient_transport_error(self) -> None:
         class _ResetFailure(_ControlledMineRLEnv):
             def reset(self):

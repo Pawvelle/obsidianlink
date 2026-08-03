@@ -685,8 +685,12 @@ correlation、自动评测和人工复核均已通过。**
 - A1 新增 `obsidian_source_located`、`first_obsidian_mined`、
   `obsidian_quota_collected` 里程碑，再复用既有建造、激活和下界进入里程碑；
 - 当前只完成任务契约与离线守护，不声称真实环境已有矿源、`mine_target` 已贯通或
-  A1 可完成。下一步按 evaluator-first 顺序实现固定矿源环境真值、确定性采集 driver
-  和自动里程碑，再申请一次真实 MineRL 验证。
+  A1 可完成；
+- `PortalA1EnvSpec` 已在离线 mission XML 中加入固定 4×1×4 黑曜石矿源（16 块，
+  位于出生点 8 blocks 边界内），初始物品栏只有钻石镐、打火石和泥土；默认 backend
+  只对冻结的 `route_a_a1` + `nearby_obsidian` 契约启用该 spec；
+- 下一步按 evaluator-first 顺序实现确定性采集 driver 和自动里程碑，再申请一次真实
+  MineRL 验证。XML 生成通过不等于真实矿源已在 Minecraft 中验证。
 
 ### 子阶段
 

@@ -10,6 +10,7 @@ from minerl.herobraine.hero.handlers.translation import KeymapTranslationHandler
 
 
 PORTAL_ENV_NAME = "ObsidianLinkPortalA0-v0"
+PORTAL_A1_ENV_NAME = "ObsidianLinkPortalA1-v0"
 PORTAL_GRID_NAME = "portal_build_region"
 PORTAL_GRID_ORIGIN_NAME = f"{PORTAL_GRID_NAME}_origin"
 PORTAL_TRANSITION_NAME = "portal_transition"
@@ -47,6 +48,29 @@ PORTAL_INVENTORY = (
     {"type": "flint_and_steel", "quantity": 1},
     {"type": "dirt", "quantity": 2},
 )
+PORTAL_A1_INVENTORY = (
+    {"type": "diamond_pickaxe", "quantity": 1},
+    {"type": "flint_and_steel", "quantity": 1},
+    {"type": "dirt", "quantity": 2},
+)
+PORTAL_A1_OBSIDIAN_DEPOSIT = (
+    '<DrawCuboid x1="-3" y1="4" z1="3" '
+    'x2="0" y2="4" z2="6" type="obsidian"/>'
+)
+
+
+class PortalA1DepositDecorator(handlers.Handler):
+    """Emit the fixed A1 deposit as XML without Jinja escaping it as text."""
+
+    def xml_template(self) -> str:
+        return (
+            "<DrawingDecorator>"
+            f"{PORTAL_A1_OBSIDIAN_DEPOSIT}"
+            "</DrawingDecorator>"
+        )
+
+    def to_string(self) -> str:
+        return "portal_a1_deposit"
 
 
 class PortalGridObservation(KeymapTranslationHandler):
@@ -301,6 +325,7 @@ class PortalA0EnvSpec(HumanSurvival):
         max_game_time_seconds: int = 120,
         initial_inventory: tuple[dict[str, Any], ...] = PORTAL_INVENTORY,
         initial_position: tuple[int, int, int] = (0, 4, 0),
+        env_name: str = PORTAL_ENV_NAME,
     ) -> None:
         if type(max_episode_steps) is not int or max_episode_steps < 1:
             raise ValueError("max_episode_steps must be a positive integer")
@@ -329,7 +354,7 @@ class PortalA0EnvSpec(HumanSurvival):
         self.initial_inventory = tuple(normalized_inventory)
         self.initial_position = initial_position
         super().__init__(
-            name=PORTAL_ENV_NAME,
+            name=env_name,
             max_episode_steps=max_episode_steps,
             resolution=(640, 360),
             guiscale_range=[1, 1],
@@ -394,4 +419,33 @@ class PortalA0EnvSpec(HumanSurvival):
         return (
             "Controlled A0 task: build, activate, and enter a Nether portal "
             "using provided obsidian and flint and steel."
+        )
+
+
+class PortalA1EnvSpec(PortalA0EnvSpec):
+    """Controlled A1 environment with a fixed nearby obsidian deposit."""
+
+    def __init__(
+        self,
+        *,
+        max_episode_steps: int = 900,
+        max_game_time_seconds: int = 900,
+        initial_inventory: tuple[dict[str, Any], ...] = PORTAL_A1_INVENTORY,
+        initial_position: tuple[int, int, int] = (0, 4, 0),
+    ) -> None:
+        super().__init__(
+            max_episode_steps=max_episode_steps,
+            max_game_time_seconds=max_game_time_seconds,
+            initial_inventory=initial_inventory,
+            initial_position=initial_position,
+            env_name=PORTAL_A1_ENV_NAME,
+        )
+
+    def create_server_decorators(self):
+        return [PortalA1DepositDecorator()]
+
+    def get_docstring(self) -> str:
+        return (
+            "Controlled A1 task: mine the fixed nearby obsidian deposit, then "
+            "build, activate, and enter a Nether portal."
         )
