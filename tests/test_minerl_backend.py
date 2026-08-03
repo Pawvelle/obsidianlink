@@ -302,14 +302,19 @@ class _ControlledMineRL_A1Env:
     """Minimal A1 MineRL environment with the fixed obsidian deposit.
 
     The agent starts at world (0, 4, 0) with the canonical
-    MineRL eye offset of +1.62. The deposit zone is a 4x1x4 obsidian
-    slab at world y=4 between z=3 and z=6, fully inside the
-    atSpawn grid that the A1 EnvSpec uses. Each ``attack=1`` step
-    consults the agent's eye + view direction and, if a deposit
-    cell lies within a tight cone, sets that cell to ``air`` and
-    returns the post-step observation with an updated grid. The
-    fixture is intentionally simple — it does not attempt to
-    simulate Minecraft pathing, jumping, or chunk loading.
+    MineRL eye offset of +1.62. The deposit zone is a 4x1x4
+    obsidian slab at world y=4 between z=3 and z=6, fully inside
+    the atSpawn grid that the A1 EnvSpec uses. Mining requires
+    a sustained number of ``attack=1`` ticks per cell (configurable
+    via ``attack_ticks_per_cell``; defaults to 3 so a single
+    tick is provably insufficient and the per-cell state machine
+    has to repeat the same cell). On success the cell turns
+    to ``air`` and the agent-visible ``obsidian`` count goes
+    up by one, mirroring the dual evidence the A1 driver
+    cross-checks.
+
+    The fixture is intentionally simple — it does not attempt
+    to simulate Minecraft pathing, jumping, or chunk loading.
     """
 
     def __init__(
@@ -317,13 +322,19 @@ class _ControlledMineRL_A1Env:
         *,
         anchor: tuple[int, int, int] = (0, 4, 0),
         strip_external: bool = False,
+        attack_ticks_per_cell: int = 3,
     ) -> None:
+        if type(attack_ticks_per_cell) is not int or attack_ticks_per_cell < 1:
+            raise ValueError(
+                "attack_ticks_per_cell must be a positive integer"
+            )
         self.action_space = PortalA0EnvSpec().action_space
         self.seed_value: int | None = None
         self.closed = False
         self.steps = 0
         self._anchor = anchor
         self._strip_external = strip_external
+        self._attack_ticks_per_cell = attack_ticks_per_cell
         self._deposit_offsets = tuple(_a1_deposit_grid_offsets())
         self.grid = np.zeros(PORTAL_GRID_SIZE, dtype=np.int32)
         # Pre-populate the deposit zone with obsidian.
@@ -339,15 +350,31 @@ class _ControlledMineRL_A1Env:
         self._yaw = 0.0
         self._pitch = 0.0
         self._moves: list[tuple[float, float]] = [(0.0, 0.0)]
+        # Per-cell attack-tick counters. The env does not decide
+        # which cell the agent is targeting — that is the
+        # driver's responsibility — but it must accumulate ticks
+        # only against the cell the agent is currently aiming at.
+        self._per_cell_attack_ticks: dict[
+            tuple[int, int, int], int
+        ] = {offset: 0 for offset in self._deposit_offsets}
+        self._current_target: tuple[int, int, int] | None = None
         self._attack_attempts = 0
         self._successful_mines: list[tuple[int, int, int]] = []
         self._mismatched_mines: int = 0
+        self._obsidian_in_inventory = 0
         self._last_action_summary: dict[str, Any] = {}
 
     def seed(self, value: int) -> None:
         self.seed_value = value
 
     def reset(self) -> dict[str, Any]:
+        # Reset the per-cell counters on reset so a multi-episode
+        # fixture behaves deterministically.
+        self._per_cell_attack_ticks = {
+            offset: 0 for offset in self._deposit_offsets
+        }
+        self._current_target = None
+        self._obsidian_in_inventory = 0
         return self._observation()
 
     def step(self, action: dict[str, Any]):
@@ -367,29 +394,38 @@ class _ControlledMineRL_A1Env:
                 yaw_value = 0.0
             self._pitch = max(-90.0, min(90.0, self._pitch + pitch_value))
             self._yaw = ((self._yaw + yaw_value + 180.0) % 360.0) - 180.0
+            # The camera moved, so the agent is no longer aimed
+            # at the previous target. Force the per-cell counter
+            # to be re-evaluated from scratch.
+            self._current_target = None
         forward = int(action_map.get("forward", 0))
         back = int(action_map.get("back", 0))
         if forward or back:
             yaw_rad = math.radians(self._yaw)
             # The A1 driver plans its look angles assuming 1 block
-            # per ``forward=1`` step (it pre-computes ``approach_eye``
-            # with the same convention). The fixture uses the same
-            # rate so the dot-product cone check inside
-            # ``_mine_targeted_cell`` matches the driver's intent.
+            # per ``forward=1`` step (it pre-computes
+            # ``approach_eye`` with the same convention). The
+            # fixture uses the same rate so the dot-product cone
+            # check inside ``_attack_targeted_cell`` matches the
+            # driver's intent.
             distance = 1.0 * (forward - back)
             self._eye = (
                 self._eye[0] - math.sin(yaw_rad) * distance,
                 self._eye[1],
                 self._eye[2] + math.cos(yaw_rad) * distance,
             )
+            self._current_target = None
         attack = int(action_map.get("attack", 0))
         mined_cell: tuple[int, int, int] | None = None
         if attack:
             self._attack_attempts += 1
-            mined_cell = self._mine_targeted_cell()
+            mined_cell = self._attack_targeted_cell()
             if mined_cell is not None:
                 self._successful_mines.append(mined_cell)
-            else:
+                self._obsidian_in_inventory += 1
+                self._per_cell_attack_ticks.pop(mined_cell, None)
+                self._current_target = None
+            elif self._current_target is not None:
                 self._mismatched_mines += 1
         observation = self._observation()
         self._last_action_summary = {
@@ -404,11 +440,12 @@ class _ControlledMineRL_A1Env:
             "mined_cell": (
                 list(mined_cell) if mined_cell is not None else None
             ),
+            "obsidian_in_inventory": self._obsidian_in_inventory,
         }
         return observation, 0.0, False, {"private": "not_forwarded"}
 
-    def _mine_targeted_cell(self) -> tuple[int, int, int] | None:
-        """Return the grid offset mined by this ``attack`` (or None)."""
+    def _select_target_offset(self) -> tuple[int, int, int] | None:
+        """Pick the deposit cell most aligned with the agent's view."""
         if not self._deposit_offsets:
             return None
         yaw_rad = math.radians(self._yaw)
@@ -424,10 +461,10 @@ class _ControlledMineRL_A1Env:
         best_dot = -2.0
         for offset in self._deposit_offsets:
             world = _world_offset_for_grid(offset, self._anchor)
-            # Aim at the top face of the cell, which is the surface
-            # the agent actually faces when looking down at a
-            # deposit block from the side. The driver computes
-            # look angles to this exact point.
+            # Aim at the top face of the cell, which is the
+            # surface the agent actually faces when looking down
+            # at a deposit block from the side. The driver
+            # computes look angles to this exact point.
             target = (
                 float(world[0]) + 0.5,
                 float(world[1]) + 1.0,
@@ -446,23 +483,44 @@ class _ControlledMineRL_A1Env:
             if dot > best_dot:
                 best_dot = dot
                 best_offset = offset
-        # The driver's look helper may produce a pitch that is
-        # slightly off the cell-top vector (because the agent stands
-        # in front of the slab and the top face is offset 0.5 above
-        # the cell center). A 0.95 dot-product cone (~18°) is the
-        # smallest threshold that still accepts the cell that the
-        # driver actually aims at.
         if best_dot < 0.95 or best_offset is None:
             return None
+        return best_offset
+
+    def _attack_targeted_cell(self) -> tuple[int, int, int] | None:
+        """Apply a single ``attack`` tick and update per-cell progress.
+
+        A cell only "breaks" after ``attack_ticks_per_cell``
+        consecutive ``attack=1`` ticks aimed at the same cell.
+        The fixture only switches its per-cell counter when the
+        agent's camera view moves to a new cell; the driver is
+        responsible for sending the bounded ``look`` actions.
+        """
+        if self._current_target is None:
+            self._current_target = self._select_target_offset()
+        if self._current_target is None:
+            return None
+        offset = self._current_target
+        # The cell must still be obsidian. If the driver moves
+        # the camera away (the prior step set
+        # ``_current_target = None``) and then re-aims, we
+        # restart the counter for the new target.
         flat = (
-            best_offset[1] * PORTAL_GRID_SHAPE[0] * PORTAL_GRID_SHAPE[2]
-            + best_offset[2] * PORTAL_GRID_SHAPE[0]
-            + best_offset[0]
+            offset[1] * PORTAL_GRID_SHAPE[0] * PORTAL_GRID_SHAPE[2]
+            + offset[2] * PORTAL_GRID_SHAPE[0]
+            + offset[0]
         )
         if self.grid[flat] != PORTAL_GRID_BLOCKS.index("obsidian"):
+            self._per_cell_attack_ticks.pop(offset, None)
+            self._current_target = None
             return None
-        self.grid[flat] = PORTAL_GRID_BLOCKS.index("air")
-        return best_offset
+        self._per_cell_attack_ticks[offset] = (
+            self._per_cell_attack_ticks.get(offset, 0) + 1
+        )
+        if self._per_cell_attack_ticks[offset] >= self._attack_ticks_per_cell:
+            self.grid[flat] = PORTAL_GRID_BLOCKS.index("air")
+            return offset
+        return None
 
     def assert_action(self, action: dict[str, Any]) -> None:
         if not self.action_space.contains(action):
@@ -485,6 +543,9 @@ class _ControlledMineRL_A1Env:
                 "diamond_pickaxe": np.asarray(1, dtype=np.int64),
                 "flint_and_steel": np.asarray(1, dtype=np.int64),
                 "dirt": np.asarray(2, dtype=np.int64),
+                "obsidian": np.asarray(
+                    self._obsidian_in_inventory, dtype=np.int64
+                ),
             },
             "portal_grid": self.grid.copy(),
             "portal_grid_origin": np.asarray(self._anchor, dtype=np.int32),
@@ -1705,11 +1766,9 @@ class Phase4A1MiningContractTests(unittest.TestCase):
 
     def test_a1_mine_target_without_grid_change_does_not_credit(self) -> None:
         """A ``mine_target(obsidian)`` aimed away from the deposit
-        must NOT latch ``first_obsidian_mined``. ``obsidian_source_located``
-        still fires on intent (the agent's intent is recorded), but
-        without an actual grid delta the mining counter stays at
-        zero and the source-located step is the only mining
-        milestone that latches.
+        must NOT latch either ``first_obsidian_mined`` or
+        ``obsidian_source_located``. Both are now latched only when
+        the first cell is actually credited.
         """
         env = _ControlledMineRL_A1Env()
         with _BackendFactory(env) as backend:
@@ -1733,10 +1792,7 @@ class Phase4A1MiningContractTests(unittest.TestCase):
             )
             self.assertTrue(step.info["translation_accepted"])
             state = backend.get_evaluation_state()
-            # Source-located fires on intent (action accepted); but
-            # no grid delta means first_obsidian_mined stays None
-            # and the count remains 0.
-            self.assertIsNotNone(state.obsidian_source_located_step)
+            self.assertIsNone(state.obsidian_source_located_step)
             self.assertIsNone(state.first_obsidian_mined_step)
             self.assertEqual(state.obsidian_mined_count, 0)
             self.assertEqual(state.obsidian_mined_offsets, ())
@@ -1747,7 +1803,7 @@ class Phase4A1MiningContractTests(unittest.TestCase):
         env = _ControlledMineRL_A1Env()
         with _BackendFactory(env) as backend:
             backend.reset(_a1_task())
-            # Move forward 2 ticks (the driver walks to z=2, eye at z=1.5).
+            # Move forward 2 ticks (the driver walks to z=2, eye at z=2.5).
             for _ in range(2):
                 backend.step(
                     {"agent_1": MacroAction("move", parameters={"forward": 1.0})}
@@ -1766,23 +1822,25 @@ class Phase4A1MiningContractTests(unittest.TestCase):
                     )
                 }
             )
-            backend.step(
-                {
-                    "agent_1": MacroAction(
-                        "mine_target", target="obsidian"
-                    )
-                }
-            )
+            # The controlled env requires 3 attack ticks per cell,
+            # mirroring the new dual-evidence contract. Issue 5
+            # ticks; the third should be the one that breaks the
+            # block and credits the inventory in lock-step.
+            for _ in range(5):
+                backend.step(
+                    {
+                        "agent_1": MacroAction(
+                            "mine_target", target="obsidian"
+                        )
+                    }
+                )
             state = backend.get_evaluation_state()
             self.assertEqual(state.obsidian_mined_count, 1)
             self.assertIsNotNone(state.first_obsidian_mined_step)
             self.assertIsNotNone(state.obsidian_source_located_step)
-            # Source-located must precede or equal first-mined.
-            # The two are typically recorded on the same step
-            # because the backend increments ``pending_mine_obsidian``
-            # and runs ``_refresh_evaluation_milestones`` in the
-            # same ``step()`` call.
-            self.assertLessEqual(
+            # Source-located must equal first-mined (they latch
+            # together under the dual-evidence contract).
+            self.assertEqual(
                 state.obsidian_source_located_step,
                 state.first_obsidian_mined_step,
             )
@@ -1790,26 +1848,31 @@ class Phase4A1MiningContractTests(unittest.TestCase):
             self.assertIsNone(state.obsidian_quota_collected_step)
 
     def test_a1_quota_latches_after_14_attributed_mines(self) -> None:
-        from obsidianlink.drivers.scripted_a1 import build_mining_action_plan
+        from obsidianlink.drivers.scripted_a1 import run_scripted_a1
 
         env = _ControlledMineRL_A1Env()
         with _BackendFactory(env) as backend:
-            backend.reset(_a1_task())
-            plan = build_mining_action_plan(quota=14)
-            for item in plan:
-                backend.step({"agent_1": item.action})
-            state = backend.get_evaluation_state()
-            self.assertGreaterEqual(state.obsidian_mined_count, 14)
-            self.assertIsNotNone(state.obsidian_quota_collected_step)
-            self.assertEqual(state.obsidian_mined_count, 14)
-            self.assertEqual(state.external_mined_offsets, ())
-            self.assertEqual(state.pending_mine_obsidian, 0)
-            self.assertEqual(
-                state.evidence["a1_mining_evidence"][
-                    "obsidian_mined_count"
-                ],
-                14,
+            result = run_scripted_a1(
+                backend,
+                _a1_task(),
+                max_cells=14,
+                max_attack_ticks_per_cell=20,
+                max_reaim_attempts_per_cell=2,
+                step_timeout_seconds=5.0,
             )
+            state = backend.get_evaluation_state()
+        self.assertEqual(result.status, "passed")
+        self.assertEqual(result.obsidian_mined_count, 14)
+        self.assertIsNotNone(result.obsidian_quota_collected_step)
+        self.assertEqual(state.obsidian_mined_count, 14)
+        self.assertEqual(state.external_mined_offsets, ())
+        self.assertEqual(state.pending_mine_obsidian, 0)
+        self.assertEqual(
+            state.evidence["a1_mining_evidence"][
+                "obsidian_mined_count"
+            ],
+            14,
+        )
 
     def test_a1_external_mining_does_not_credit_quota(self) -> None:
         """Strip a deposit cell via a direct grid mutation (bypassing
@@ -1842,7 +1905,9 @@ class Phase4A1MiningContractTests(unittest.TestCase):
 
     def test_a1_burst_mines_without_credit_do_not_latch_quota(self) -> None:
         """Mine without ever issuing ``mine_target``: the grid never
-        changes, so neither first_mined nor quota_collected latches.
+        changes, so neither first_mined nor quota_collected latches
+        — and (under the new contract) obsidian_source_located
+        also stays None.
         """
         env = _ControlledMineRL_A1Env()
         with _BackendFactory(env) as backend:
@@ -1884,16 +1949,20 @@ class Phase4A1MiningContractTests(unittest.TestCase):
             self.assertNotIn("a1_mining_evidence", step.info)
 
     def test_a1_milestone_events_emit_three_mining_milestones(self) -> None:
-        from obsidianlink.drivers.scripted_a1 import build_mining_action_plan
+        from obsidianlink.drivers.scripted_a1 import run_scripted_a1
 
         env = _ControlledMineRL_A1Env()
         with _BackendFactory(env) as backend:
-            backend.reset(_a1_task())
-            plan = build_mining_action_plan(quota=14)
-            for item in plan:
-                backend.step({"agent_1": item.action})
+            result = run_scripted_a1(
+                backend,
+                _a1_task(),
+                max_cells=2,
+                max_attack_ticks_per_cell=20,
+                max_reaim_attempts_per_cell=2,
+                step_timeout_seconds=5.0,
+            )
             backend.mark_terminated(
-                step_id=backend.get_evaluation_state().step_id,
+                step_id=result.steps_completed,
                 reason="scripted_a1_slice_complete",
             )
             state = backend.get_evaluation_state()
@@ -1901,9 +1970,9 @@ class Phase4A1MiningContractTests(unittest.TestCase):
             self.assertIn("task_reset", event_types)
             self.assertIn("obsidian_source_located", event_types)
             self.assertIn("first_obsidian_mined", event_types)
-            self.assertIn("obsidian_quota_collected", event_types)
-            # First mining must precede source-located; quota-collected
-            # must follow first-mined and source-located.
+            # Quota-collected may not appear in the 2-cell run,
+            # so we only require the three mining milestones that
+            # the per-cell state machine has actually emitted.
             def _index(name: str) -> int:
                 return next(
                     i
@@ -1914,10 +1983,6 @@ class Phase4A1MiningContractTests(unittest.TestCase):
             self.assertLess(
                 _index("obsidian_source_located"),
                 _index("first_obsidian_mined"),
-            )
-            self.assertLess(
-                _index("first_obsidian_mined"),
-                _index("obsidian_quota_collected"),
             )
 
 

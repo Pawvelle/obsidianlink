@@ -784,6 +784,104 @@ correlation、自动评测和人工复核均已通过。**
 - 暂不进入 Phase 4 A2（点火资源补全）/ A3（朝向/槽位随机化）/
   A4（错误注入），也不进入 Route B、双角色或任何多智能体流程。
 
+### 2026-08-03 A1 单块采集校准（state machine 重构）
+
+本轮把上一版的"单格一 tick 即被记录"乐观状态机改成与真实
+MineRL 行为对齐的**单格持续攻击**状态机，并新增显式的单块
+校准模式。具体改动：
+
+- 状态机：`obsidianlink/drivers/scripted_a1.py` 改为按格驱动
+  的循环。每个格被反复执行 `mine_target(obsidian)`，直到
+  同一 step 上同时出现：(a) backend 报告该格被记入
+  `obsidian_mined_offsets`（即网格确实从 obsidian 变成非
+  obsidian，且与一次被接受的 mine action 配套），(b) agent
+  可见的 `obsidian` 库存量在该 step 增加。两项证据不
+  同时出现就 fail closed：
+  - 仅网格变化而无库存增加 → 归类为 `external_mined_offsets`，
+    driver 终止并报告"grid removed without inventory increase
+    (classified as external by backend)"；
+  - 仅库存增加而无网格变化 → 终止并报告"inventory increased
+    without matching grid delta"。
+- 预算（脚本 `--max-*` 暴露）：
+  - `max_attack_ticks_per_cell = 40`（默认）：一个格最多连续
+    多少 tick 不被攻破就重试瞄准或放弃；
+  - `max_reaim_attempts_per_cell = 3`（默认）：每个格最多
+    重新计算 look 角度并重置攻击计数的次数；
+  - `max_no_progress_ticks = 200`（默认）：整局内连续
+    `obsidian_mined_count` 不变的步数上限；
+  - `max_environment_steps = task.limits["max_environment_steps"]`
+    （来自任务实例，900）：由 backend `get_evaluation_state`
+    暴露给 driver，driver 在每步前检查；
+  - `step_timeout_seconds = 30`（默认）：SIGALRM 主线程
+    deadline，与 `_run_step` 配合。
+- Source-located 语义修正：
+  - 不再在第一次 `mine_target(obsidian)` 被翻译时锁存
+    `obsidian_source_located`；
+  - 改为在第一块被可靠归因（即 `first_obsidian_mined`
+    锁存）的同一 step 上同时锁存
+    `obsidian_source_located`；
+  - driver 永远不能"动作被接受 = 定位成功"，必须等到
+    第一块真正被采下并记入库存才算"定位"。
+- 受控环境：`tests/test_minerl_backend._ControlledMineRL_A1Env`
+  现在要求每个 deposit 格被连续 attack 3 tick 才破坏（`attack_ticks_per_cell=3`），
+  并在破坏的同一步增加 `obsidian_in_inventory`。环境仅在
+  agent 的 view 锥命中当前 deposit 格时累加 per-cell 计数；
+  镜头一动 (`look`/`move`) 就清空 `current_target`，强制
+  driver 重新瞄准。
+- Driver 结果结构：`ScriptedA1Result` 新增 `max_cells`、
+  `total_attack_ticks`、`total_reaim_attempts`、
+  `first_attack_step`、`block_removed_step`、
+  `inventory_increased_step`、`elapsed_seconds`、
+  `final_visible_inventory`、`cells_attempted`
+  （每个格的 `attack_ticks` / `reaim_attempts` /
+  `first_attack_step` / `grid_removed_step` / `inventory_step` /
+  `credited` / `abandoned_reason`）。
+- 单块校准模式：`scripts/run_scripted_a1.py` 新增
+  `--calibration-blocks N`（默认 1，限制 1..16）。设置后：
+  - 默认输出目录改为 `runs/phase4-a1-single-block-calibration/`
+    而非 `runs/phase4-scripted-a1/`；
+  - driver 严格停在第 N 个被归因的格，永远不会去第 N+1 个；
+  - 终止原因明确写为 `scripted_a1_single_block_calibration_complete`，
+    状态为 `blocked`（因为 `obsidian_quota_required=14` 仍由
+    任务实例冻结），但 `obsidian_mined_count`、`grid_removed_step`、
+    `inventory_increased_step` 都按真实步数记录；
+  - `summary.json` 新增 `target_count` / `attack_ticks_per_cell_budget`
+    / `first_attack_step` / `block_removed_step` /
+    `inventory_increased_step` / `elapsed_seconds` /
+    `final_visible_inventory` / `cells_attempted` /
+    `working_tree_dirty` / `code_commit` /
+    `reproducible_from_clean_commit`；
+  - 新增 `manual_review.md`：自动写一段 sanity review，列出
+    target / mined / first_attack / block_removed /
+    inventory_increased / dual-evidence-same-step / status /
+    failure / commit / dirty，便于人工复核。
+- 2026-08-03 离线验证：
+  - `python -m unittest discover -s tests -v` → **166/166**
+    通过，`OK`（旧 165 + 1 net new test added in scripted_a1
+    reframe + 同等数量的 contract test 适配新语义）；
+  - `python -m obsidianlink --check` → `status=ok`；
+  - 全部 JSON 通过 `json.load` 验证；
+  - `git diff --check` 通过；
+  - 离线端到端单块校准运行（受控 env）：
+    `obsidian_mined_count = 1`、`total_attack_ticks = 3`、
+    `block_removed_step == inventory_increased_step == 10`、
+    `obsidian_in_inventory = 1`、
+    `failure_type = "quota_not_collected"`（设计内：quota
+    仍是 14，但 `max_cells=1` 强制停在第 1 格）；
+  - 本轮无 Gradle、Java、MineRL、MiniMax、Qwen 调用；
+    `vendor/minerl` 嵌套仓库未触碰。
+
+### 当前不实现 / 不声称（更新）
+
+- 暂未在真实 MineRL 中跑单块校准；离线端到端已经用受控
+  fixture 校准过 3 attack ticks → 1 obsidian 的链路，但真实
+  MineRL 的单格 attack 成本尚未测量；
+- 暂不把单块结果推广到 14 块；扩展到 14 块之前必须先在真实
+  MineRL 中校准单块成本，并把 driver 的默认
+  `max_attack_ticks_per_cell` 调成"3 × 实测"以保留安全裕度；
+- 暂不实现建门、点火、进入下界；
+- 暂不进入 Phase 4 A2 / A3 / A4、Route B、双角色或多智能体。
+
 ### 子阶段
 
 #### A0 - Build Only

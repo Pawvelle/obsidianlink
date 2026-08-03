@@ -1,11 +1,19 @@
 """Phase 4 A1 mining-slice runner.
 
-The runner drives the deterministic ``scripted_a1`` plan against a
-real ``MineRLEnvironmentBackend`` and writes the standard evidence
-bag to ``runs/phase4-scripted-a1/<timestamp>/``. It is the
-counterpart of ``run_scripted_a0.py`` for the Phase 4 A1 mining
-slice; it intentionally does NOT attempt to build, ignite, or enter
-the Nether in this round.
+Two modes are supported:
+
+* ``--calibration-blocks N`` — single-block or N-block calibration
+  run that stops after the first ``N`` credited cells, even when
+  the configured quota is 14. The default ``N=1`` is the canonical
+  Phase 4 A1 single-block calibration path requested by the user;
+  ``N=14`` is the full slice.
+
+* (no flag) — run the full ``obsidian_quota_required`` slice.
+
+Both modes write the standard evidence bag to
+``runs/phase4-scripted-a1[-single-block-calibration]/<timestamp>/``
+and never claim ``success=True`` unless the formal evaluator
+confirms it.
 """
 
 from __future__ import annotations
@@ -51,8 +59,11 @@ for import_root in (ROOT, VENDORED_MINERL):
 
 from obsidianlink.core.types import TaskInstance  # noqa: E402
 from obsidianlink.drivers.scripted_a1 import (  # noqa: E402
-    MAX_CELL_RETRY_ATTEMPTS,
-    MAX_MINE_NO_PROGRESS_RETRIES,
+    DEFAULT_MAX_ATTACK_TICKS_PER_CELL,
+    DEFAULT_MAX_CELLS,
+    DEFAULT_MAX_REAIM_ATTEMPTS_PER_CELL,
+    DEFAULT_MAX_NO_PROGRESS_TICKS,
+    DEFAULT_STEP_TIMEOUT_SECONDS,
     run_scripted_a1,
 )
 from obsidianlink.env.minerl_backend import MineRLEnvironmentBackend  # noqa: E402
@@ -252,33 +263,222 @@ def _foreground_minecraft_window(timeout_seconds: float = 60.0) -> None:
         time.sleep(0.25)
 
 
+def _build_summary(
+    *,
+    code_version: dict[str, Any],
+    run_dir: Path,
+    args: argparse.Namespace,
+    result: Any,
+    evaluation_result: Any,
+    final_state: Any,
+    wall_time_seconds: float,
+) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "status": result.status,
+        "failure_type": result.failure_type,
+        "driver_status": result.status,
+        "slice": (
+            "phase4_a1_single_block_calibration"
+            if args.calibration_blocks is not None
+            else "phase4_a1_mining"
+        ),
+        "calibration_blocks": args.calibration_blocks,
+        "target_count": (
+            args.calibration_blocks
+            if args.calibration_blocks is not None
+            else int(final_state.obsidian_quota_required)
+        ),
+        "attack_ticks_per_cell_budget": args.max_attack_ticks_per_cell,
+        "reaim_attempts_per_cell_budget": args.max_reaim_attempts_per_cell,
+        "no_progress_ticks_budget": args.max_no_progress_ticks,
+        "step_timeout_seconds": args.step_timeout_seconds,
+        "steps_completed": result.steps_completed,
+        "planned_steps": result.planned_steps,
+        "obsidian_mined_count": result.obsidian_mined_count,
+        "obsidian_mined_offsets": [
+            list(offset) for offset in result.obsidian_mined_offsets
+        ],
+        "external_mined_offsets": [
+            list(offset) for offset in result.external_mined_offsets
+        ],
+        "obsidian_source_located_step": result.obsidian_source_located_step,
+        "first_obsidian_mined_step": result.first_obsidian_mined_step,
+        "obsidian_quota_collected_step": result.obsidian_quota_collected_step,
+        "obsidian_quota_required": result.obsidian_quota_required,
+        "max_cells": result.max_cells,
+        "total_attack_ticks": result.total_attack_ticks,
+        "total_reaim_attempts": result.total_reaim_attempts,
+        "first_attack_step": result.first_attack_step,
+        "block_removed_step": result.block_removed_step,
+        "inventory_increased_step": result.inventory_increased_step,
+        "elapsed_seconds": wall_time_seconds,
+        "final_visible_inventory": dict(result.final_visible_inventory),
+        "cells_attempted": [
+            {key: value for key, value in cell.items()}
+            for cell in result.cells_attempted
+        ],
+        "terminated": result.terminated,
+        "evaluation_evidence": dict(result.evaluation_evidence),
+        "formal_evaluation": {
+            "success": evaluation_result.success,
+            "step_id": evaluation_result.step_id,
+            "milestones": list(evaluation_result.milestones),
+            "blocking_conditions": list(
+                evaluation_result.blocking_conditions
+            ),
+            "failure_type": evaluation_result.failure_type,
+            "failure_step": evaluation_result.failure_step,
+            "last_successful_milestone": (
+                evaluation_result.last_successful_milestone
+            ),
+            "episode_terminated": evaluation_result.episode_terminated,
+            "terminated_step": evaluation_result.terminated_step,
+            "terminated_reason": evaluation_result.terminated_reason,
+        },
+        "evaluator_state": {
+            "obsidian_source_located_step": (
+                final_state.obsidian_source_located_step
+            ),
+            "first_obsidian_mined_step": (
+                final_state.first_obsidian_mined_step
+            ),
+            "obsidian_quota_collected_step": (
+                final_state.obsidian_quota_collected_step
+            ),
+            "obsidian_mined_count": final_state.obsidian_mined_count,
+            "obsidian_mined_offsets": [
+                list(offset)
+                for offset in final_state.obsidian_mined_offsets
+            ],
+            "external_mined_offsets": [
+                list(offset)
+                for offset in final_state.external_mined_offsets
+            ],
+            "obsidian_quota_required": final_state.obsidian_quota_required,
+        },
+        "blocked_reason": result.blocked_reason,
+        "code_commit": code_version["commit"],
+        "working_tree_dirty": code_version["working_tree_dirty"],
+        "working_tree_dirty_paths": code_version["dirty_paths"],
+        "reproducible_from_clean_commit": (
+            not code_version["working_tree_dirty"]
+        ),
+    }
+    return summary
+
+
+def _write_manual_review(run_dir: Path, summary: dict[str, Any]) -> None:
+    target_count = summary.get("target_count", 0)
+    mined = summary.get("obsidian_mined_count", 0)
+    first_attack = summary.get("first_attack_step")
+    block_removed = summary.get("block_removed_step")
+    inventory_increased = summary.get("inventory_increased_step")
+    dual_evidence = (
+        block_removed is not None
+        and inventory_increased is not None
+        and block_removed == inventory_increased
+    )
+    if mined >= target_count and dual_evidence:
+        verdict = "accepted"
+    elif mined == 0:
+        verdict = "no_mining"
+    else:
+        verdict = "partial_credit"
+    body = (
+        f"# Phase 4 A1 Mining — Manual Review\n\n"
+        f"Run: `{summary.get('run_dir', run_dir)}`\n\n"
+        f"## Summary\n\n"
+        f"* target count: **{target_count}**\n"
+        f"* obsidian mined: **{mined}**\n"
+        f"* first attack step: **{first_attack}**\n"
+        f"* block removed step: **{block_removed}**\n"
+        f"* inventory increased step: **{inventory_increased}**\n"
+        f"* dual evidence on the same step: **{dual_evidence}**\n"
+        f"* status: **{summary.get('status', 'unknown')}**\n"
+        f"* failure type: **{summary.get('failure_type', 'none')}**\n"
+        f"* working tree dirty: **{summary.get('working_tree_dirty')}**\n"
+        f"* commit: `{summary.get('code_commit')}`\n\n"
+        f"## Verdict\n\n"
+        f"**{verdict}**\n\n"
+        f"This is a single-block calibration slice. The driver only "
+        f"credits a cell when both the grid delta and the agent's "
+        f"visible obsidian inventory increase on the same step_id. "
+        f"`obsidian_source_located` and `first_obsidian_mined` only "
+        f"latch on the first credited cell.\n"
+    )
+    (run_dir / "manual_review.md").write_text(body, encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--output-root",
         type=Path,
-        default=ROOT / "runs/phase4-scripted-a1",
+        default=None,
+        help=(
+            "Override the run output root. Defaults to "
+            "runs/phase4-a1-single-block-calibration when "
+            "--calibration-blocks is set; otherwise "
+            "runs/phase4-scripted-a1."
+        ),
     )
     parser.add_argument(
-        "--max-no-progress-retries",
+        "--calibration-blocks",
         type=int,
-        default=MAX_MINE_NO_PROGRESS_RETRIES,
+        default=None,
+        help=(
+            "Run a single-block or N-block calibration. When set, "
+            "the driver stops after the first N credited cells "
+            "(default 1) and never advances to a later cell. The "
+            "experiment config is unchanged so the canonical "
+            "obsidian_quota_required=14 is still recorded in the "
+            "evidence bag."
+        ),
     )
     parser.add_argument(
-        "--max-cell-retry-attempts",
+        "--max-attack-ticks-per-cell",
         type=int,
-        default=MAX_CELL_RETRY_ATTEMPTS,
+        default=DEFAULT_MAX_ATTACK_TICKS_PER_CELL,
     )
-    parser.add_argument("--step-timeout-seconds", type=float, default=30.0)
+    parser.add_argument(
+        "--max-reaim-attempts-per-cell",
+        type=int,
+        default=DEFAULT_MAX_REAIM_ATTEMPTS_PER_CELL,
+    )
+    parser.add_argument(
+        "--max-no-progress-ticks",
+        type=int,
+        default=DEFAULT_MAX_NO_PROGRESS_TICKS,
+    )
+    parser.add_argument(
+        "--step-timeout-seconds",
+        type=float,
+        default=DEFAULT_STEP_TIMEOUT_SECONDS,
+    )
     parser.add_argument(
         "--watch",
         action="store_true",
         help="show a live window with the exact first-person frames seen by AI",
     )
     args = parser.parse_args()
+    if args.calibration_blocks is not None and args.calibration_blocks < 1:
+        raise ValueError("--calibration-blocks must be >= 1")
+    if args.calibration_blocks is not None and args.calibration_blocks > 16:
+        raise ValueError(
+            "--calibration-blocks cannot exceed the 16-cell deposit"
+        )
+
+    if args.output_root is not None:
+        output_root = args.output_root
+    elif args.calibration_blocks is not None:
+        output_root = (
+            ROOT / "runs/phase4-a1-single-block-calibration"
+        )
+    else:
+        output_root = ROOT / "runs/phase4-scripted-a1"
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = args.output_root / timestamp
+    run_dir = output_root / timestamp
     run_dir.mkdir(parents=True, exist_ok=False)
     code_version = _write_reproducibility_snapshot(run_dir, args)
     if args.watch:
@@ -313,19 +513,39 @@ def main() -> int:
                 )
                 event_handle.flush()
 
+            started = time.monotonic()
             result = run_scripted_a1(
                 backend,
                 _load_task(),
-                max_no_progress_retries=args.max_no_progress_retries,
-                max_cell_retry_attempts=args.max_cell_retry_attempts,
+                max_cells=(
+                    args.calibration_blocks
+                    if args.calibration_blocks is not None
+                    else DEFAULT_MAX_CELLS
+                ),
+                max_attack_ticks_per_cell=args.max_attack_ticks_per_cell,
+                max_reaim_attempts_per_cell=(
+                    args.max_reaim_attempts_per_cell
+                ),
+                max_no_progress_ticks=args.max_no_progress_ticks,
                 step_timeout_seconds=args.step_timeout_seconds,
                 event_sink=write_event,
                 observation_sink=record_observation,
             )
+            wall_time = time.monotonic() - started
         if result.status == "passed":
             backend.mark_terminated(
                 step_id=result.steps_completed,
                 reason="scripted_a1_slice_complete",
+            )
+        elif args.calibration_blocks is not None and result.obsidian_mined_count > 0:
+            backend.mark_terminated(
+                step_id=result.steps_completed,
+                reason="scripted_a1_single_block_calibration_complete",
+            )
+        else:
+            backend.mark_terminated(
+                step_id=result.steps_completed,
+                reason="scripted_a1_budget_exhausted",
             )
         evaluation_state = backend.get_evaluation_state()
         evaluation_result = PortalEvaluator().evaluate(evaluation_state)
@@ -352,96 +572,14 @@ def main() -> int:
             status = "passed"
         else:
             status = "blocked"
-        blocked_reason = result.blocked_reason
-        if (
-            blocked_reason is None
-            and result.status != "passed"
-            and evaluation_result.failure_type
-        ):
-            blocked_reason = (
-                "PortalEvaluator: "
-                + str(evaluation_result.failure_type)
-            )
-        summary = _json_ready(
-            {
-                "status": status,
-                "slice": "phase4_a1_mining",
-                "driver_status": result.status,
-                "steps_completed": result.steps_completed,
-                "planned_steps": result.planned_steps,
-                "step_timeout_seconds": args.step_timeout_seconds,
-                "obsidian_mined_count": result.obsidian_mined_count,
-                "obsidian_mined_offsets": [
-                    list(offset)
-                    for offset in result.obsidian_mined_offsets
-                ],
-                "external_mined_offsets": [
-                    list(offset)
-                    for offset in result.external_mined_offsets
-                ],
-                "obsidian_source_located_step": (
-                    result.obsidian_source_located_step
-                ),
-                "first_obsidian_mined_step": (
-                    result.first_obsidian_mined_step
-                ),
-                "obsidian_quota_collected_step": (
-                    result.obsidian_quota_collected_step
-                ),
-                "obsidian_quota_required": result.obsidian_quota_required,
-                "terminated": result.terminated,
-                "evaluation_evidence": dict(result.evaluation_evidence),
-                "formal_evaluation": {
-                    "success": evaluation_result.success,
-                    "step_id": evaluation_result.step_id,
-                    "milestones": list(evaluation_result.milestones),
-                    "blocking_conditions": list(
-                        evaluation_result.blocking_conditions
-                    ),
-                    "failure_type": evaluation_result.failure_type,
-                    "failure_step": evaluation_result.failure_step,
-                    "last_successful_milestone": (
-                        evaluation_result.last_successful_milestone
-                    ),
-                    "episode_terminated": (
-                        evaluation_result.episode_terminated
-                    ),
-                    "terminated_step": evaluation_result.terminated_step,
-                    "terminated_reason": evaluation_result.terminated_reason,
-                },
-                "evaluator_state": {
-                    "obsidian_source_located_step": (
-                        evaluation_state.obsidian_source_located_step
-                    ),
-                    "first_obsidian_mined_step": (
-                        evaluation_state.first_obsidian_mined_step
-                    ),
-                    "obsidian_quota_collected_step": (
-                        evaluation_state.obsidian_quota_collected_step
-                    ),
-                    "obsidian_mined_count": (
-                        evaluation_state.obsidian_mined_count
-                    ),
-                    "obsidian_mined_offsets": [
-                        list(offset)
-                        for offset in evaluation_state.obsidian_mined_offsets
-                    ],
-                    "external_mined_offsets": [
-                        list(offset)
-                        for offset in evaluation_state.external_mined_offsets
-                    ],
-                    "obsidian_quota_required": (
-                        evaluation_state.obsidian_quota_required
-                    ),
-                },
-                "blocked_reason": blocked_reason,
-                "code_commit": code_version["commit"],
-                "working_tree_dirty": code_version["working_tree_dirty"],
-                "working_tree_dirty_paths": code_version["dirty_paths"],
-                "reproducible_from_clean_commit": (
-                    not code_version["working_tree_dirty"]
-                ),
-            }
+        summary = _build_summary(
+            code_version=code_version,
+            run_dir=run_dir,
+            args=args,
+            result=result,
+            evaluation_result=evaluation_result,
+            final_state=evaluation_state,
+            wall_time_seconds=wall_time,
         )
         summary["run_dir"] = str(run_dir)
         summary["artifacts"] = {
@@ -453,12 +591,14 @@ def main() -> int:
             "decision_frames": "decision_frames/",
             "action_events": "events.jsonl",
             "evaluator_events": "evaluator_events.jsonl",
+            "manual_review": "manual_review.md",
         }
         (run_dir / "summary.json").write_text(
             json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True)
             + "\n",
             encoding="utf-8",
         )
+        _write_manual_review(run_dir, summary)
         print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
         if status == "passed":
             return 0
@@ -468,7 +608,12 @@ def main() -> int:
     except Exception as error:
         summary = {
             "status": "failed",
-            "slice": "phase4_a1_mining",
+            "slice": (
+                "phase4_a1_single_block_calibration"
+                if args.calibration_blocks is not None
+                else "phase4_a1_mining"
+            ),
+            "calibration_blocks": args.calibration_blocks,
             "error_type": type(error).__name__,
             "error": str(error),
             "traceback": traceback.format_exc(),

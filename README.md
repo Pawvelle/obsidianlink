@@ -341,6 +341,13 @@ Phase 4 已于 2026-08-03 启动 A1 任务契约切片：新增固定的附近�
 （`obsidianlink/drivers/scripted_a1.py` + `scripts/run_scripted_a1.py` +
 `configs/experiments/phase4_scripted_a1.json`），由
 `tests.test_minerl_backend.Phase4A1MiningContractTests` 与
-`tests.test_scripted_a1` 共 20 个离线用例守护。165/165 单元测试
+`tests.test_scripted_a1` 共 21 个离线用例守护。166/166 单元测试
 通过，`python -m obsidianlink --check` 仍然成功。**当前不执行真实
-MineRL A1 采集运行，本轮只完成离线采集切片，不复用作 A1 完整地狱门成功。**
+MineRL A1 采集运行，本轮只完成离线采集切片 + 离线单块校准（3 attack
+tick → 1 obsidian），不复用作 A1 完整地狱门成功。**
+
+后续：
+- 真实 MineRL 单块校准（必须先有用户授权 `./gradlew` / Java 编译
+  之后才能跑，并基于实测的 attack tick 数调整 driver 的
+  `max_attack_ticks_per_cell` 默认值）；
+- 在单块成本校准后再考虑扩展到 14 块采集。

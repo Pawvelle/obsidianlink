@@ -269,16 +269,16 @@ class MineRLEnvironmentBackend:
         if accepted_obsidian_placement:
             self._latched["pending_place_block_obsidian"] += 1
         if accepted_obsidian_mining:
+            # Per Phase 4 A1 evidence rules,
+            # ``obsidian_source_located`` is no longer latched on
+            # intent (the first accepted mine_target(obsidian)
+            # action). It is latched only when the first
+            # ``first_obsidian_mined`` evidence lands, in
+            # ``_refresh_evaluation_milestones``. Intent-only
+            # latching would let a driver claim "agent located
+            # the deposit" before the agent has actually removed
+            # a block or seen its inventory grow.
             self._latched["pending_mine_obsidian"] += 1
-            # ``obsidian_source_located`` is latched on intent: the
-            # first accepted mine_target(obsidian) action proves the
-            # agent has selected the deposit as its target, regardless
-            # of whether the grid has reacted yet.
-            if self._latched["obsidian_source_located_step"] is None:
-                self._latched["obsidian_source_located_step"] = self._step_id
-                self._latched["latched_timestamps"][
-                    "obsidian_source_located"
-                ] = time.time()
         self._refresh_evaluation_milestones()
         if done:
             self._mark_terminated(
@@ -363,11 +363,11 @@ class MineRLEnvironmentBackend:
         if target != "obsidian":
             raise ValueError(f"unsupported mine_target target: {target!r}")
         self._latched["pending_mine_obsidian"] += count
-        if self._latched["obsidian_source_located_step"] is None:
-            self._latched["obsidian_source_located_step"] = self._step_id
-            self._latched["latched_timestamps"][
-                "obsidian_source_located"
-            ] = time.time()
+        # Note: ``obsidian_source_located_step`` is intentionally
+        # not latched here. The test fixture path must also wait
+        # for the next ``_refresh_evaluation_milestones`` call
+        # to credit the cell so source-located and
+        # first-obsidian-mined fire together.
 
     def get_evaluation_state(self) -> EvaluationState:
         task = self._require_task()
@@ -876,6 +876,27 @@ class MineRLEnvironmentBackend:
                 self._latched["latched_timestamps"][
                     "first_obsidian_mined"
                 ] = time.time()
+                # Per Phase 4 A1 evidence rules, latch
+                # ``obsidian_source_located`` at the same step as
+                # the first attributed mining. We do not
+                # "locate" the deposit on intent; only an
+                # actually-credited mine counts. The
+                # exact-count contract in
+                # ``_refresh_evaluation_milestones`` already
+                # requires a matching ``pending_mine_obsidian``
+                # credit, so a latched
+                # ``first_obsidian_mined`` is a strong
+                # "the agent hit a deposit cell and got credit
+                # for it" signal.
+                if self._latched["obsidian_source_located_step"] is None:
+                    self._latched[
+                        "obsidian_source_located_step"
+                    ] = self._step_id
+                    self._latched["latched_timestamps"][
+                        "obsidian_source_located"
+                    ] = self._latched["latched_timestamps"][
+                        "first_obsidian_mined"
+                    ]
             if (
                 self._latched["obsidian_quota_collected_step"] is None
                 and self._latched["obsidian_mined_count"]
