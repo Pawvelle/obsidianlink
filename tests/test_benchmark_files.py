@@ -52,6 +52,27 @@ class BenchmarkFileTests(unittest.TestCase):
                 self.assertTrue((ROOT / config["model_lock"]).is_file())
                 self.assertEqual(config["evaluator"], "portal_v0")
 
+    def test_phase_four_a1_instance_freezes_nearby_obsidian_contract(self) -> None:
+        path = ROOT / "benchmark/instances/route_a_a1_phase4.json"
+        task = TaskInstance.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        inventory = task.initial_inventories["agent_1"]
+        scenario = task.scenario_parameters
+
+        self.assertEqual(task.task_id, "route_a_a1_phase4_seed_0")
+        self.assertEqual(task.workflow, "route_a_a1")
+        self.assertEqual(task.difficulty, 2)
+        self.assertNotIn("obsidian", inventory)
+        self.assertEqual(inventory["diamond_pickaxe"], 1)
+        self.assertEqual(scenario["variant"], "nearby_obsidian")
+        self.assertEqual(scenario["obsidian_required"], 14)
+        self.assertEqual(scenario["obsidian_deposit"]["minimum_blocks"], 14)
+        self.assertLessEqual(
+            scenario["obsidian_deposit"]["max_distance_blocks"], 8
+        )
+        self.assertIn("obsidian_quota_collected", task.milestones)
+        with self.assertRaises(TypeError):
+            scenario["obsidian_deposit"]["minimum_blocks"] = 13
+
 
 if __name__ == "__main__":
     unittest.main()

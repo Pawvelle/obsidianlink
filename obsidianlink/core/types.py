@@ -16,6 +16,16 @@ def _freeze_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:
     return MappingProxyType(dict(value))
 
 
+def _freeze_json_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {key: _freeze_json_value(item) for key, item in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_json_value(item) for item in value)
+    return value
+
+
 @dataclass(frozen=True)
 class TaskInstance:
     schema_version: str
@@ -31,6 +41,7 @@ class TaskInstance:
     milestones: tuple[str, ...]
     limits: Mapping[str, int]
     split: str
+    scenario_parameters: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         _require_identifier(self.schema_version, "schema_version")
@@ -48,6 +59,8 @@ class TaskInstance:
         _require_identifier(self.instruction, "instruction")
         _require_identifier(self.workflow, "workflow")
         _require_identifier(self.split, "split")
+        if not isinstance(self.scenario_parameters, Mapping):
+            raise ValueError("scenario_parameters must be a mapping")
         if not self.milestones:
             raise ValueError("milestones must be non-empty")
         for milestone in self.milestones:
@@ -92,6 +105,11 @@ class TaskInstance:
             ),
         )
         object.__setattr__(self, "limits", MappingProxyType(limits))
+        object.__setattr__(
+            self,
+            "scenario_parameters",
+            _freeze_json_value(self.scenario_parameters),
+        )
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "TaskInstance":
@@ -110,7 +128,8 @@ class TaskInstance:
             "limits",
             "split",
         }
-        unknown = set(value) - required
+        optional = {"scenario_parameters"}
+        unknown = set(value) - required - optional
         missing = required - set(value)
         if unknown or missing:
             raise ValueError(
@@ -139,6 +158,7 @@ class TaskInstance:
             milestones=tuple(value["milestones"]),
             limits=dict(value["limits"]),
             split=value["split"],
+            scenario_parameters=dict(value.get("scenario_parameters", {})),
         )
 
 

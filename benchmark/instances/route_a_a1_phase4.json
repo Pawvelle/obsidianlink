@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1",
+  "task_id": "route_a_a1_phase4_seed_0",
+  "route": "obsidian_mining",
+  "difficulty": 2,
+  "agent_ids": ["agent_1"],
+  "world_seed": 0,
+  "instruction": "Locate the nearby obsidian deposit, mine at least 14 obsidian with the provided diamond pickaxe, return to the fixed flat build site, build and activate a 4x5 Nether portal, and enter the Nether.",
+  "spawn_positions": {"agent_1": [0, 4, 0]},
+  "initial_inventories": {
+    "agent_1": {
+      "diamond_pickaxe": 1,
+      "flint_and_steel": 1,
+      "dirt": 2
+    }
+  },
+  "workflow": "route_a_a1",
+  "milestones": [
+    "task_reset",
+    "critical_resources_checked",
+    "obsidian_source_located",
+    "first_obsidian_mined",
+    "obsidian_quota_collected",
+    "build_site_selected",
+    "first_obsidian_placed",
+    "valid_portal_frame",
+    "portal_activated",
+    "agent_entered_nether"
+  ],
+  "limits": {
+    "max_environment_steps": 900,
+    "max_model_calls": 12,
+    "max_game_time_seconds": 900
+  },
+  "split": "development",
+  "scenario_parameters": {
+    "variant": "nearby_obsidian",
+    "obsidian_required": 14,
+    "obsidian_deposit": {
+      "fixed": true,
+      "reachable": true,
+      "minimum_blocks": 14,
+      "max_distance_blocks": 8
+    },
+    "build_site": "fixed_flat",
+    "spawn_orientation": {"yaw": 0, "pitch": 0},
+    "inventory_slots_randomized": false
+  }
+}

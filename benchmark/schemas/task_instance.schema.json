@@ -122,6 +122,9 @@
         "validation",
         "test"
       ]
+    },
+    "scenario_parameters": {
+      "type": "object"
     }
   }
 }

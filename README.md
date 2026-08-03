@@ -273,7 +273,7 @@ MiniMax-M3 可作为不依赖本地模型常驻的远程视觉 planner；密钥�
     [`tests/test_local_qwen.py`](tests/test_local_qwen.py) 回归测试；
   - 单元测试套件 140 / 140 通过，`python -m obsidianlink --check` 通过；
   - **Pre-instrumentation run**
-    [`runs/phase3-vlm-a0/20260803-215738/`](../runs/phase3-vlm-a0/20260803-215738/)：
+    `runs/phase3-vlm-a0/20260803-215738/`：
     320 step 全部跑完，Qwen 决策到达 owner 时已超过
     `max-decision-age-steps=160` 窗口被丢弃为 stale，所有 action 为
     `wait`，evaluator 输出 `failure_type=frame_never_valid`、
@@ -282,7 +282,7 @@ MiniMax-M3 可作为不依赖本地模型常驻的远程视觉 planner；密钥�
     修复前提交 `40e84e8`、未记录 dirty 标记、未记录推理延迟，
     **不作为 Phase 3 close-out 证据**。
   - **Phase 3 close-out run（干净提交）**
-    [`runs/phase3-vlm-a0/20260803-222729/`](../runs/phase3-vlm-a0/20260803-222729/)：
+    `runs/phase3-vlm-a0/20260803-222729/`：
     - 来自本地提交
       `280ec920df963522355335137a57f0e2083c6fcd`，未 push；
       `code_version.json.working_tree_dirty=false`、
@@ -323,5 +323,10 @@ MiniMax-M3 可作为不依赖本地模型常驻的远程视觉 planner；密钥�
 - **Phase 3 退出条件全部满足**（详见
   [`ROADMAP.md`](ROADMAP.md) 2026-08-03 close-out 条目）：Scripted-A0
   canonical 闭环、VLM 产生可诊断里程碑失败、Agent 不读 evaluator-only
-  状态、失败有明确类型和最后有效里程碑、可从干净提交复现。本轮未授权
-  启动 Phase 4。
+  状态、失败有明确类型和最后有效里程碑、可从干净提交复现。Phase 3 close-out
+  run 本身未启动 Phase 4；Phase 4 随后按用户要求进入 A1 任务契约切片。
+
+Phase 4 已于 2026-08-03 启动 A1 任务契约切片：新增固定的附近黑曜石实例
+`benchmark/instances/route_a_a1_phase4.json`，明确初始无黑曜石、已有钻石镐与
+点火工具、资源距离和数量边界。真实 A1 MineRL 环境和确定性 driver 尚未实现，
+当前不把任务契约通过误报为 A1 可完成性证据。

@@ -584,20 +584,13 @@ correlation、自动评测和人工复核均已通过。**
   契约无法影响 episode 走向；这属于受控运行的设计边界，不是新 bug。
   本轮无法从 20260803-215738 跑里直接给出推理延迟数字，**实测推理
   延迟以干净提交下的新一轮 VLM run 的 `model_requests.jsonl` 为准**。
-- 本次 fix 解决了 2026-07-31 报告中"模型与 MineRL 同时常驻由底层进程
-  提前终止"的部分根因（之前根本到不了负 stride 这一层），但跑通后
-  暴露新的真实诊断：在 0.25s step 节奏和 capacity-1 mailbox 之下，
-  Qwen3-VL-2B 在 MPS 上的单次推理延迟 ≫ episode 预算，单帧单调用
-  契约无法影响 episode 走向；这属于受控运行的设计边界，不是新 bug。
-
 ### 2026-08-03 Phase 3 VLM close-out (干净提交)
 
 - 本地提交 `280ec920df963522355335137a57f0e2083c6fcd`（branch
   `main`，未 push）；工作区在跑前为 clean（`git status --porcelain`
   输出空）；`code_version.json.working_tree_dirty = false`、
   `summary.json.reproducible_from_clean_commit = true`。
-- 受控 VLM A0 真实运行
-  [`runs/phase3-vlm-a0/20260803-222729/`](../../runs/phase3-vlm-a0/20260803-222729/)：
+- 受控 VLM A0 真实运行 `runs/phase3-vlm-a0/20260803-222729/`：
   - 同一 workflow / local_qwen / MPS 配置，`min-step-interval 0.25s`、
     `max-decision-age-steps 160`、预算 320 step；
   - Qwen3-VL-2B-Instruct 在 MPS 上的**实测推理延迟**
@@ -638,7 +631,7 @@ correlation、自动评测和人工复核均已通过。**
   （`code_version.json.working_tree_dirty=false`、
   `summary.json.reproducible_from_clean_commit=true`）。
 
-### Phase 3 关闭、未启动 Phase 4
+### Phase 3 关闭记录
 
 - 收尾证据见
   `runs/phase3-vlm-a0/20260803-222729/{summary,events,evaluator_events,
@@ -654,7 +647,7 @@ correlation、自动评测和人工复核均已通过。**
   - 切换到 MiniMax-M3 远程 planner
     （`scripts/probe_minimax_m3.py --allow-live-request` + 已冻结
     的 `phase3_minimax_m3_workflow_a0` 实验配置）；
-  - Phase 4 Route A Single-Agent 任何子阶段。
+- Phase 4 在 Phase 3 正式关闭后，随用户后续推进要求启动。
 
 ### 模型接入顺序
 
@@ -676,12 +669,24 @@ correlation、自动评测和人工复核均已通过。**
 
 ## Phase 4 - Route A Single-Agent
 
-**状态：计划中。依赖 Phase 3。**
+**状态：进行中。Phase 3 前置条件已满足。**
 
 ### 目标
 
 从“材料齐全只建门”逐步扩展到附近黑曜石采集和有限资源补全，形成第一个稳定的
 单智能体长程基线。
+
+### 2026-08-03 启动记录
+
+- 冻结 `benchmark/instances/route_a_a1_phase4.json` 作为 A1 第一个开发实例：
+  单角色、seed 0、固定出生点和朝向、初始无黑曜石、已有钻石镐与打火石；
+- `scenario_parameters` 明确附近矿源至少 14 块、最大距离 8 blocks、固定且可达，
+  建造点保持固定平地，避免在第一条 A1 纵向切片中同时引入资源、朝向和地形变化；
+- A1 新增 `obsidian_source_located`、`first_obsidian_mined`、
+  `obsidian_quota_collected` 里程碑，再复用既有建造、激活和下界进入里程碑；
+- 当前只完成任务契约与离线守护，不声称真实环境已有矿源、`mine_target` 已贯通或
+  A1 可完成。下一步按 evaluator-first 顺序实现固定矿源环境真值、确定性采集 driver
+  和自动里程碑，再申请一次真实 MineRL 验证。
 
 ### 子阶段
 
