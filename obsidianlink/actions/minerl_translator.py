@@ -8,11 +8,31 @@ import numpy as np
 from obsidianlink.core.types import MacroAction
 
 
+PORTAL_ENV_NAME = "ObsidianLinkPortalA0-v0"
+PORTAL_A1_ENV_NAME = "ObsidianLinkPortalA1-v0"
+
+# Phase 3 A0 inventory: obsidian / flint_and_steel / dirt → hotbar 1..3.
 PORTAL_A0_HOTBAR = {
     "obsidian": "hotbar.1",
     "flint_and_steel": "hotbar.2",
     "dirt": "hotbar.3",
 }
+# Phase 4 A1 inventory: diamond_pickaxe / flint_and_steel / dirt.
+# The A1 spec has no free obsidian in the initial inventory; the agent
+# must mine it from a fixed nearby deposit. The hotbar order is fixed
+# by the SimpleInventoryAgentStart handler in the EnvSpec, so the
+# mapping must match that order exactly.
+PORTAL_A1_HOTBAR = {
+    "diamond_pickaxe": "hotbar.1",
+    "flint_and_steel": "hotbar.2",
+    "dirt": "hotbar.3",
+}
+
+# Items a driver can ``mine_target`` semantically. The current A1
+# slice only ever targets "obsidian", but the translator stays
+# permissive so tests can opt into "stone" or "dirt" via the same
+# allowlist.
+PORTAL_A1_MINE_TARGETS = frozenset({"obsidian", "stone", "dirt"})
 
 
 @dataclass(frozen=True)
@@ -32,11 +52,30 @@ def _set_if_supported(
     low_level[key] = value
 
 
+def _hotbar_for_env(env_name: str | None) -> Mapping[str, str]:
+    if env_name == PORTAL_A1_ENV_NAME:
+        return PORTAL_A1_HOTBAR
+    if env_name is None or env_name == PORTAL_ENV_NAME:
+        return PORTAL_A0_HOTBAR
+    raise ValueError(f"unknown MineRL portal env_name: {env_name!r}")
+
+
 def translate_macro_action(
     action: MacroAction,
     action_space: Any,
+    *,
+    env_name: str | None = PORTAL_ENV_NAME,
 ) -> MineRLTranslationResult:
-    """Translate one semantic action into one bounded MineRL environment tick."""
+    """Translate one semantic action into one bounded MineRL environment tick.
+
+    ``env_name`` selects between the A0 inventory (obsidian /
+    flint_and_steel / dirt) and the A1 inventory
+    (diamond_pickaxe / flint_and_steel / dirt). ``mine_target`` is
+    treated the same in both modes — a one-tick ``attack=1`` — but the
+    A1 backend additionally records intent when the target is
+    ``obsidian``.
+    """
+    hotbar = _hotbar_for_env(env_name)
     no_op = action_space.no_op()
     low_level = dict(no_op)
     try:
@@ -70,28 +109,40 @@ def translate_macro_action(
             if bool(action.parameters.get("jump", False)):
                 _set_if_supported(low_level, "jump", 1)
         elif action.action_type == "equip_item":
-            hotbar_key = PORTAL_A0_HOTBAR.get(action.target or "")
+            hotbar_key = hotbar.get(action.target or "")
             if hotbar_key is None:
-                raise ValueError(f"unsupported A0 inventory target: {action.target}")
+                raise ValueError(
+                    f"unsupported inventory target for {env_name}: {action.target}"
+                )
             _set_if_supported(low_level, hotbar_key, 1)
         elif action.action_type == "mine_target":
+            if env_name == PORTAL_A1_ENV_NAME and (
+                action.target not in PORTAL_A1_MINE_TARGETS
+            ):
+                raise ValueError(
+                    f"unsupported A1 mine_target: {action.target}"
+                )
             _set_if_supported(low_level, "attack", 1)
         elif action.action_type == "place_block":
-            if action.target not in {"obsidian", "dirt"}:
-                raise ValueError(f"unsupported A0 place target: {action.target}")
-            hotbar_key = PORTAL_A0_HOTBAR[action.target]
+            if action.target not in hotbar:
+                raise ValueError(
+                    f"unsupported place target for {env_name}: {action.target}"
+                )
+            hotbar_key = hotbar[action.target]
             _set_if_supported(low_level, hotbar_key, 1)
             if bool(action.parameters.get("jump", False)):
                 _set_if_supported(low_level, "jump", 1)
             _set_if_supported(low_level, "use", 1)
         elif action.action_type == "use_item":
-            hotbar_key = PORTAL_A0_HOTBAR.get(action.target or "")
+            hotbar_key = hotbar.get(action.target or "")
             if hotbar_key is None:
-                raise ValueError(f"unsupported A0 use target: {action.target}")
+                raise ValueError(
+                    f"unsupported use target for {env_name}: {action.target}"
+                )
             _set_if_supported(low_level, hotbar_key, 1)
             _set_if_supported(low_level, "use", 1)
         elif action.action_type == "craft_item":
-            raise ValueError("craft_item is not available in Route A0")
+            raise ValueError("craft_item is not available in Route A0/A1")
         else:
             raise ValueError(f"unsupported semantic action: {action.action_type}")
 

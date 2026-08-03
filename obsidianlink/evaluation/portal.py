@@ -42,6 +42,12 @@ FAILURE_NETHER_ENTRY_NOT_VIA_EPISODE_PORTAL = (
     "nether_entry_not_via_episode_portal"
 )
 FAILURE_NETHER_ENTRY_PORTAL_UNKNOWN = "nether_entry_portal_unknown"
+# Phase 4 A1 mining-slice terminal failures. The current slice only
+# attributes the source-located and quota-collected failures; the
+# ``first_obsidian_mined`` checkpoint is informational and does not by
+# itself produce a new terminal failure class.
+FAILURE_OBSIDIAN_SOURCE_NEVER_LOCATED = "obsidian_source_never_located"
+FAILURE_OBSIDIAN_QUOTA_NEVER_COLLECTED = "obsidian_quota_never_collected"
 
 FAILURE_TYPES: frozenset[str] = frozenset(
     {
@@ -51,6 +57,8 @@ FAILURE_TYPES: frozenset[str] = frozenset(
         FAILURE_NO_AGENT_ENTERED_NETHER,
         FAILURE_NETHER_ENTRY_NOT_VIA_EPISODE_PORTAL,
         FAILURE_NETHER_ENTRY_PORTAL_UNKNOWN,
+        FAILURE_OBSIDIAN_SOURCE_NEVER_LOCATED,
+        FAILURE_OBSIDIAN_QUOTA_NEVER_COLLECTED,
     }
 )
 
@@ -63,15 +71,26 @@ MILESTONE_FIRST_OBSIDIAN_PLACED = "first_obsidian_placed"
 MILESTONE_VALID_PORTAL_FRAME = "valid_portal_frame"
 MILESTONE_PORTAL_ACTIVATED = "portal_activated"
 MILESTONE_AGENT_ENTERED_NETHER = "agent_entered_nether"
+# Phase 4 A1 mining slice. The names match ``benchmark/instances/route_a_a1_phase4.json``.
+MILESTONE_OBSIDIAN_SOURCE_LOCATED = "obsidian_source_located"
+MILESTONE_FIRST_OBSIDIAN_MINED = "first_obsidian_mined"
+MILESTONE_OBSIDIAN_QUOTA_COLLECTED = "obsidian_quota_collected"
 
 MILESTONE_EVENT_TYPES: tuple[str, ...] = (
     MILESTONE_TASK_RESET,
+    MILESTONE_OBSIDIAN_SOURCE_LOCATED,
+    MILESTONE_FIRST_OBSIDIAN_MINED,
+    MILESTONE_OBSIDIAN_QUOTA_COLLECTED,
     MILESTONE_FIRST_OBSIDIAN_PLACED,
     MILESTONE_BUILD_SITE_SELECTED,
     MILESTONE_VALID_PORTAL_FRAME,
     MILESTONE_PORTAL_ACTIVATED,
     MILESTONE_AGENT_ENTERED_NETHER,
 )
+
+# Default quota for the Phase 4 A1 mining slice. The frozen task instance
+# always overrides this through ``TaskInstance.scenario_parameters``.
+DEFAULT_A1_OBSIDIAN_QUOTA = 14
 
 
 def _require_identifier(value: str, field_name: str) -> None:
@@ -128,6 +147,21 @@ class EvaluationState:
     first_valid_frame_step: int | None = None
     first_activation_step: int | None = None
     first_nether_step_by_agent: Mapping[str, int] = field(default_factory=dict)
+    # Phase 4 A1 mining slice. ``obsidian_source_located_step`` latches on
+    # the first translated ``mine_target(obsidian)`` action (intent);
+    # ``first_obsidian_mined_step`` latches on the first grid delta that
+    # removes a deposit-zone obsidian cell after such an action; and
+    # ``obsidian_quota_collected_step`` latches when the episode-mined
+    # count reaches ``obsidian_quota_required``. All three are
+    # evaluator-only; they never enter an agent observation.
+    obsidian_source_located_step: int | None = None
+    first_obsidian_mined_step: int | None = None
+    obsidian_quota_collected_step: int | None = None
+    obsidian_mined_count: int = 0
+    obsidian_mined_offsets: tuple[tuple[int, int, int], ...] = ()
+    external_mined_offsets: tuple[tuple[int, int, int], ...] = ()
+    pending_mine_obsidian: int = 0
+    obsidian_quota_required: int = DEFAULT_A1_OBSIDIAN_QUOTA
 
     # Termination signal.
     episode_terminated: bool = False
@@ -200,10 +234,44 @@ class EvaluationState:
             "terminated_step",
             "failure_step",
             "pending_place_block_obsidian",
+            "obsidian_source_located_step",
+            "first_obsidian_mined_step",
+            "obsidian_quota_collected_step",
         ):
             value = getattr(self, name)
             if value is not None and (type(value) is not int or value < 0):
                 raise ValueError(f"{name} must be a non-negative int or None")
+        for name in (
+            "obsidian_mined_count",
+            "obsidian_quota_required",
+            "pending_mine_obsidian",
+        ):
+            value = getattr(self, name)
+            if type(value) is not int or value < 0:
+                raise ValueError(f"{name} must be a non-negative int")
+        if (
+            type(self.obsidian_quota_required) is not int
+            or self.obsidian_quota_required < 1
+        ):
+            raise ValueError("obsidian_quota_required must be a positive integer")
+        for offset in self.obsidian_mined_offsets:
+            if (
+                not isinstance(offset, tuple)
+                or len(offset) != 3
+                or any(type(value) is not int for value in offset)
+            ):
+                raise ValueError(
+                    "obsidian_mined_offsets must contain (x, y, z) int tuples"
+                )
+        for offset in self.external_mined_offsets:
+            if (
+                not isinstance(offset, tuple)
+                or len(offset) != 3
+                or any(type(value) is not int for value in offset)
+            ):
+                raise ValueError(
+                    "external_mined_offsets must contain (x, y, z) int tuples"
+                )
         if not self.episode_terminated and (
             self.failure_type is not None
             or self.failure_step is not None
@@ -300,6 +368,16 @@ class EvaluationState:
         _require_ts(self.first_activation_step, "portal_activated")
         for agent_id, step in self.first_nether_step_by_agent.items():
             _require_ts(step, f"agent_entered_nether:{agent_id}")
+        _require_ts(
+            self.obsidian_source_located_step, MILESTONE_OBSIDIAN_SOURCE_LOCATED
+        )
+        _require_ts(
+            self.first_obsidian_mined_step, MILESTONE_FIRST_OBSIDIAN_MINED
+        )
+        _require_ts(
+            self.obsidian_quota_collected_step,
+            MILESTONE_OBSIDIAN_QUOTA_COLLECTED,
+        )
         object.__setattr__(self, "evidence", MappingProxyType(dict(self.evidence)))
         object.__setattr__(
             self,
@@ -325,6 +403,16 @@ class EvaluationState:
             self,
             "external_obsidian_offsets",
             tuple(tuple(offset) for offset in self.external_obsidian_offsets),
+        )
+        object.__setattr__(
+            self,
+            "obsidian_mined_offsets",
+            tuple(tuple(offset) for offset in self.obsidian_mined_offsets),
+        )
+        object.__setattr__(
+            self,
+            "external_mined_offsets",
+            tuple(tuple(offset) for offset in self.external_mined_offsets),
         )
         object.__setattr__(
             self,
@@ -402,6 +490,52 @@ class EvaluationState:
                     timestamp=_ts(MILESTONE_TASK_RESET),
                     agent_id=None,
                     payload={},
+                )
+            )
+        if self.obsidian_source_located_step is not None:
+            events.append(
+                StructuredEvent(
+                    episode_id=self.episode_id,
+                    step_id=self.obsidian_source_located_step,
+                    event_type=MILESTONE_OBSIDIAN_SOURCE_LOCATED,
+                    timestamp=_ts(MILESTONE_OBSIDIAN_SOURCE_LOCATED),
+                    agent_id=None,
+                    payload={
+                        "obsidian_quota_required": self.obsidian_quota_required,
+                    },
+                )
+            )
+        if self.first_obsidian_mined_step is not None:
+            events.append(
+                StructuredEvent(
+                    episode_id=self.episode_id,
+                    step_id=self.first_obsidian_mined_step,
+                    event_type=MILESTONE_FIRST_OBSIDIAN_MINED,
+                    timestamp=_ts(MILESTONE_FIRST_OBSIDIAN_MINED),
+                    agent_id=None,
+                    payload={
+                        "obsidian_mined_count": self.obsidian_mined_count,
+                        "offsets": [
+                            list(o) for o in self.obsidian_mined_offsets
+                        ],
+                    },
+                )
+            )
+        if self.obsidian_quota_collected_step is not None:
+            events.append(
+                StructuredEvent(
+                    episode_id=self.episode_id,
+                    step_id=self.obsidian_quota_collected_step,
+                    event_type=MILESTONE_OBSIDIAN_QUOTA_COLLECTED,
+                    timestamp=_ts(MILESTONE_OBSIDIAN_QUOTA_COLLECTED),
+                    agent_id=None,
+                    payload={
+                        "obsidian_mined_count": self.obsidian_mined_count,
+                        "obsidian_quota_required": self.obsidian_quota_required,
+                        "offsets": [
+                            list(o) for o in self.obsidian_mined_offsets
+                        ],
+                    },
                 )
             )
         if self.first_obsidian_placed_step is not None:
@@ -491,11 +625,14 @@ class EvaluationState:
 def _milestone_order(event_type: str) -> int:
     order = {
         MILESTONE_TASK_RESET: 0,
-        MILESTONE_FIRST_OBSIDIAN_PLACED: 1,
-        MILESTONE_BUILD_SITE_SELECTED: 2,
-        MILESTONE_VALID_PORTAL_FRAME: 3,
-        MILESTONE_PORTAL_ACTIVATED: 4,
-        MILESTONE_AGENT_ENTERED_NETHER: 5,
+        MILESTONE_OBSIDIAN_SOURCE_LOCATED: 1,
+        MILESTONE_FIRST_OBSIDIAN_MINED: 2,
+        MILESTONE_OBSIDIAN_QUOTA_COLLECTED: 3,
+        MILESTONE_FIRST_OBSIDIAN_PLACED: 4,
+        MILESTONE_BUILD_SITE_SELECTED: 5,
+        MILESTONE_VALID_PORTAL_FRAME: 6,
+        MILESTONE_PORTAL_ACTIVATED: 7,
+        MILESTONE_AGENT_ENTERED_NETHER: 8,
     }
     return order.get(event_type, 99)
 
@@ -527,6 +664,21 @@ def _last_milestone(state: EvaluationState) -> str | None:
     candidates: list[tuple[int, str]] = []
     if state.task_reset_step is not None:
         candidates.append((state.task_reset_step, MILESTONE_TASK_RESET))
+    if state.obsidian_source_located_step is not None:
+        candidates.append(
+            (state.obsidian_source_located_step, MILESTONE_OBSIDIAN_SOURCE_LOCATED)
+        )
+    if state.first_obsidian_mined_step is not None:
+        candidates.append(
+            (state.first_obsidian_mined_step, MILESTONE_FIRST_OBSIDIAN_MINED)
+        )
+    if state.obsidian_quota_collected_step is not None:
+        candidates.append(
+            (
+                state.obsidian_quota_collected_step,
+                MILESTONE_OBSIDIAN_QUOTA_COLLECTED,
+            )
+        )
     if state.first_obsidian_placed_step is not None:
         candidates.append(
             (state.first_obsidian_placed_step, MILESTONE_FIRST_OBSIDIAN_PLACED)
@@ -556,6 +708,14 @@ def _derive_failure(
 
     Priority (most specific first):
 
+    0a. ``obsidian_source_never_located`` — the episode terminated
+        before any ``mine_target(obsidian)`` action was ever accepted.
+        Only emitted when the scene required mining (no episode
+        obsidian was ever placed *and* the obsidian quota was never
+        collected).
+    0b. ``obsidian_quota_never_collected`` — at least one mine
+        action was accepted but the episode ended before the
+        required obsidian count was reached.
     1. ``frame_not_built_by_episode`` — an attribution-failed
        candidate is observed (frame is geometrically valid but its
        required cells were already obsidian in the baseline) or the
@@ -576,6 +736,47 @@ def _derive_failure(
     """
     if not state.episode_terminated:
         return (None, None, None)
+    # Phase 4 A1 mining slice failures. They only fire when:
+    #   * the episode never built a portal;
+    #   * no agent entered the Nether;
+    #   * the A0 attribution / external-structure detectors did not
+    #     already produce a stronger signal.
+    # ``attribution_failed_candidate_count`` /
+    # ``external_structure_candidate_count`` /
+    # ``external_obsidian_offsets`` come straight from the backend
+    # evidence bag, so a single external frame keeps the canonical
+    # ``frame_not_built_by_episode`` classification.
+    attribution_failed = bool(
+        state.evidence.get("attribution_failed_candidate_count", 0)
+    )
+    external_structure = bool(
+        state.evidence.get("external_structure_candidate_count", 0)
+    )
+    external_obsidian_seen = bool(state.external_obsidian_offsets)
+    a1_mining_eligible = (
+        state.first_obsidian_placed_step is None
+        and not state.portal_built_by_episode
+        and not state.agents_in_nether
+        and not attribution_failed
+        and not external_structure
+        and not external_obsidian_seen
+    )
+    if a1_mining_eligible and state.obsidian_source_located_step is None:
+        return (
+            FAILURE_OBSIDIAN_SOURCE_NEVER_LOCATED,
+            state.terminated_step,
+            MILESTONE_TASK_RESET,
+        )
+    if a1_mining_eligible and state.obsidian_quota_collected_step is None:
+        return (
+            FAILURE_OBSIDIAN_QUOTA_NEVER_COLLECTED,
+            state.terminated_step,
+            (
+                MILESTONE_OBSIDIAN_SOURCE_LOCATED
+                if state.obsidian_source_located_step is not None
+                else MILESTONE_TASK_RESET
+            ),
+        )
     if state.portal_built_by_episode:
         if not state.portal_activated:
             return (
@@ -706,6 +907,12 @@ class PortalEvaluator:
         milestones: list[str] = []
         if state.task_reset_step is not None:
             milestones.append(MILESTONE_TASK_RESET)
+        if state.obsidian_source_located_step is not None:
+            milestones.append(MILESTONE_OBSIDIAN_SOURCE_LOCATED)
+        if state.first_obsidian_mined_step is not None:
+            milestones.append(MILESTONE_FIRST_OBSIDIAN_MINED)
+        if state.obsidian_quota_collected_step is not None:
+            milestones.append(MILESTONE_OBSIDIAN_QUOTA_COLLECTED)
         if state.first_obsidian_placed_step is not None:
             milestones.append(MILESTONE_FIRST_OBSIDIAN_PLACED)
         if state.build_site_selected_step is not None:
@@ -818,6 +1025,36 @@ def merge_evaluator_milestones(
             previous.first_activation_step, current.first_activation_step
         ),
         first_nether_step_by_agent=merged_nether,
+        obsidian_source_located_step=_prefer(
+            previous.obsidian_source_located_step,
+            current.obsidian_source_located_step,
+        ),
+        first_obsidian_mined_step=_prefer(
+            previous.first_obsidian_mined_step, current.first_obsidian_mined_step
+        ),
+        obsidian_quota_collected_step=_prefer(
+            previous.obsidian_quota_collected_step,
+            current.obsidian_quota_collected_step,
+        ),
+        obsidian_mined_count=(
+            current.obsidian_mined_count
+            or previous.obsidian_mined_count
+        ),
+        obsidian_mined_offsets=(
+            current.obsidian_mined_offsets
+            if current.obsidian_mined_offsets
+            else previous.obsidian_mined_offsets
+        ),
+        external_mined_offsets=(
+            current.external_mined_offsets
+            if current.external_mined_offsets
+            else previous.external_mined_offsets
+        ),
+        obsidian_quota_required=(
+            current.obsidian_quota_required
+            if current.obsidian_quota_required
+            else previous.obsidian_quota_required
+        ),
         episode_terminated=(
             current.episode_terminated or previous.episode_terminated
         ),

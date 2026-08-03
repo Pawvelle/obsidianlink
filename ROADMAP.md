@@ -669,14 +669,15 @@ correlation、自动评测和人工复核均已通过。**
 
 ## Phase 4 - Route A Single-Agent
 
-**状态：进行中。Phase 3 前置条件已满足。**
+**状态：进行中。Phase 3 前置条件已满足。A1 任务契约已冻结，离线采集切片
+（设备第一步）已落实并通过 165/165 单元测试；尚未执行真实 MineRL 采集运行。**
 
 ### 目标
 
-从“材料齐全只建门”逐步扩展到附近黑曜石采集和有限资源补全，形成第一个稳定的
+从"材料齐全只建门"逐步扩展到附近黑曜石采集和有限资源补全，形成第一个稳定的
 单智能体长程基线。
 
-### 2026-08-03 启动记录
+### 2026-08-03 A1 任务契约切片（启动）
 
 - 冻结 `benchmark/instances/route_a_a1_phase4.json` 作为 A1 第一个开发实例：
   单角色、seed 0、固定出生点和朝向、初始无黑曜石、已有钻石镐与打火石；
@@ -688,9 +689,100 @@ correlation、自动评测和人工复核均已通过。**
   A1 可完成；
 - `PortalA1EnvSpec` 已在离线 mission XML 中加入固定 4×1×4 黑曜石矿源（16 块，
   位于出生点 8 blocks 边界内），初始物品栏只有钻石镐、打火石和泥土；默认 backend
-  只对冻结的 `route_a_a1` + `nearby_obsidian` 契约启用该 spec；
-- 下一步按 evaluator-first 顺序实现确定性采集 driver 和自动里程碑，再申请一次真实
-  MineRL 验证。XML 生成通过不等于真实矿源已在 Minecraft 中验证。
+  只对冻结的 `route_a_a1` + `nearby_obsidian` 契约启用该 spec。
+
+### 2026-08-03 A1 离线采集切片（落实）
+
+- 里程碑常量和 `EvaluationState` 字段扩展：
+  - 新增 `MILESTONE_OBSIDIAN_SOURCE_LOCATED`、
+    `MILESTONE_FIRST_OBSIDIAN_MINED`、`MILESTONE_OBSIDIAN_QUOTA_COLLECTED`
+    三个新里程碑，对应 `obsidian_source_located_step`、
+    `first_obsidian_mined_step`、`obsidian_quota_collected_step` 三个
+    evaluator-only 锁存字段，并附带 `obsidian_mined_count`、
+    `obsidian_mined_offsets`、`external_mined_offsets`、
+    `obsidian_quota_required`、`pending_mine_obsidian`；
+  - `latched_timestamps` 必须包含三个新 key；
+  - 新增 `FAILURE_OBSIDIAN_SOURCE_NEVER_LOCATED`、
+    `FAILURE_OBSIDIAN_QUOTA_NEVER_COLLECTED` 两个终端失败类型，但只在
+    没有 A0 外部结构 / attribution 失败时才会触发，A0 失败仍然优先；
+  - `merge_evaluator_milestones` 与 `PortalEvaluator` 同步暴露新字段和里程碑。
+- 采集证据追踪在 `MineRLEnvironmentBackend`：
+  - `portal_a1_deposit_grid_offsets()` 与
+    `PORTAL_A1_DEPOSIT_WORLD_MIN/MAX` 在 `portal_spec` 中定义矿源
+    4×1×4 在 spec 出生点 `(0, 4, 0)` 下的 16 个 grid 偏移；
+  - `reset()` 在 A1 契约下保存 `grid_world_anchor` 与
+    `baseline_deposit_obsidian_offsets`；`close()` 全部重置；
+  - `step()` 接受 `mine_target(obsidian)` 时累加 `pending_mine_obsidian`
+    并在第一次接受时锁存 `obsidian_source_located_step`；之后
+    `_refresh_evaluation_milestones` 用与 A0 place_block 同样的
+    "exact-count" 规则：fresh 移除的 deposit 块数 == pending 才
+    归因为 `obsidian_mined_offsets`，否则记为 `external_mined_offsets`；
+  - `_credit_pending_mine_for_test` 是测试专用通道，与 A0
+    `_credit_pending_place_block_for_test` 平行，方便 fixture
+    注入矿源被直接修改的网格场景；
+  - `evidence["a1_mining_evidence"]` 暴露矿源 grid offsets、世界边界、
+    baseline/current 计数、归因/外部集合、三个锁存 step 字段。evaluator
+    只读，不进入 agent 观察。
+- 动作翻译：`obsidianlink/actions/minerl_translator.py` 新增
+  `PORTAL_A1_HOTBAR`（`diamond_pickaxe`/`flint_and_steel`/`dirt` →
+  hotbar 1/2/3），`translate_macro_action` 通过新增的 `env_name`
+  kwarg 选择 A0 或 A1 热栏；`mine_target(obsidian)` 在 A1 下受
+  `PORTAL_A1_MINE_TARGETS` allowlist 限制，缺省仍是单 tick
+  `attack=1`，因此模型控制接口不变。
+- 离线采集 driver `obsidianlink/drivers/scripted_a1.py`：
+  - 计划只使用 `equip_item(diamond_pickaxe)`、`move(forward=1.0)`、
+    `look`、`mine_target(obsidian)`、`wait` 五种 allowlist 内动作；
+  - 默认从出生点直行 2 块到矿源边缘，按 (x, z) 行优先顺序定位
+    14 个 `world (x+0.5, 5, z+0.5)` 顶面坐标；
+  - `_look_steps_to` 把目标 (yaw, pitch) 拆成 30° 上限的
+    多次 look；`MAX_MINING_PLAN_STEPS=360` 兜底；
+  - 每步带 `episode_id`/`agent_id`/`step_id`；
+  - 暴露 `MAX_CELL_RETRY_ATTEMPTS` 和 `MAX_MINE_NO_PROGRESS_RETRIES`
+    两层预算：单格连续 retry 超限或全图无进展超限则 fail closed 并写
+    明确 `blocked_reason`；环境 owner 永远不等待模型推理。
+- 运行脚本 `scripts/run_scripted_a1.py`：镜像
+  `scripts/run_scripted_a0.py` 写入 `runs/phase4-scripted-a1/<timestamp>/`
+  下 `task_instance.json` / `experiment_config.json` /
+  `code_version.json`（含 `commit` / `working_tree_dirty` /
+  `dirty_paths`）/ `initial.png` / `final.png` / `events.jsonl` /
+  `evaluator_events.jsonl` / `summary.json`；脚本 `status=passed`
+  时显式 `mark_terminated(reason="scripted_a1_slice_complete")`，
+  dirty run 不会声称完全可复现。
+- 单元 / 集成测试覆盖：
+  - 离线 A1 任务契约：`mine_target_without_grid_change_does_not_credit`、
+    `first_successful_mine_latches_first_mined_milestone`、
+    `quota_latches_after_14_attributed_mines`、
+    `external_mining_does_not_credit_quota`、
+    `burst_mines_without_credit_do_not_latch_quota`、
+    `observation_never_exposes_evaluator_truth`、
+    `milestone_events_emit_three_mining_milestones` 等
+    10 个 `tests.test_minerl_backend.Phase4A1MiningContractTests`；
+  - 离线 driver：`tests.test_scripted_a1.ScriptedA1PlanTests`
+    + `ScriptedA1DriverTests` + `ScriptedA1BudgetTests` 共 10 个
+    用例，覆盖 plan 形状、quota 异常、重试预算、no-progress
+    终止、non-A1 task 拒绝、step 超时拒绝；
+  - 离线 A1 受控环境：`tests.test_minerl_backend._ControlledMineRL_A1Env`
+    维护 agent (eye, yaw, pitch) 状态，按 1 block / 步前进、按
+    0.95 点积锥判定 attack 是否命中 deposit 单元；
+- 验证顺序（2026-08-03 离线执行）：
+  - `python -m unittest discover -s tests -v` → **165/165** 通过，
+    `OK`；
+  - `python -m obsidianlink --check` → `status=ok`；
+  - `scripts/check_environment.py` → `python: 3.10.20`，所有契约文件存在；
+  - 全部 9 个 JSON 文件通过 `json.load` 验证；
+  - `git diff --check` 通过；本轮无 Gradle、Java、MineRL、Minecraft
+    启动；无 MiniMax / Qwen 调用。
+
+### 当前不实现 / 不声称
+
+- 暂未执行真实 MineRL A1 采集运行（受控环境 + 真实 MineRL 的
+  矿源一致性需要在用户批准 `./gradlew compileJava` /
+  `shadowJar` 之后再次落地）；
+- 暂不实现建门、点火、进入下界；当前切片目标是"定位 → 开采 → 获得
+  至少 14 块黑曜石"这一确定性纵切。A0 复用路径要等真实 MineRL A1
+  矿源在重置时与 `portal_grid` 一致后再拼接；
+- 暂不进入 Phase 4 A2（点火资源补全）/ A3（朝向/槽位随机化）/
+  A4（错误注入），也不进入 Route B、双角色或任何多智能体流程。
 
 ### 子阶段
 

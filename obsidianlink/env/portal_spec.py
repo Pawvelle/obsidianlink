@@ -57,6 +57,44 @@ PORTAL_A1_OBSIDIAN_DEPOSIT = (
     '<DrawCuboid x1="-3" y1="4" z1="3" '
     'x2="0" y2="4" z2="6" type="obsidian"/>'
 )
+# World-coordinate bounds of the fixed A1 obsidian deposit. The
+# evaluator-only grid is anchored to ``PORTAL_GRID_MIN``, so the
+# deposit is read into the backend as a 4x1x4 slice in grid-relative
+# coordinates. The backend derives the grid offsets from these bounds
+# to keep the mining evidence aligned with the A1 mission spec.
+PORTAL_A1_DEPOSIT_WORLD_MIN = (-3, 4, 3)
+PORTAL_A1_DEPOSIT_WORLD_MAX = (0, 4, 6)
+
+
+def portal_a1_deposit_grid_offsets() -> tuple[tuple[int, int, int], ...]:
+    """Return the 16 (x, y, z) grid offsets for the A1 deposit zone.
+
+    The A1 deposit is a 4x1x4 horizontal slab at world y=4. The portal
+    evaluator grid is anchored to the actual agent spawn point. This
+    helper returns the *canonical* offsets relative to a spawn at
+    world ``(0, 4, 0)``: the grid origin is at world
+    ``(-3, 3, 0)`` and the deposit at world ``(-3, 4, 3)`` lives
+    at grid offset ``(0, 1, 3)``. The backend adjusts the offsets
+    at reset time using the recorded ``portal_grid_origin`` so the
+    evidence still aligns when MineRL places the agent elsewhere.
+    """
+    canonical_anchor: tuple[int, int, int] = (0, 4, 0)
+    wx_min, wy_min, wz_min = PORTAL_A1_DEPOSIT_WORLD_MIN
+    wx_max, wy_max, wz_max = PORTAL_A1_DEPOSIT_WORLD_MAX
+    if (wx_min, wy_min, wz_min) > (wx_max, wy_max, wz_max):
+        raise ValueError("A1 deposit world bounds are inverted")
+    offsets: list[tuple[int, int, int]] = []
+    for wx in range(wx_min, wx_max + 1):
+        for wy in range(wy_min, wy_max + 1):
+            for wz in range(wz_min, wz_max + 1):
+                offsets.append(
+                    (
+                        wx - (canonical_anchor[0] + PORTAL_GRID_MIN[0]),
+                        wy - (canonical_anchor[1] + PORTAL_GRID_MIN[1]),
+                        wz - (canonical_anchor[2] + PORTAL_GRID_MIN[2]),
+                    )
+                )
+    return tuple(offsets)
 
 
 class PortalA1DepositDecorator(handlers.Handler):

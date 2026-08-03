@@ -1,0 +1,14 @@
+{
+  "experiment_id": "phase4_scripted_a1",
+  "backend": "minerl_portal_a1",
+  "task_instance": "benchmark/instances/route_a_a1_phase4.json",
+  "planner": "scripted_a1",
+  "evaluator": "portal_v0",
+  "max_no_progress_retries": 3,
+  "max_cell_retry_attempts": 4,
+  "step_timeout_seconds": 30.0,
+  "obsidian_quota_required": 14,
+  "max_mine_target_actions_per_step": 1,
+  "event_schema_version": "0.1",
+  "notes": "Phase 4 A1 mining-slice baseline. The driver only attempts to locate the fixed obsidian deposit, equip the diamond pickaxe, and collect at least 14 obsidian. It does NOT build, ignite, or enter the Nether in this round; downstream A0/A1 phases will splice the A0 build plan on top of the mining slice."
+}

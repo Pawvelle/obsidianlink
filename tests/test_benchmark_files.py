@@ -73,6 +73,22 @@ class BenchmarkFileTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             scenario["obsidian_deposit"]["minimum_blocks"] = 13
 
+    def test_phase_four_a1_scripted_config_freezes_mining_slice(self) -> None:
+        path = ROOT / "configs/experiments/phase4_scripted_a1.json"
+        config = json.loads(path.read_text(encoding="utf-8"))
+        task_path = ROOT / config["task_instance"]
+        task = TaskInstance.from_dict(json.loads(task_path.read_text(encoding="utf-8")))
+        self.assertEqual(config["planner"], "scripted_a1")
+        self.assertEqual(config["obsidian_quota_required"], 14)
+        self.assertGreaterEqual(config["max_no_progress_retries"], 1)
+        self.assertGreaterEqual(config["max_cell_retry_attempts"], 1)
+        self.assertEqual(task.task_id, "route_a_a1_phase4_seed_0")
+        self.assertEqual(task.workflow, "route_a_a1")
+        self.assertNotIn("obsidian", task.initial_inventories["agent_1"])
+        self.assertEqual(
+            task.scenario_parameters["obsidian_required"], 14
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

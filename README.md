@@ -191,6 +191,15 @@ python scripts/smoke_test_portal_env.py --mode real --exercise-actions
 python scripts/run_scripted_a0.py
 ```
 
+Phase 4 A1 离线采集切片：
+
+```bash
+conda activate mc-agent
+python scripts/run_scripted_a1.py
+# 仅在 MineRL Java 端确认矿源实际落在 atSpawn 网格内之后，
+# 再考虑用真实 MineRL 跑一次 A1 采集；本轮只覆盖离线切片。
+```
+
 真实检查在核心生命周期通过但 evaluator transport 不可用时返回退出码 2，并写入
 `status=blocked`。这表示已经取得有效的部分能力证据，不表示地狱门任务成功。
 任何 MineRL Gradle 构建仍需要用户明确批准。
@@ -328,5 +337,10 @@ MiniMax-M3 可作为不依赖本地模型常驻的远程视觉 planner；密钥�
 
 Phase 4 已于 2026-08-03 启动 A1 任务契约切片：新增固定的附近黑曜石实例
 `benchmark/instances/route_a_a1_phase4.json`，明确初始无黑曜石、已有钻石镐与
-点火工具、资源距离和数量边界。真实 A1 MineRL 环境和确定性 driver 尚未实现，
-当前不把任务契约通过误报为 A1 可完成性证据。
+点火工具、资源距离和数量边界；同期落实离线"采集 → 至少 14 块黑曜石"切片
+（`obsidianlink/drivers/scripted_a1.py` + `scripts/run_scripted_a1.py` +
+`configs/experiments/phase4_scripted_a1.json`），由
+`tests.test_minerl_backend.Phase4A1MiningContractTests` 与
+`tests.test_scripted_a1` 共 20 个离线用例守护。165/165 单元测试
+通过，`python -m obsidianlink --check` 仍然成功。**当前不执行真实
+MineRL A1 采集运行，本轮只完成离线采集切片，不复用作 A1 完整地狱门成功。**

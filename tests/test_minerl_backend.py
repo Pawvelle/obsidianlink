@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import unittest
 from pathlib import Path
 from typing import Any, Mapping
@@ -17,6 +18,8 @@ from obsidianlink.env.minerl_backend import (
 )
 from obsidianlink.env.portal_spec import (
     PORTAL_GRID_BLOCKS,
+    PORTAL_GRID_MIN,
+    PORTAL_GRID_SHAPE,
     PORTAL_GRID_SIZE,
     PortalA0EnvSpec,
     PortalA1EnvSpec,
@@ -231,7 +234,7 @@ class _BackendFactory:
     thread so the ``open/reset/step/close`` lifecycle is straightforward.
     """
 
-    def __init__(self, env: _ControlledMineRLEnv) -> None:
+    def __init__(self, env: Any) -> None:
         self.env = env
         self.backend = MineRLEnvironmentBackend(
             env_factory=lambda task: env,
@@ -245,6 +248,256 @@ class _BackendFactory:
     def __exit__(self, *exc_info: Any) -> None:
         self.backend.close()
         self.env.closed = True
+
+
+def _a1_task(agent_ids: tuple[str, ...] = ("agent_1",)) -> TaskInstance:
+    """Build the frozen A1 task instance for offline tests."""
+    return TaskInstance.from_dict(
+        json.loads(
+            (ROOT / "benchmark/instances/route_a_a1_phase4.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    )
+
+
+def _a1_deposit_grid_offsets() -> list[tuple[int, int, int]]:
+    """Return the 16 grid offsets for the A1 deposit at the spec spawn (0, 4, 0).
+
+    The portal grid is anchored to the agent's spawn position with the
+    atSpawn bounds ``PORTAL_GRID_MIN..PORTAL_GRID_MAX`` (in grid
+    coordinates). For a spawn at world ``(0, 4, 0)`` the grid world
+    origin is ``(-3, 3, 0)``, so the deposit cell at world
+    ``(-3, 4, 3)`` sits at grid offset ``(0, 1, 3)``. The y_offset
+    is therefore ``world_y - (anchor_y + PORTAL_GRID_MIN[1])``, not
+    ``world_y - PORTAL_GRID_MIN[1]`` as in a world-only origin.
+    """
+    anchor = (0, 4, 0)
+    offsets: list[tuple[int, int, int]] = []
+    for wx in range(-3, 1):
+        for wz in range(3, 7):
+            offsets.append(
+                (
+                    wx - (anchor[0] + PORTAL_GRID_MIN[0]),
+                    4 - (anchor[1] + PORTAL_GRID_MIN[1]),
+                    wz - (anchor[2] + PORTAL_GRID_MIN[2]),
+                )
+            )
+    return offsets
+
+
+def _world_offset_for_grid(
+    grid_offset: tuple[int, int, int],
+    anchor: tuple[int, int, int],
+) -> tuple[int, int, int]:
+    """Convert a grid offset into a world (x, y, z) block coordinate."""
+    return (
+        anchor[0] + grid_offset[0] + PORTAL_GRID_MIN[0],
+        anchor[1] + grid_offset[1] + PORTAL_GRID_MIN[1],
+        anchor[2] + grid_offset[2] + PORTAL_GRID_MIN[2],
+    )
+
+
+class _ControlledMineRL_A1Env:
+    """Minimal A1 MineRL environment with the fixed obsidian deposit.
+
+    The agent starts at world (0, 4, 0) with the canonical
+    MineRL eye offset of +1.62. The deposit zone is a 4x1x4 obsidian
+    slab at world y=4 between z=3 and z=6, fully inside the
+    atSpawn grid that the A1 EnvSpec uses. Each ``attack=1`` step
+    consults the agent's eye + view direction and, if a deposit
+    cell lies within a tight cone, sets that cell to ``air`` and
+    returns the post-step observation with an updated grid. The
+    fixture is intentionally simple — it does not attempt to
+    simulate Minecraft pathing, jumping, or chunk loading.
+    """
+
+    def __init__(
+        self,
+        *,
+        anchor: tuple[int, int, int] = (0, 4, 0),
+        strip_external: bool = False,
+    ) -> None:
+        self.action_space = PortalA0EnvSpec().action_space
+        self.seed_value: int | None = None
+        self.closed = False
+        self.steps = 0
+        self._anchor = anchor
+        self._strip_external = strip_external
+        self._deposit_offsets = tuple(_a1_deposit_grid_offsets())
+        self.grid = np.zeros(PORTAL_GRID_SIZE, dtype=np.int32)
+        # Pre-populate the deposit zone with obsidian.
+        for offset in self._deposit_offsets:
+            flat = (
+                offset[1] * PORTAL_GRID_SHAPE[0] * PORTAL_GRID_SHAPE[2]
+                + offset[2] * PORTAL_GRID_SHAPE[0]
+                + offset[0]
+            )
+            self.grid[flat] = PORTAL_GRID_BLOCKS.index("obsidian")
+        # Agent state (eye, yaw, pitch).
+        self._eye = (anchor[0] + 0.5, anchor[1] + 1.62, anchor[2] + 0.5)
+        self._yaw = 0.0
+        self._pitch = 0.0
+        self._moves: list[tuple[float, float]] = [(0.0, 0.0)]
+        self._attack_attempts = 0
+        self._successful_mines: list[tuple[int, int, int]] = []
+        self._mismatched_mines: int = 0
+        self._last_action_summary: dict[str, Any] = {}
+
+    def seed(self, value: int) -> None:
+        self.seed_value = value
+
+    def reset(self) -> dict[str, Any]:
+        return self._observation()
+
+    def step(self, action: dict[str, Any]):
+        self.assert_action(action)
+        self.steps += 1
+        action_map = dict(action) if isinstance(action, Mapping) else {}
+        previous_eye = self._eye
+        previous_yaw = self._yaw
+        previous_pitch = self._pitch
+        camera = action_map.get("camera")
+        if camera is not None:
+            try:
+                pitch_value = float(np.asarray(camera).reshape(-1)[0])
+                yaw_value = float(np.asarray(camera).reshape(-1)[1])
+            except (TypeError, ValueError, IndexError):
+                pitch_value = 0.0
+                yaw_value = 0.0
+            self._pitch = max(-90.0, min(90.0, self._pitch + pitch_value))
+            self._yaw = ((self._yaw + yaw_value + 180.0) % 360.0) - 180.0
+        forward = int(action_map.get("forward", 0))
+        back = int(action_map.get("back", 0))
+        if forward or back:
+            yaw_rad = math.radians(self._yaw)
+            # The A1 driver plans its look angles assuming 1 block
+            # per ``forward=1`` step (it pre-computes ``approach_eye``
+            # with the same convention). The fixture uses the same
+            # rate so the dot-product cone check inside
+            # ``_mine_targeted_cell`` matches the driver's intent.
+            distance = 1.0 * (forward - back)
+            self._eye = (
+                self._eye[0] - math.sin(yaw_rad) * distance,
+                self._eye[1],
+                self._eye[2] + math.cos(yaw_rad) * distance,
+            )
+        attack = int(action_map.get("attack", 0))
+        mined_cell: tuple[int, int, int] | None = None
+        if attack:
+            self._attack_attempts += 1
+            mined_cell = self._mine_targeted_cell()
+            if mined_cell is not None:
+                self._successful_mines.append(mined_cell)
+            else:
+                self._mismatched_mines += 1
+        observation = self._observation()
+        self._last_action_summary = {
+            "previous_eye": previous_eye,
+            "previous_yaw": previous_yaw,
+            "previous_pitch": previous_pitch,
+            "new_eye": self._eye,
+            "new_yaw": self._yaw,
+            "new_pitch": self._pitch,
+            "attack": bool(attack),
+            "moved": bool(forward or back),
+            "mined_cell": (
+                list(mined_cell) if mined_cell is not None else None
+            ),
+        }
+        return observation, 0.0, False, {"private": "not_forwarded"}
+
+    def _mine_targeted_cell(self) -> tuple[int, int, int] | None:
+        """Return the grid offset mined by this ``attack`` (or None)."""
+        if not self._deposit_offsets:
+            return None
+        yaw_rad = math.radians(self._yaw)
+        pitch_rad = math.radians(self._pitch)
+        cos_pitch = math.cos(pitch_rad)
+        # MineRL/Malmo forward vector: yaw=0 is +z, yaw=90° is -x.
+        view_dir = (
+            -math.sin(yaw_rad) * cos_pitch,
+            -math.sin(pitch_rad),
+            math.cos(yaw_rad) * cos_pitch,
+        )
+        best_offset: tuple[int, int, int] | None = None
+        best_dot = -2.0
+        for offset in self._deposit_offsets:
+            world = _world_offset_for_grid(offset, self._anchor)
+            # Aim at the top face of the cell, which is the surface
+            # the agent actually faces when looking down at a
+            # deposit block from the side. The driver computes
+            # look angles to this exact point.
+            target = (
+                float(world[0]) + 0.5,
+                float(world[1]) + 1.0,
+                float(world[2]) + 0.5,
+            )
+            delta = (
+                target[0] - self._eye[0],
+                target[1] - self._eye[1],
+                target[2] - self._eye[2],
+            )
+            norm = math.sqrt(sum(value * value for value in delta))
+            if norm < 0.05:
+                continue
+            to_cell = tuple(value / norm for value in delta)
+            dot = sum(a * b for a, b in zip(view_dir, to_cell))
+            if dot > best_dot:
+                best_dot = dot
+                best_offset = offset
+        # The driver's look helper may produce a pitch that is
+        # slightly off the cell-top vector (because the agent stands
+        # in front of the slab and the top face is offset 0.5 above
+        # the cell center). A 0.95 dot-product cone (~18°) is the
+        # smallest threshold that still accepts the cell that the
+        # driver actually aims at.
+        if best_dot < 0.95 or best_offset is None:
+            return None
+        flat = (
+            best_offset[1] * PORTAL_GRID_SHAPE[0] * PORTAL_GRID_SHAPE[2]
+            + best_offset[2] * PORTAL_GRID_SHAPE[0]
+            + best_offset[0]
+        )
+        if self.grid[flat] != PORTAL_GRID_BLOCKS.index("obsidian"):
+            return None
+        self.grid[flat] = PORTAL_GRID_BLOCKS.index("air")
+        return best_offset
+
+    def assert_action(self, action: dict[str, Any]) -> None:
+        if not self.action_space.contains(action):
+            raise AssertionError("invalid test action")
+
+    def close(self) -> None:
+        self.closed = True
+
+    def _observation(self) -> dict[str, Any]:
+        position = {
+            "xpos": float(self._eye[0]),
+            "ypos": float(self._eye[1]),
+            "zpos": float(self._eye[2]),
+            "yaw": float(self._yaw),
+            "pitch": float(self._pitch),
+        }
+        observation: dict[str, Any] = {
+            "pov": np.zeros((360, 640, 3), dtype=np.uint8),
+            "inventory": {
+                "diamond_pickaxe": np.asarray(1, dtype=np.int64),
+                "flint_and_steel": np.asarray(1, dtype=np.int64),
+                "dirt": np.asarray(2, dtype=np.int64),
+            },
+            "portal_grid": self.grid.copy(),
+            "portal_grid_origin": np.asarray(self._anchor, dtype=np.int32),
+            "portal_dimension": np.asarray("minecraft:overworld"),
+            "location_stats": position,
+            "use_item": {
+                "obsidian": np.asarray(0, dtype=np.int64),
+                "flint_and_steel": np.asarray(0, dtype=np.int64),
+            },
+        }
+        if self._strip_external:
+            observation["__strip_external_after_steps"] = self.steps
+        return observation
 
 
 class MineRLEnvironmentBackendTests(unittest.TestCase):
@@ -1381,6 +1634,291 @@ class FrameGeometryRegressionTests(unittest.TestCase):
         )
         self.assertTrue(result.has_missing_truth)
         self.assertEqual(len(result.episode_built_candidates), 0)
+
+
+# ----------------------------------------------------------------------
+# Phase 4 A1 mining-slice contract
+# ----------------------------------------------------------------------
+
+
+class Phase4A1MiningContractTests(unittest.TestCase):
+    """Offline contract tests for the A1 mining-slice backend.
+
+    The tests in this class only validate the *backend* contract. The
+    full ``run_scripted_a1`` driver is exercised separately in
+    ``tests/test_scripted_a1.py``; here we focus on:
+
+    * the deposit zone is populated and large enough to satisfy the
+      14-obsidian quota;
+    * the initial inventory has no obsidian;
+    * ``equip_item(diamond_pickaxe)`` translates to ``hotbar.1``;
+    * ``mine_target(obsidian)`` translates to ``attack=1`` and
+      latches ``obsidian_source_located_step``;
+    * the mining milestones (``first_obsidian_mined_step`` and
+      ``obsidian_quota_collected_step``) only latch on actual grid
+      deltas;
+    * the agent observation never exposes evaluator-only state;
+    * external non-attributed mining deltas never satisfy the quota.
+    """
+
+    def test_a1_task_instance_starts_with_no_obsidian_in_inventory(self) -> None:
+        task = _a1_task()
+        inventory = task.initial_inventories["agent_1"]
+        self.assertNotIn("obsidian", inventory)
+        self.assertEqual(inventory["diamond_pickaxe"], 1)
+        self.assertEqual(inventory["flint_and_steel"], 1)
+        self.assertEqual(inventory["dirt"], 2)
+        self.assertEqual(
+            task.scenario_parameters["obsidian_required"], 14
+        )
+
+    def test_a1_deposit_zone_baseline_contains_at_least_14_obsidian(self) -> None:
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            backend.reset(_a1_task())
+            state = backend.get_evaluation_state()
+            evidence = state.evidence["a1_mining_evidence"]
+            self.assertGreaterEqual(
+                evidence["baseline_deposit_obsidian_count"], 14
+            )
+            self.assertGreaterEqual(
+                state.obsidian_quota_required, 14
+            )
+            self.assertEqual(state.obsidian_mined_count, 0)
+            self.assertEqual(state.obsidian_source_located_step, None)
+            self.assertEqual(state.first_obsidian_mined_step, None)
+            self.assertEqual(state.obsidian_quota_collected_step, None)
+
+    def test_a1_equip_diamond_pickaxe_translates(self) -> None:
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            backend.reset(_a1_task())
+            step = backend.step(
+                {
+                    "agent_1": MacroAction(
+                        "equip_item", target="diamond_pickaxe"
+                    )
+                }
+            )
+            self.assertTrue(step.info["translation_accepted"])
+            self.assertIsNone(step.info["translation_error"])
+
+    def test_a1_mine_target_without_grid_change_does_not_credit(self) -> None:
+        """A ``mine_target(obsidian)`` aimed away from the deposit
+        must NOT latch ``first_obsidian_mined``. ``obsidian_source_located``
+        still fires on intent (the agent's intent is recorded), but
+        without an actual grid delta the mining counter stays at
+        zero and the source-located step is the only mining
+        milestone that latches.
+        """
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            backend.reset(_a1_task())
+            # Turn the agent 180° to face -z, away from the deposit
+            # which lives at z=3..6. The controlled env's view
+            # cone then contains no deposit cell.
+            backend.step(
+                {
+                    "agent_1": MacroAction(
+                        "look", parameters={"yaw": 180.0, "pitch": 0.0}
+                    )
+                }
+            )
+            step = backend.step(
+                {
+                    "agent_1": MacroAction(
+                        "mine_target", target="obsidian"
+                    )
+                }
+            )
+            self.assertTrue(step.info["translation_accepted"])
+            state = backend.get_evaluation_state()
+            # Source-located fires on intent (action accepted); but
+            # no grid delta means first_obsidian_mined stays None
+            # and the count remains 0.
+            self.assertIsNotNone(state.obsidian_source_located_step)
+            self.assertIsNone(state.first_obsidian_mined_step)
+            self.assertEqual(state.obsidian_mined_count, 0)
+            self.assertEqual(state.obsidian_mined_offsets, ())
+
+    def test_a1_first_successful_mine_latches_first_mined_milestone(self) -> None:
+        from obsidianlink.drivers.scripted_a1 import _world_to_local_angles, AGENT_EYE
+
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            backend.reset(_a1_task())
+            # Move forward 2 ticks (the driver walks to z=2, eye at z=1.5).
+            for _ in range(2):
+                backend.step(
+                    {"agent_1": MacroAction("move", parameters={"forward": 1.0})}
+                )
+            # Look at the closest deposit cell top (world (0, 4, 3) → y=5).
+            # After 2 forward steps (1 block per step) the eye sits at
+            # (0.5, 5.62, 2.5), so we aim at the cell top in front.
+            approach_eye = (AGENT_EYE[0], AGENT_EYE[1], AGENT_EYE[2] + 2.0)
+            yaw, pitch = _world_to_local_angles(
+                (0.5, 5.0, 3.5), eye=approach_eye
+            )
+            backend.step(
+                {
+                    "agent_1": MacroAction(
+                        "look", parameters={"yaw": yaw, "pitch": pitch}
+                    )
+                }
+            )
+            backend.step(
+                {
+                    "agent_1": MacroAction(
+                        "mine_target", target="obsidian"
+                    )
+                }
+            )
+            state = backend.get_evaluation_state()
+            self.assertEqual(state.obsidian_mined_count, 1)
+            self.assertIsNotNone(state.first_obsidian_mined_step)
+            self.assertIsNotNone(state.obsidian_source_located_step)
+            # Source-located must precede or equal first-mined.
+            # The two are typically recorded on the same step
+            # because the backend increments ``pending_mine_obsidian``
+            # and runs ``_refresh_evaluation_milestones`` in the
+            # same ``step()`` call.
+            self.assertLessEqual(
+                state.obsidian_source_located_step,
+                state.first_obsidian_mined_step,
+            )
+            # Quota still unmet.
+            self.assertIsNone(state.obsidian_quota_collected_step)
+
+    def test_a1_quota_latches_after_14_attributed_mines(self) -> None:
+        from obsidianlink.drivers.scripted_a1 import build_mining_action_plan
+
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            backend.reset(_a1_task())
+            plan = build_mining_action_plan(quota=14)
+            for item in plan:
+                backend.step({"agent_1": item.action})
+            state = backend.get_evaluation_state()
+            self.assertGreaterEqual(state.obsidian_mined_count, 14)
+            self.assertIsNotNone(state.obsidian_quota_collected_step)
+            self.assertEqual(state.obsidian_mined_count, 14)
+            self.assertEqual(state.external_mined_offsets, ())
+            self.assertEqual(state.pending_mine_obsidian, 0)
+            self.assertEqual(
+                state.evidence["a1_mining_evidence"][
+                    "obsidian_mined_count"
+                ],
+                14,
+            )
+
+    def test_a1_external_mining_does_not_credit_quota(self) -> None:
+        """Strip a deposit cell via a direct grid mutation (bypassing
+        any ``mine_target`` action). The exact-count rule must fail
+        closed to ``external_mined_offsets`` and the quota must
+        stay unmet.
+        """
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            backend.reset(_a1_task())
+            # Mutate the grid directly: the bridge / environment
+            # would have to do this for an external mining delta to
+            # appear.
+            deposit = _a1_deposit_grid_offsets()
+            flat = (
+                deposit[0][1] * PORTAL_GRID_SHAPE[0] * PORTAL_GRID_SHAPE[2]
+                + deposit[0][2] * PORTAL_GRID_SHAPE[0]
+                + deposit[0][0]
+            )
+            env.grid[flat] = PORTAL_GRID_BLOCKS.index("air")
+            backend.step({"agent_1": MacroAction.wait()})
+            state = backend.get_evaluation_state()
+            self.assertEqual(state.obsidian_mined_count, 0)
+            self.assertEqual(
+                tuple(state.external_mined_offsets)[:1],
+                (deposit[0],),
+            )
+            self.assertIsNone(state.obsidian_quota_collected_step)
+            self.assertIsNone(state.first_obsidian_mined_step)
+
+    def test_a1_burst_mines_without_credit_do_not_latch_quota(self) -> None:
+        """Mine without ever issuing ``mine_target``: the grid never
+        changes, so neither first_mined nor quota_collected latches.
+        """
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            backend.reset(_a1_task())
+            for _ in range(20):
+                backend.step({"agent_1": MacroAction.wait()})
+            state = backend.get_evaluation_state()
+            self.assertEqual(state.obsidian_mined_count, 0)
+            self.assertIsNone(state.obsidian_source_located_step)
+            self.assertIsNone(state.first_obsidian_mined_step)
+            self.assertIsNone(state.obsidian_quota_collected_step)
+
+    def test_a1_observation_never_exposes_evaluator_truth(self) -> None:
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            observations = backend.reset(_a1_task())
+            observation = observations["agent_1"]
+            for forbidden in (
+                "portal_grid",
+                "obsidian_mined_offsets",
+                "obsidian_quota_required",
+                "obsidian_source_located_step",
+                "first_obsidian_mined_step",
+                "obsidian_quota_collected_step",
+                "a1_mining_evidence",
+            ):
+                self.assertFalse(
+                    hasattr(observation, forbidden),
+                    f"{forbidden} must not appear on the agent observation",
+                )
+            step = backend.step(
+                {
+                    "agent_1": MacroAction(
+                        "mine_target", target="obsidian"
+                    )
+                }
+            )
+            self.assertNotIn("obsidian_mined_count", step.info)
+            self.assertNotIn("a1_mining_evidence", step.info)
+
+    def test_a1_milestone_events_emit_three_mining_milestones(self) -> None:
+        from obsidianlink.drivers.scripted_a1 import build_mining_action_plan
+
+        env = _ControlledMineRL_A1Env()
+        with _BackendFactory(env) as backend:
+            backend.reset(_a1_task())
+            plan = build_mining_action_plan(quota=14)
+            for item in plan:
+                backend.step({"agent_1": item.action})
+            backend.mark_terminated(
+                step_id=backend.get_evaluation_state().step_id,
+                reason="scripted_a1_slice_complete",
+            )
+            state = backend.get_evaluation_state()
+            event_types = [event.event_type for event in state.milestone_events()]
+            self.assertIn("task_reset", event_types)
+            self.assertIn("obsidian_source_located", event_types)
+            self.assertIn("first_obsidian_mined", event_types)
+            self.assertIn("obsidian_quota_collected", event_types)
+            # First mining must precede source-located; quota-collected
+            # must follow first-mined and source-located.
+            def _index(name: str) -> int:
+                return next(
+                    i
+                    for i, event in enumerate(state.milestone_events())
+                    if event.event_type == name
+                )
+
+            self.assertLess(
+                _index("obsidian_source_located"),
+                _index("first_obsidian_mined"),
+            )
+            self.assertLess(
+                _index("first_obsidian_mined"),
+                _index("obsidian_quota_collected"),
+            )
 
 
 if __name__ == "__main__":
