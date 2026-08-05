@@ -38,11 +38,13 @@
 - 当前真实 MineRL 仍因 7 项能力缺失 fail closed（`assert_backend_can_start_task` 在 `reset` 最早处触发，`env_factory` 不被调用）。
 - 全部离线测试通过；`git diff --check` 干净；`vendor/minerl` 未修改；未启动 Minecraft / MineRL / Gradle / 模型 API。
 
-## R4：确定性单块 driver
+## R4：确定性单块 driver（完成）
 
 使用有限动作、有限等待和有限重试完成单块浇筑。先跑 FakeBackend；真实 MineRL 另行申请授权。
 
-## R5：连续浇筑
+完成条件（已达成）：公共 `MacroAction` 协议、24 步固定计划、计划/step/time/wait 硬上限、后端提前终止 fail closed、driver/evaluator 信息隔离、FakeBackend 可重放与全量离线测试通过。
+
+## R5：连续浇筑（下一阶段）
 
 把单块扩展为短区段，验证多次液体操作和恢复逻辑。
 

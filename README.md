@@ -4,18 +4,18 @@ ObsidianLink 是一个可复现的 Minecraft 单智能体基准。目标是让 A
 
 ## 当前任务
 
-当前阶段：`R3-CASTING-EVALUATOR`
+当前阶段：`R4-DETERMINISTIC-CASTING-DRIVER`（已完成）
 
 当前任务实例：`casting_c1_fixed`
 
-本阶段为 `casting_c1_fixed` 实现纯离线、类型严格、不可变、fail-closed 的 evaluator，用 evaluator-only 真值回答：
+本阶段已经在 FakeBackend 上实现确定性、有限循环的单块浇筑 driver，并由 R3 evaluator 独立判断结果：
 
-- 目标 cell 是否成功从非黑曜石变成黑曜石；
-- 是否同时满足 reset 状态、流体证据、相关动作因果、预算、正常终止等完整证据链；
-- 真值缺失时是否明确返回 `truth_missing` 而不是 `success`；
-- 错误方块、超预算、非正常终止、因果证据不足时是否给出稳定结果。
+- driver 只使用 Agent-visible observation，不读取 evaluator-only 真值；
+- 动作使用公共 `MacroAction` 协议和封闭 R4 白名单；
+- step、时间、等待和计划长度都有硬上限；
+- 后端提前终止、预算耗尽或证据缺失都不会伪装成成功。
 
-下一位 Agent 应先阅读 [PROJECT_STATUS.md](PROJECT_STATUS.md)，按照其中列出的文件位置和完成条件工作。当前不启动 Minecraft，不运行 Gradle，不实现 driver 或 VLM。
+下一任务是 R5 连续浇筑。开始前先阅读 [PROJECT_STATUS.md](PROJECT_STATUS.md)；当前仍不启动 Minecraft、不运行 Gradle、不接 VLM。
 
 ## 项目目标
 
@@ -39,7 +39,7 @@ ObsidianLink 是一个可复现的 Minecraft 单智能体基准。目标是让 A
 | 目标 | 让指定 cell 从空气变成黑曜石 |
 | 环境预算 | 最多 160 step、120 秒 |
 | 世界修改 | 只能通过 Agent 的白名单动作 |
-| 当前状态 | 契约已冻结，后端能力尚未确认 |
+| 当前状态 | R4 离线 driver 已完成；真实 MineRL 能力仍缺失 |
 
 任务定义位于 [`benchmark/instances/active/casting_c1_fixed.json`](benchmark/instances/active/casting_c1_fixed.json)，离线实验约束位于 [`configs/experiments/active/casting_c1_contract.json`](configs/experiments/active/casting_c1_contract.json)。
 
@@ -201,9 +201,9 @@ git diff --check
 
 1. `R1`：冻结单块任务契约，已完成。
 2. `R2`：后端能力清单，已完成。
-3. `R3`：单块黑曜石 evaluator，当前阶段。
-4. `R4`：确定性单块 driver。
-5. `R5`：连续浇筑。
+3. `R3`：单块黑曜石 evaluator，已完成。
+4. `R4`：确定性单块 driver，已完成。
+5. `R5`：连续浇筑，下一阶段。
 6. `R6`：完整门框、点火和进入下界。
 7. `R7`：接入 VLM 和更完整任务。
 

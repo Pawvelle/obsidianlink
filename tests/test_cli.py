@@ -16,12 +16,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["phase"], "reset_3_casting_evaluator")
+        self.assertEqual(
+            payload["phase"], "reset_4_deterministic_casting_driver"
+        )
         self.assertEqual(payload["active_task"], "casting_c1_fixed")
         self.assertFalse(payload["live_run_allowed"])
         self.assertTrue(payload["action_parser_accepted"])
         self.assertTrue(payload["portal_evaluator_success"])
         self.assertEqual(payload["casting_evaluator_outcome"], "truth_missing")
+        self.assertEqual(payload["driver_status"], "completed")
+        self.assertEqual(payload["driver_success_outcome"], "success")
         self.assertIn("no real MineRL", payload["note"])
 
 
