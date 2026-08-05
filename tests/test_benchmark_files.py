@@ -31,6 +31,14 @@ class BenchmarkFileTests(unittest.TestCase):
             task.scenario_parameters["implementation_status"],
             "contract_only",
         )
+        self.assertEqual(task.scenario_parameters["task_family"], "casting")
+        self.assertEqual(task.scenario_parameters["agent_mode"], "single")
+        self.assertEqual(task.scenario_parameters["task_level"], "C1")
+        self.assertEqual(task.scenario_parameters["layout_type"], "fixed")
+        self.assertEqual(
+            task.scenario_parameters["compatibility_task_name"],
+            "casting_s_c1_fixed",
+        )
         self.assertFalse(task.scenario_parameters["allow_live_run"])
         self.assertIn("first_obsidian_cast", task.milestones)
         self.assertEqual(
@@ -59,6 +67,14 @@ class BenchmarkFileTests(unittest.TestCase):
         self.assertEqual(
             task.scenario_parameters["implementation_status"],
             "offline_fake_verified",
+        )
+        self.assertEqual(task.scenario_parameters["task_family"], "casting")
+        self.assertEqual(task.scenario_parameters["agent_mode"], "single")
+        self.assertEqual(task.scenario_parameters["task_level"], "C2")
+        self.assertEqual(task.scenario_parameters["layout_type"], "fixed")
+        self.assertEqual(
+            task.scenario_parameters["compatibility_task_name"],
+            "casting_s_c2_fixed",
         )
         self.assertFalse(task.scenario_parameters["allow_live_run"])
         self.assertEqual(config["status"], "offline_fake_verified")

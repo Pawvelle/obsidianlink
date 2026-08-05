@@ -8,8 +8,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from obsidianlink.core.task_catalog import (  # noqa: E402
+    load_task_catalog,
+    validate_catalog_references,
+)
 
 
 def _check_project_files() -> dict[str, bool]:
@@ -20,10 +26,17 @@ def _check_project_files() -> dict[str, bool]:
         "ROADMAP.md",
         "BENCHMARK_SPEC.md",
         "DATASET_CARD.md",
+        "docs/benchmark/TASK_TAXONOMY.md",
+        "docs/architecture/TASK_REGISTRY.md",
+        "docs/tasks/casting/casting_c1_fixed.md",
+        "docs/tasks/casting/casting_c3_fixed.md",
         "pyproject.toml",
         "environment.yml",
         "model.lock.json",
         "obsidianlink/__init__.py",
+        "obsidianlink/core/task_catalog.py",
+        "benchmark/catalog/tasks.json",
+        "benchmark/schemas/task_catalog.schema.json",
         "benchmark/schemas/task_instance.schema.json",
         "benchmark/instances/active/casting_c1_fixed.json",
         "benchmark/instances/active/casting_c3_fixed.json",
@@ -71,12 +84,22 @@ def main() -> int:
     args = parser.parse_args()
 
     files = _check_project_files()
+    catalog = load_task_catalog(ROOT / "benchmark/catalog/tasks.json")
+    validate_catalog_references(catalog, ROOT)
+    active_entry = catalog.active_entry
+    if active_entry.taxonomy is None:  # guarded by TaskCatalog
+        raise RuntimeError("active task catalog entry must have taxonomy")
+    taxonomy = active_entry.taxonomy.as_dict()
+    taxonomy["compatibility_task_name"] = active_entry.canonical_name
     result: dict[str, object] = {
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "project_files": files,
-        "phase": "reset_5_continuous_casting",
-        "active_task": "casting_c3_fixed",
+        "phase": "benchmark_1_task_catalog_foundation",
+        "active_task": active_entry.compatibility_id,
+        "task_taxonomy": taxonomy,
+        "task_catalog_version": catalog.catalog_version,
+        "task_catalog_entries": len(catalog.entries),
         "live_run_allowed": False,
     }
     if args.runtime:

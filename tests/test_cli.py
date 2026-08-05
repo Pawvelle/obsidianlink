@@ -17,9 +17,21 @@ class CliTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(
-            payload["phase"], "reset_5_continuous_casting"
+            payload["phase"], "benchmark_1_task_catalog_foundation"
         )
         self.assertEqual(payload["active_task"], "casting_c3_fixed")
+        self.assertEqual(
+            payload["task_taxonomy"],
+            {
+                "task_family": "casting",
+                "agent_mode": "single",
+                "task_level": "C2",
+                "layout_type": "fixed",
+                "compatibility_task_name": "casting_s_c2_fixed",
+            },
+        )
+        self.assertEqual(payload["task_catalog_version"], "2026-08-05")
+        self.assertEqual(payload["task_catalog_entries"], 4)
         self.assertFalse(payload["live_run_allowed"])
         # R4 single-cell contract is still part of the check.
         self.assertTrue(payload["r4"]["action_parser_accepted"])

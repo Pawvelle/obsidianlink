@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://obsidianlink.local/schemas/task_catalog.schema.json",
+  "title": "ObsidianLink Task Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_version",
+    "active_compatibility_id",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "catalog_version": {"type": "string", "minLength": 1},
+    "active_compatibility_id": {"type": "string", "minLength": 1},
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_family", "agent_mode", "task_level", "layout_type"],
+      "properties": {
+        "task_family": {"enum": ["casting", "ruined", "adaptive"]},
+        "agent_mode": {"enum": ["single", "multi"]},
+        "task_level": {"pattern": "^[CRA][1-5]$"},
+        "layout_type": {"enum": ["fixed", "randomized", "hidden", "challenge"]}
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "canonical_name",
+        "compatibility_id",
+        "task_instance_id",
+        "workflow",
+        "taxonomy",
+        "instance_path",
+        "experiment_paths",
+        "implementation_status",
+        "benchmark_visible",
+        "live_run_allowed"
+      ],
+      "properties": {
+        "kind": {"enum": ["benchmark", "calibration"]},
+        "canonical_name": {"type": "string", "minLength": 1},
+        "compatibility_id": {"type": "string", "minLength": 1},
+        "task_instance_id": {"type": "string", "minLength": 1},
+        "workflow": {"type": "string", "minLength": 1},
+        "taxonomy": {
+          "oneOf": [
+            {"$ref": "#/$defs/taxonomy"},
+            {"type": "null"}
+          ]
+        },
+        "instance_path": {"type": "string", "pattern": "^[^/].*\\.json$"},
+        "experiment_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[^/].*\\.json$"}
+        },
+        "implementation_status": {
+          "enum": ["contract_only", "offline_fake_verified", "legacy_regression"]
+        },
+        "benchmark_visible": {"type": "boolean"},
+        "live_run_allowed": {"type": "boolean"}
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": "0.1",
+  "catalog_version": "2026-08-05",
+  "active_compatibility_id": "casting_c3_fixed",
+  "entries": [
+    {
+      "kind": "benchmark",
+      "canonical_name": "casting_s_c1_fixed",
+      "compatibility_id": "casting_c1_fixed",
+      "task_instance_id": "casting_c1_fixed_seed_0",
+      "workflow": "casting_c1_fixed",
+      "taxonomy": {
+        "task_family": "casting",
+        "agent_mode": "single",
+        "task_level": "C1",
+        "layout_type": "fixed"
+      },
+      "instance_path": "benchmark/instances/active/casting_c1_fixed.json",
+      "experiment_paths": [
+        "configs/experiments/active/casting_c1_contract.json"
+      ],
+      "implementation_status": "offline_fake_verified",
+      "benchmark_visible": true,
+      "live_run_allowed": false
+    },
+    {
+      "kind": "benchmark",
+      "canonical_name": "casting_s_c2_fixed",
+      "compatibility_id": "casting_c3_fixed",
+      "task_instance_id": "casting_c3_fixed_seed_0",
+      "workflow": "casting_c3_fixed",
+      "taxonomy": {
+        "task_family": "casting",
+        "agent_mode": "single",
+        "task_level": "C2",
+        "layout_type": "fixed"
+      },
+      "instance_path": "benchmark/instances/active/casting_c3_fixed.json",
+      "experiment_paths": [
+        "configs/experiments/active/casting_c3_contract.json"
+      ],
+      "implementation_status": "offline_fake_verified",
+      "benchmark_visible": true,
+      "live_run_allowed": false
+    },
+    {
+      "kind": "calibration",
+      "canonical_name": "calibration_route_a_a0_development",
+      "compatibility_id": "route_a_a0_development",
+      "task_instance_id": "route_a_a0_development_seed_0",
+      "workflow": "route_a_a0",
+      "taxonomy": null,
+      "instance_path": "benchmark/instances/route_a_a0_development.json",
+      "experiment_paths": [
+        "configs/experiments/phase0_fake_a0.json"
+      ],
+      "implementation_status": "legacy_regression",
+      "benchmark_visible": false,
+      "live_run_allowed": false
+    },
+    {
+      "kind": "calibration",
+      "canonical_name": "calibration_route_a_a0_phase3",
+      "compatibility_id": "route_a_a0_phase3",
+      "task_instance_id": "route_a_a0_phase3_seed_0",
+      "workflow": "route_a_a0",
+      "taxonomy": null,
+      "instance_path": "benchmark/instances/route_a_a0_phase3.json",
+      "experiment_paths": [
+        "configs/experiments/phase3_minimax_m3_workflow_a0.json",
+        "configs/experiments/phase3_scripted_a0.json",
+        "configs/experiments/phase3_single_direct_a0.json",
+        "configs/experiments/phase3_single_workflow_a0.json"
+      ],
+      "implementation_status": "legacy_regression",
+      "benchmark_visible": false,
+      "live_run_allowed": false
+    }
+  ]
+}

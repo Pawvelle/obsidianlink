@@ -12,6 +12,8 @@ ObsidianLink 的数据是每次 benchmark episode 产生的可审计证据，不
 
 所有事件使用 `episode_id` 和 `step_id`，适用时使用 `agent_id`。多 Agent 事件必须能区分发送者、接收者和共享状态更新；Adaptive 路线事件必须能审计选择和切换，但不能把 evaluator-only 参考答案写入 Agent-visible 流。
 
+正式结果只能引用 [`benchmark/catalog/tasks.json`](benchmark/catalog/tasks.json) 中 `benchmark_visible=true` 的任务。Calibration/regression entry 可以产生开发证据，但不得混入正式 Success Rate 或 leaderboard 汇总。
+
 ## 未来统一 run 元数据
 
 以下字段是未来正式 Benchmark 数据格式设计。字段类型、枚举和可空规则将在对应 schema 阶段冻结；B0 只冻结语义。
@@ -75,4 +77,4 @@ Agent-visible 数据与 evaluator-only truth 分开存储、授权和回放：
 
 ## 当前状态
 
-当前仓库仍未产生真实正式数据集。`casting_c1_fixed` 只有离线测试和受控 FakeBackend 结果，真实 MineRL episode 尚未运行。Ruined、Adaptive、Multi-Agent、统一未来字段和正式 train/dev/test 发布都只是规划，不能声称已有数据支持。
+当前仓库仍未产生真实正式数据集。`casting_c1_fixed`（Casting-S-C1）和 `casting_c3_fixed`（兼容 ID，正式分类 Casting-S-C2）都只有离线测试和受控 FakeBackend 结果，真实 MineRL episode 尚未运行。C1/C2 的局部 success 不能冒充 Nether entry。Ruined、Adaptive、Multi-Agent、统一未来字段和正式 train/dev/test 发布都只是规划，不能声称已有数据支持。

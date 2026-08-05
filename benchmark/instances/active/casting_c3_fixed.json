@@ -30,6 +30,11 @@
   },
   "split": "development",
   "scenario_parameters": {
+    "task_family": "casting",
+    "agent_mode": "single",
+    "task_level": "C2",
+    "layout_type": "fixed",
+    "compatibility_task_name": "casting_s_c2_fixed",
     "implementation_status": "offline_fake_verified",
     "world_dimension": "minecraft:overworld",
     "layout": "fixed_controlled",

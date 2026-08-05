@@ -43,6 +43,17 @@ Casting 从流体、支撑结构和方块操作开始，要求 Agent 通过原�
 
 `casting_c1_fixed` 是稳定历史兼容 ID，不重命名任务文件、workflow、实例或实验配置。
 
+当前 R5 任务 `casting_c3_fixed` 的分类为：
+
+- family：`casting`
+- mode：`single`（命名缩写 `s`）
+- level：`C2`
+- layout：`fixed`
+- status：`implemented_offline`
+- 文档级兼容名称：`casting_s_c2_fixed`
+
+`casting_c3_fixed` 中的 `c3` 是早期“三个 cell”的数量型命名，不代表本 taxonomy 的能力层级 C3。为保持任务、workflow、重放和测试兼容性，现有 ID 不重命名；新任务不得继续使用这种数量型歧义命名。
+
 ### Ruined Portal
 
 Ruined Portal 评测探索、结构理解、材料利用、修复和使用废弃传送门。
@@ -116,7 +127,9 @@ Multi-Agent 任务评测角色分工、私有观察、消息传递、共享任�
 - `ruined_m_r5_randomized`
 - `adaptive_m_a5_challenge`
 
-名称描述任务分类，不替代唯一的 `task_instance_id`。同一分类下的不同 seed、资源配置或场景变体必须使用不同实例 ID。旧 ID `casting_c1_fixed` 保留为兼容 ID；本文档不修改当前 schema。
+名称描述任务分类，不替代唯一的 `task_instance_id`。同一分类下的不同 seed、资源配置或场景变体必须使用不同实例 ID。旧 ID `casting_c1_fixed` 和 `casting_c3_fixed` 保留为兼容 ID；当前实例通过 `scenario_parameters` 显式声明 taxonomy，不为整理命名而破坏 schema 或重放。
+
+任务的 canonical name、兼容 ID、实际路径和 Benchmark/calibration 可见性统一登记在 [`benchmark/catalog/tasks.json`](../../benchmark/catalog/tasks.json)，规则见 [TASK_REGISTRY.md](../architecture/TASK_REGISTRY.md)。新任务必须先进入 catalog，不能只靠 README 或文件名声明分类。
 
 ## 难度维度
 
@@ -136,4 +149,4 @@ Multi-Agent 任务评测角色分工、私有观察、消息传递、共享任�
 
 ## 范围与兼容性
 
-该 taxonomy 冻结长期设计，不表示所有矩阵单元已经实现。B0 阶段可宣称的 active implementation 仍只有 Casting-S-C1 的 `casting_c1_fixed` 离线切片；Ruined、Adaptive、Multi-Agent 和端到端进入 Nether 均属于后续计划。
+该 taxonomy 冻结长期设计，不表示所有矩阵单元已经实现。当前 active implementation 包含 Casting-S-C1 的 `casting_c1_fixed` 和 Casting-S-C2 的 `casting_c3_fixed`，两者都仅在 FakeBackend 离线验证。Casting C3–C5、Ruined、Adaptive、Multi-Agent 和端到端进入 Nether 均属于后续计划。

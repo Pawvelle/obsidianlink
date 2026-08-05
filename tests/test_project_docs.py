@@ -13,6 +13,10 @@ CORE_DOCS = (
     ROOT / "ROADMAP.md",
     ROOT / "BENCHMARK_SPEC.md",
     ROOT / "DATASET_CARD.md",
+    ROOT / "docs/benchmark/TASK_TAXONOMY.md",
+    ROOT / "docs/architecture/TASK_REGISTRY.md",
+    ROOT / "docs/tasks/casting/casting_c1_fixed.md",
+    ROOT / "docs/tasks/casting/casting_c3_fixed.md",
     ROOT / "docs/runbooks/FIRST_OBSIDIAN_BLOCK.md",
 )
 MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
@@ -62,6 +66,7 @@ class ProjectDocumentationTests(unittest.TestCase):
             with self.subTest(name=name):
                 text = (ROOT / name).read_text(encoding="utf-8")
                 self.assertIn("casting_c1_fixed", text)
+                self.assertIn("casting_c3_fixed", text)
 
     def test_local_markdown_links_resolve(self) -> None:
         for path in CORE_DOCS:

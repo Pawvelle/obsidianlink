@@ -24,15 +24,19 @@ Single-Agent 与 Multi-Agent 是和任务族正交的 Agent Modes：
 
 ## Current Implementation
 
-当前阶段：`B0-BENCHMARK-SCOPE-FREEZE`（文档范围冻结）
+当前阶段：`B1-TASK-CATALOG-FOUNDATION`（兼容任务目录与严格验证完成）
 
-当前 active implementation 仍是 `casting_c1_fixed`，分类为 Casting-S-C1、fixed layout，兼容名称为 `casting_s_c1_fixed`。它只要求在固定受控场景中用原版水和熔岩生成一块黑曜石，是整个 Benchmark 最底层的单项能力测试。
+当前 active implementation 是 `casting_c3_fixed`：三个有序 target cell 的固定连续浇筑任务，正式分类为 Casting-S-C2 / fixed，兼容名称为 `casting_s_c2_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 taxonomy 的 C3（完整门框）。`casting_c1_fixed` 继续作为 Casting-S-C1 回归合同保留。
+
+[`benchmark/catalog/tasks.json`](benchmark/catalog/tasks.json) 是任务身份、taxonomy、兼容路径和发布可见性的统一索引。早期 `route_a_a0` 实例被明确标为 calibration/regression，不计入正式 Benchmark task matrix；详细兼容规则见 [TASK_REGISTRY.md](docs/architecture/TASK_REGISTRY.md)。
 
 当前已验证范围：
 
 - FakeBackend 离线能力清单与 fail-closed capability gate；
 - 单块黑曜石独立 evaluator；
 - 确定性、有限动作/等待/恢复的单块 driver；
+- 三 cell continuous evaluator、72 步 deterministic driver 和 per-cell 因果证据；
+- 有序前缀 `partial_completion`、有限恢复、预算失败与确定性重放；
 - Agent-visible observation 与 evaluator-only truth 隔离；
 - 结构化身份字段、证据快照和离线测试。
 
@@ -43,7 +47,7 @@ Single-Agent 与 Multi-Agent 是和任务族正交的 Agent Modes：
 - Ruined Portal、Adaptive Routing 和 Multi-Agent；
 - 正式 benchmark episode 数据集。
 
-任务实例位于 [`casting_c1_fixed.json`](benchmark/instances/active/casting_c1_fixed.json)，离线合同位于 [`casting_c1_contract.json`](configs/experiments/active/casting_c1_contract.json)，详细规则见 [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md)。B0 后的下一工程任务仍是 `R5-CONTINUOUS-CASTING`；本轮不实现它。
+当前实例位于 [`casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)，离线合同位于 [`casting_c3_contract.json`](configs/experiments/active/casting_c3_contract.json)，详细规则见 [`casting_c3_fixed` 任务页](docs/tasks/casting/casting_c3_fixed.md)。基础回归规则见 [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md)。下一工程任务是 `R6-COMPLETE-PORTAL-FRAME`。
 
 ## 系统架构
 
@@ -89,7 +93,7 @@ Evaluator 使用独立环境真值判断任务结果。目标方块、流体状�
 
 Success Rate 是主要指标；Completion Rate、Environment Steps、Game Time、Model Calls、Invalid Action Rate、Recovery Rate 和 Evidence Completeness 是辅助指标。Adaptive 与 Multi-Agent 另有路线选择、切换、通信、makespan、重复工作和贡献指标。项目不使用未经验证的单一综合分数。
 
-`casting_c1_fixed` 的 evaluator outcome `success` 只证明单块 C1 切片完成，不代表完整传送门或进入 Nether。Driver 结束、模型返回 `accepted=true` 或画面看似正确均不能单独证明成功。
+`casting_c1_fixed` 的 `success` 只证明 C1 单块切片，`casting_c3_fixed` 的 `success` 只证明 C2 连续浇筑切片；两者都不代表完整传送门或进入 Nether。Driver 结束、模型返回 `accepted=true` 或画面看似正确均不能单独证明成功。
 
 ## 项目结构
 
@@ -101,6 +105,7 @@ ObsidianLink/
 ├── BENCHMARK_SPEC.md       权威总规范、指标和信息边界
 ├── DATASET_CARD.md         运行证据与未来统一元数据
 ├── benchmark/              任务实例和 schema
+│   └── catalog/            canonical taxonomy 与历史兼容路径索引
 ├── configs/                实验合同
 ├── obsidianlink/           协议、backend、driver、evaluator 与 workflow
 ├── docs/
@@ -183,6 +188,8 @@ git diff --check
 - [AGENTS.md](AGENTS.md)：必须遵守的开发规则
 - [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md)：Benchmark 权威总规范
 - [TASK_TAXONOMY.md](docs/benchmark/TASK_TAXONOMY.md)：任务分类与命名
+- [TASK_REGISTRY.md](docs/architecture/TASK_REGISTRY.md)：Catalog、兼容路径与 calibration 分类
 - [ROADMAP.md](ROADMAP.md)：工程阶段与 Benchmark 发布路线
 - [DATASET_CARD.md](DATASET_CARD.md)：数据、证据和隐私边界
 - [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md)：当前最小切片合同
+- [`casting_c3_fixed` 任务页](docs/tasks/casting/casting_c3_fixed.md)：当前连续浇筑合同与 C2 兼容映射

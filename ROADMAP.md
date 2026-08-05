@@ -20,7 +20,7 @@
 
 使用公共 `MacroAction` 协议和封闭白名单，在 FakeBackend 上以有限动作、有限等待和有限恢复完成单块浇筑。Driver 不读取 evaluator-only truth；离线重放、隔离和失败路径测试已完成。
 
-### B0：Benchmark Scope Freeze（当前阶段，文档完成）
+### B0：Benchmark Scope Freeze（完成）
 
 B0 冻结：
 
@@ -30,17 +30,21 @@ B0 冻结：
 - family/mode/level/layout 文档命名规范；
 - 通用、Adaptive 和 Multi-Agent 指标体系；
 - README、BENCHMARK_SPEC、ROADMAP、DATASET_CARD、PROJECT_STATUS 与 taxonomy 的一致范围；
-- 当前 active implementation 仍保持 `casting_c1_fixed`，不改文件 ID 或 schema。
+- B0 完成时 active implementation 保持 `casting_c1_fixed`，不改文件 ID 或 schema。
 
 B0 不实现新环境、evaluator、driver、planner 或通信逻辑。完成后下一工程任务仍是 `R5-CONTINUOUS-CASTING`。
 
 ## Suite A — Casting
 
-### R5：连续浇筑（下一工程任务）
+### R5：连续浇筑（完成）
 
-把 C1 扩展为多个有序目标黑曜石，验证多次流体操作、per-cell 因果证据、部分完成和有限恢复。必须先完成合同和 FakeBackend 确定性证明。
+`casting_c3_fixed` 已把 C1 扩展为三个有序目标黑曜石，并完成多次流体操作、per-cell 因果证据、部分完成、有限恢复和 FakeBackend 确定性证明。按 B0 taxonomy，该旧兼容 ID 属于 Casting-S-C2 / fixed；`c3` 表示三个 cell，不是能力层级 C3。
 
-### R6：完整门框、点火和进入 Nether
+### B1：Task Catalog Foundation（完成）
+
+建立严格、只读的任务 catalog，统一 canonical taxonomy、历史兼容 ID、实例/实验路径、实现状态、发布可见性和 live-run policy。现有 C1/C2 保持原路径；`route_a_a0` 明确归为 calibration/regression；CLI 和环境检查从 catalog 解析当前任务。B1 不移动历史文件、不修改 evaluator/driver/backend，也不实现 R6。
+
+### R6：完整门框、点火和进入 Nether（下一工程任务）
 
 在固定受控场景完成有效门框、点火和 Nether entry，由独立 evaluator 验证。
 

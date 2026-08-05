@@ -1,6 +1,8 @@
 # ObsidianLink Benchmark 总规范
 
-本文档是 ObsidianLink Benchmark 的权威总规范。任务分类和稳定命名见 [TASK_TAXONOMY.md](docs/benchmark/TASK_TAXONOMY.md)；当前单块切片的具体合同见 [`casting_c1_fixed`](docs/tasks/casting/casting_c1_fixed.md)。
+本文档是 ObsidianLink Benchmark 的权威总规范。任务分类和稳定命名见 [TASK_TAXONOMY.md](docs/benchmark/TASK_TAXONOMY.md)；当前能力切片合同见 [`casting_c1_fixed`](docs/tasks/casting/casting_c1_fixed.md) 和 [`casting_c3_fixed`](docs/tasks/casting/casting_c3_fixed.md)。
+
+正式任务身份、canonical taxonomy、历史兼容 ID 和 calibration 可见性以 [`benchmark/catalog/tasks.json`](benchmark/catalog/tasks.json) 为统一索引；解析与迁移规则见 [TASK_REGISTRY.md](docs/architecture/TASK_REGISTRY.md)。Catalog 不包含 evaluator truth，也不替代 task instance 合同。
 
 ## 1. Benchmark 总目标
 
@@ -164,7 +166,12 @@ Observation、action、message、evaluation 和 log 都包含 `episode_id`、`st
 
 ## 14. 当前实现范围
 
-B0 范围冻结时，可作为 active benchmark implementation 声明的只有 Casting-S-C1 / `casting_c1_fixed`：FakeBackend 离线能力清单、独立 evaluator 和 deterministic driver。其兼容任务文件保持不变。
+当前 active benchmark implementation 包含：
+
+- Casting-S-C1 / `casting_c1_fixed`：FakeBackend 单块能力清单、独立 evaluator 和 deterministic driver；
+- Casting-S-C2 / `casting_c3_fixed`：三个有序 cell 的 continuous evaluator、deterministic driver、部分完成、有限恢复和 per-cell 因果证据。
+
+`casting_c3_fixed` 是旧的数量型兼容 ID，其中 `c3` 表示三个 cell；它不属于 taxonomy C3（完整门框）。两个任务目前都只完成 FakeBackend 离线验证。
 
 当前不得声称：
 
