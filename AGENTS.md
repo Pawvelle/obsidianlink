@@ -14,6 +14,11 @@
 10. 先用 FakeBackend 和确定性 driver 证明任务，再连接模型。
 11. 运行结果写入 `runs/`，不得保存密钥、模型权重或隐藏推理。
 12. 修改后运行相关离线测试，并报告结果和仍未验证的限制。
+13. 长期 Benchmark scope 与 `PROJECT_STATUS.md` 的当前 active task 必须分开；不得因未来路线已规划就提前实现未到阶段的代码。
+14. 新任务必须声明 family、mode、level 和 layout；保留已有兼容 ID，除非专门阶段明确迁移。
+15. Single-Agent 和 Multi-Agent 的 observation、memory、消息边界与 evaluator truth 必须严格隔离；一个 Agent 的私有状态不得隐式泄漏给另一个 Agent。
+16. Adaptive evaluator 的可行路线集合、参考路线和参考成本属于 evaluator-only truth，不得进入 Agent prompt、memory、消息或共享任务状态。
+17. README 和其他公开文档必须区分愿景与已实现范围；未完成的 Ruined、Adaptive、Multi-Agent 或真实 MineRL 能力不得声称已支持。
 
 ## 开始检查
 

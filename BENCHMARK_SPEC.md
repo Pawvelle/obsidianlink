@@ -1,47 +1,177 @@
-# Benchmark 说明
+# ObsidianLink Benchmark 总规范
 
-## 目标
+本文档是 ObsidianLink Benchmark 的权威总规范。任务分类和稳定命名见 [TASK_TAXONOMY.md](docs/benchmark/TASK_TAXONOMY.md)；当前单块切片的具体合同见 [`casting_c1_fixed`](docs/tasks/casting/casting_c1_fixed.md)。
 
-评估一个 Minecraft Agent 是否能用原版机制构建并使用下界传送门。当前评估 R5 最小连续浇筑切片 `casting_c3_fixed`；R4 的 `casting_c1_fixed` 作为回归合同保留。
+## 1. Benchmark 总目标
 
-## 当前任务
+ObsidianLink 是一个可复现的 Minecraft 单智能体与多智能体 Benchmark，用于评测 Agent 在“进入下界”任务中的环境感知、路线可行性判断、长程规划、具身动作执行、错误恢复、路线切换、分工、通信与协作，并要求自动评估和可审核运行证据。
 
-- 维度：Overworld
-- Agent：1 个
-- 布局：固定受控场景
-- 资源：3 个水桶、3 个熔岩桶和 6 个支撑方块
-- 目标：让 3 个冻结、有序的目标 cell 从非黑曜石变成黑曜石
-- 禁止：Minecraft 命令和 evaluator 修改世界
+端到端目标是：至少一名任务合同指定的 Agent，通过当前 episode 内完成建造、修复或激活的下界传送门进入 Nether。
 
-任务实例：[`benchmark/instances/active/casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)
+## 2. 任务族
 
-## 成功条件
+### Casting
 
-以下条件全部满足才算成功：
+Agent 使用原版水、熔岩、支撑结构和方块更新机制构造传送门。中间里程碑为：单块黑曜石、连续目标黑曜石、有效门框、点火、进入 Nether。
 
-1. reset 后 3 个目标 cell 都不是黑曜石；
-2. Agent 在预算内执行白名单动作；
-3. 3 个目标 cell 都通过水与熔岩更新变成黑曜石；
-4. 每个变化都发生在该 cell 独占的相关动作后的有限时间窗口；
-5. episode 正常结束，自动评估和人工复核一致。
+### Ruined Portal
 
-少于或多于 3 个 cell、目标顺序错误、跨 cell 重用动作 step、真值缺失、因果不清、形成圆石、超预算或进程残留都不能算成功。完成非空有序前缀但未完成全部 cell 时只能得到 `partial_completion`。
+Agent 探索废弃传送门，理解缺失结构，收集或利用资源完成修复，再点火并进入 Nether。识别、定位、到达、判断缺口和完成修复都是中间里程碑；仅找到结构不是完整成功。
 
-## 信息边界
+### Adaptive
 
-Agent 只能看到正常 observation，例如画面、公开库存和手持物品。目标 cell、流体状态、Portal 结构和评分结果属于 evaluator-only 信息，不得进入 prompt、memory 或策略输入。
+场景同时或潜在地提供 Casting 与 Ruined Portal 路线。Agent 需要根据距离、资源、结构完整程度、风险和执行成本选择路线，并在失败或条件变化时切换。早期场景优先采用“只有一条路线实际可行”的可审计设计；后续才引入两条路线均可行但成本不同的比较。
 
-## 安全边界
+## 3. Agent 模式
 
-- 动作必须经过 schema、类型、白名单和数值限制；
-- 每个事件带 `episode_id`、`step_id`，适用时带 `agent_id`；
-- 所有循环、等待、重试和模型调用都有上限；
-- 模型不得生成并执行代码、shell 或 Minecraft 命令。
+- Single-Agent：一个 Agent 独立观察、规划、执行和恢复。
+- Multi-Agent：多个具有独立身份和私有 observation/memory 的 Agent，在同一任务族内通过受控消息或共享状态合作。
 
-## 证据
+模式与任务族正交，形成 Casting-S/M、Ruined-S/M 和 Adaptive-S/M 六个矩阵单元。Multi-Agent 不是独立的第四任务族。
 
-正式运行至少保存任务配置、代码版本、初始与最终画面、动作事件、evaluator 事件、summary 和 manual review。`accepted=true` 或 driver 结束都不等于任务成功。
+## 4. 统一成功定义
 
-## 当前状态
+端到端 Benchmark success 必须同时满足：
 
-该任务仍处于离线准备阶段。必须按 [ROADMAP.md](ROADMAP.md) 先完成能力清单、evaluator 和确定性 driver，之后才可申请真实 MineRL 运行。
+1. 任务实例、指定 Agent 集合、初始世界和预算在 reset 时冻结；
+2. 门框在当前 episode 中被建造、修复或从非完整状态激活；
+3. 世界变化只来自允许的 Agent 动作和原版 Minecraft 机制；
+4. 至少一名指定 Agent 在预算内实际进入 Nether；
+5. evaluator-only 真值和证据链独立验证以上事实；
+6. episode 正常终止，证据身份、step 顺序和版本信息完整。
+
+仅发现传送门、仅完成门框、仅点火、使用与本 episode 无关的预先完整传送门、文本声称成功、driver 正常退出，均不构成端到端成功。Evaluator 或 Minecraft 命令不得直接修改世界。
+
+C1/R1 等能力切片可以使用局部 evaluator outcome `success` 表示该切片完成，但汇总时必须标注 `task_level`，不得把它冒充进入 Nether 的端到端成功。
+
+## 5. 中间里程碑与 Completion Rate
+
+每个实例必须冻结有序、可判定的里程碑：
+
+- Casting：流体与材料就绪、黑曜石 cell、连续区段、有效门框、点火、Nether entry；
+- Ruined：识别、定位、到达、缺口判断、材料就绪、修复、点火、Nether entry；
+- Adaptive：候选信息获取、初始路线选择、路线执行、必要时切换、最终路线完成、Nether entry；
+- Multi-Agent：在所属 family 的里程碑之外记录每个 Agent 的可归因贡献。
+
+`completion_rate` 是已验证里程碑权重或数量占比；权重必须在任务合同中预先冻结。它是诊断指标，不替代 `success`，也不能掩盖关键末端里程碑缺失。
+
+## 6. 信息边界
+
+### Agent-visible
+
+只包含正常游戏画面、公开库存、手持物品、允许的状态字段、该 Agent 接收的消息，以及任务明确公开的信息。Planner 只使用这一侧的数据。
+
+### Evaluator-only
+
+包括目标 cell 和方块 truth、流体 truth、隐藏 Portal 结构、可行路线集合、参考路线与参考成本、评分结果、其他 Agent 的私有 observation，以及任务未公开的场景参数。
+
+两侧必须使用独立类型、存储和日志通道。Evaluator-only 数据不能进入 prompt、memory、消息、共享任务板或策略输入。Multi-Agent 中，一个 Agent 的私有 observation/memory 也不能未经协议直接泄漏给另一 Agent。
+
+## 7. 动作安全与世界修改
+
+- 模型输出必须经过严格结构解析、封闭动作白名单、类型检查和数值限制；
+- 不执行模型生成的代码、shell、Minecraft 命令或无限输入；
+- 所有环境 step、等待、重试、恢复、消息和模型调用都有硬上限；
+- Planner I/O 不得阻塞环境 step loop，过期决策必须丢弃；
+- evaluator、runner 和 reviewer 不得为了达成结果而修改世界；
+- 只允许任务合同声明的原版机制和 Agent 动作产生计分世界变化。
+
+## 8. 自动 evaluator 要求
+
+Evaluator 必须独立于 Agent 文本和 driver 状态，使用 evaluator-only truth 与结构化事件：
+
+- 输入、版本、outcome 集合、判定优先级和预算应可序列化并冻结；
+- truth 缺失、身份不一致、step 乱序或因果证据不足时 fail closed；
+- 每个判定关联 `episode_id`、`step_id`，适用时关联 `agent_id`；
+- 成功必须能追溯到合法 Agent 动作后的有限因果窗口；
+- 自动结果与人工复核不一致时不得计为已确认成功；
+- evaluator 版本随结果保存，支持确定性重放和审计。
+
+## 9. 通用指标
+
+Success Rate 是主要指标。效率和可靠性指标作为辅助报告，不设计未经验证的单一综合分数。
+
+| Metric | 定义 |
+|---|---|
+| Success Rate | 满足该任务层级冻结成功合同的 episode 比例；端到端榜单必须要求进入 Nether |
+| Completion Rate | 已验证里程碑完成比例 |
+| Environment Steps | episode 消耗的环境 step |
+| Game Time | 冻结口径下的游戏内时长 |
+| Model Calls | 有效和被拒绝/过期的模型调用计数，分别保存 |
+| Invalid Action Rate | 被 parser、安全层或 backend 拒绝的动作占提交动作比例 |
+| Recovery Rate | 触发恢复的 episode 比例，并同时报告恢复次数 |
+| Evidence Completeness | 必需证据字段和文件完整的比例；缺关键真值时 fail closed |
+
+所有比率必须同时报告分子、分母、任务层级、split 和置信区间或重复 seed 范围，避免跨不同难度直接混合。
+
+## 10. Adaptive 专属指标
+
+| Metric | 定义 |
+|---|---|
+| Route Selection Accuracy | 初始所选路线属于 evaluator 冻结可行/目标路线集合的比例 |
+| Decision Steps | reset 到可审计初始路线承诺之间的 environment steps |
+| Route Switch Count | 已验证路线切换次数 |
+| Successful Route Switch Rate | 切换后最终成功的切换 episode 比例 |
+| Route Abandonment Cost | 被放弃路线在切换前消耗的 step、时间和资源 |
+| Final Route | 最终执行完成的 Casting 或 Ruined 路线 |
+| Normalized Execution Cost | 实际执行成本相对冻结参考成本的比值或差值，口径由实例预先声明 |
+
+还必须记录路线切换原因。可行路线和参考成本只供 evaluator 使用；Agent 的选择从动作/计划事件推导，不能由 evaluator truth 回填。
+
+## 11. Multi-Agent 专属指标
+
+| Metric | 定义 |
+|---|---|
+| Team Success Rate | 团队满足任务层级成功合同的 episode 比例 |
+| Makespan | reset 到团队终局所经历的 environment steps 或 game time |
+| Communication Message Count | 协议接受的 Agent 间消息数 |
+| Communication Token Count | 按冻结 tokenizer/计数规则计算的消息 token 数 |
+| Idle Step Ratio | 各 Agent 可行动但没有有效任务推进的 step 占比 |
+| Duplicate Work Rate | 被 evaluator 归类为重复且无新增里程碑贡献的工作占比 |
+| Coordination Failure Count | 冲突动作、错误交接、状态不一致等可判定失败次数 |
+| Per-Agent Milestone Contribution | 每个 Agent 对已验证里程碑的可归因贡献 |
+
+贡献均衡度只作分析，不规定越平均越好；有效分工可能天然不均衡。团队 success 仍要求至少一名任务指定 Agent 进入 Nether（对端到端任务）。
+
+## 12. 数据划分
+
+正式 Benchmark 使用 `train` / `dev` / `test`：
+
+- train 可公开生成规则、场景和必要标注，用于开发 baseline；
+- dev 用于调试和选择公开配置，但不得反复据其隐藏真值手工定制；
+- test 的 seed、隐藏布局、可行路线、参考成本和 evaluator truth 与 Agent 隔离。
+
+同源模板、近重复世界和 seed 不得跨 split 泄漏。Split 分配、生成器版本和 benchmark version 必须保存；最终报告按 family、mode、level、layout 和难度参数分层。
+
+## 13. 运行证据协议
+
+正式 episode 至少保存：
+
+```text
+task_instance.json
+experiment_config.json
+capability_manifest.json
+code_version.json
+initial.png
+final.png
+events.jsonl
+evaluator_events.jsonl
+summary.json
+manual_review.md
+```
+
+Observation、action、message、evaluation 和 log 都包含 `episode_id`、`step_id`，适用时包含 `agent_id`。`summary.json` 使用 [DATASET_CARD.md](DATASET_CARD.md) 规定的统一元数据。Agent-visible 与 evaluator-only 证据分开保存；不得保存密钥、模型权重、隐藏推理或与 episode 无关的个人数据。
+
+## 14. 当前实现范围
+
+B0 范围冻结时，可作为 active benchmark implementation 声明的只有 Casting-S-C1 / `casting_c1_fixed`：FakeBackend 离线能力清单、独立 evaluator 和 deterministic driver。其兼容任务文件保持不变。
+
+当前不得声称：
+
+- 真实 MineRL 浇筑已经验证；
+- 完整门框、点火或进入 Nether 已完成；
+- Ruined Portal 环境或修复任务已实现；
+- Adaptive planner/evaluator 已实现；
+- Multi-Agent observation、通信或协作已实现。
+
+这些内容属于 [ROADMAP.md](ROADMAP.md) 的后续阶段，而不是 B0 交付。

@@ -1,74 +1,101 @@
-# 路线图
+# ObsidianLink 路线图
 
-项目采用小步验证：先证明一块黑曜石，再扩展到门框和完整任务。
+路线图把长期 Benchmark scope 与当前工程阶段分开。每个阶段先冻结合同，再用 FakeBackend 和确定性流程验证；真实 MineRL、模型和更复杂场景必须在对应阶段获得授权后推进。
 
-## 已完成：基础层
+## Foundation
 
-- 安全动作协议、FakeBackend、日志和回放；
-- MineRL Portal 环境桥接；
-- Portal 框架、激活和进入下界 evaluator；
-- 确定性建门校准流程。
+### R1：冻结真实任务契约（完成）
 
-## R1：冻结真实任务契约（完成）
+活动任务 `casting_c1_fixed`：固定场景、Single-Agent、用水和熔岩生成一块黑曜石。任务 seed、资源、目标 cell、里程碑和预算已冻结。
 
-活动任务为 `casting_c1_fixed`：固定场景、单 Agent、用水和熔岩生成一块黑曜石。
+### R2：后端能力清单（完成）
 
-## R2：后端能力清单（完成）
+离线定义不可变 `BackendCapabilities`，覆盖水桶/熔岩桶选择与使用、公开库存/手持物品、目标方块 truth 和流体 truth。缺关键能力时 reset 前 fail closed；FakeBackend 正反例、序列化与离线测试已完成。
 
-纯离线确认桶、use 动作、公开物品状态、目标方块和流体真值的接口。缺能力时必须提前失败。
+### R3：单块黑曜石 evaluator（完成）
 
-完成条件：manifest、FakeBackend 正反例、reset 路径门禁、JSON 序列化与离线测试通过。详见 [PROJECT_STATUS.md](PROJECT_STATUS.md) 的 R2 段。
+为 `casting_c1_fixed` 实现独立 `CastingEvaluationState` 和 evaluator：区分 `success`、`wrong_block`、`truth_missing`、预算、初态、因果和终止问题。Evaluator 只读 evaluator-only truth，不读取 Agent 文本、图像或 Planner 输入，也不修改世界。
 
-## R3：单块 evaluator（完成）
+### R4：确定性单块 driver（完成）
 
-在 R2 已暴露的 backend 能力缺口上，为 `casting_c1_fixed` 实现 evaluator：比较动作前后目标 cell 的方块，给出 `success`、`wrong_block`、`truth_missing` 或超预算等明确结果。evaluator 必须：
+使用公共 `MacroAction` 协议和封闭白名单，在 FakeBackend 上以有限动作、有限等待和有限恢复完成单块浇筑。Driver 不读取 evaluator-only truth；离线重放、隔离和失败路径测试已完成。
 
-- 只读取 evaluator-only 真值，不读取 Agent 文本 / 图像 / Planner 输入；
-- 在 `target_block_truth` / `fluid_truth` 缺失时返回 `truth_missing`，不能误判为 `success`；
-- 通过 `BackendCapabilities` 显式校验 backend 是否能提供 `exposes_target_block_truth` 等真值接口，缺则 fail closed；
-- 复用现有 `EvaluationState` / `PortalEvaluator` 的失败分类结构；
-- 不实现真实 driver；driver 留给 R4。
+### B0：Benchmark Scope Freeze（当前阶段，文档完成）
 
-完成条件（已达成）：
+B0 冻结：
 
-- `obsidianlink/evaluation/casting.py` 提供 `CastingEvaluationState`（frozen + 类型严格 + 容器递归不可变 + `__post_init__` 跨字段时间校验）、`CastingEvaluationResult`（frozen，`as_dict()` 提供分离的 JSON 快照）、`CastingEvaluator`（纯函数，签名只接受 `CastingEvaluationState`）。
-- 9 个稳定 outcome id（`success` / `in_progress` / `wrong_block` / `truth_missing` / `step_budget_exceeded` / `time_budget_exceeded` / `invalid_initial_state` / `causality_missing` / `abnormal_termination`），固定优先级（step 预算 → 时间预算 → invalid_initial_state → truth_missing → in_progress → abnormal_termination → causality_missing → wrong_block → success）。
-- 有限因果窗口 `causality_window_steps`（默认 4，上限 32），方块更新必须落在最新相关动作之后且在窗口内；水/熔岩必须明确存在，transition 必须明确以 obsidian 结束，所有证据 step 不得来自未来。
-- `FakeEnvironmentBackend` 暴露 `set_casting_evaluation_state` / `get_casting_evaluation_state`：`episode_id` / `step_id` 严格一致；未注入 / 越步读取 / 未 reset 读取分别报错；`reset` / `step` / `close` 自动清空；`Observation.frame` / `visible_inventory` / `messages` / `workflow_stage` 不含任何 casting truth。
-- 当前真实 MineRL 仍因 7 项能力缺失 fail closed（`assert_backend_can_start_task` 在 `reset` 最早处触发，`env_factory` 不被调用）。
-- 全部离线测试通过；`git diff --check` 干净；`vendor/minerl` 未修改；未启动 Minecraft / MineRL / Gradle / 模型 API。
+- 统一“进入 Nether”的端到端 Benchmark 目标；
+- Casting、Ruined Portal、Adaptive Routing 三个任务族；
+- Single-Agent、Multi-Agent 两种正交模式；
+- family/mode/level/layout 文档命名规范；
+- 通用、Adaptive 和 Multi-Agent 指标体系；
+- README、BENCHMARK_SPEC、ROADMAP、DATASET_CARD、PROJECT_STATUS 与 taxonomy 的一致范围；
+- 当前 active implementation 仍保持 `casting_c1_fixed`，不改文件 ID 或 schema。
 
-## R4：确定性单块 driver（完成）
+B0 不实现新环境、evaluator、driver、planner 或通信逻辑。完成后下一工程任务仍是 `R5-CONTINUOUS-CASTING`。
 
-使用有限动作、有限等待和有限重试完成单块浇筑。先跑 FakeBackend；真实 MineRL 另行申请授权。
+## Suite A — Casting
 
-完成条件（已达成）：公共 `MacroAction` 协议、24 步固定计划、计划/step/time/wait 硬上限、后端提前终止 fail closed、driver/evaluator 信息隔离、FakeBackend 可重放与全量离线测试通过。
+### R5：连续浇筑（下一工程任务）
 
-## R5：连续浇筑（完成）
+把 C1 扩展为多个有序目标黑曜石，验证多次流体操作、per-cell 因果证据、部分完成和有限恢复。必须先完成合同和 FakeBackend 确定性证明。
 
-把 R3 / R4 的单块扩展为短区段，验证多次液体操作、每 cell 独立因果证据、单 cell 失败不掩盖、有限恢复协议。
+### R6：完整门框、点火和进入 Nether
 
-完成条件（已达成）：
+在固定受控场景完成有效门框、点火和 Nether entry，由独立 evaluator 验证。
 
-- 任务实例 `casting_c3_fixed`（3 个有序目标 cell 的固定直线区段）已冻结在 `benchmark/instances/active/casting_c3_fixed.json`。
-- 新 `obsidianlink/evaluation/continuous_casting.py` 提供 `ContinuousCastingCellTruth` / `ContinuousCastingEvaluationState` / `ContinuousCastingEvaluationResult` / `ContinuousCastingEvaluator`，所有容器都是 frozen + 递归不可变 + `__post_init__` 严格校验。
-- 10 个稳定 outcome id（success / in_progress / partial_completion / wrong_block / truth_missing / step_budget_exceeded / time_budget_exceeded / invalid_initial_state / causality_missing / abnormal_termination）；`partial_completion` 表示完成非空有序前缀，中间空洞仍是 `wrong_block`。
-- evaluator 严格要求 3 个冻结、有序目标 cell；每个 cell 的 `relevant_action_steps` / `water_truth` / `lava_truth` / `transition_evidence` 都是 per-cell 的，相关动作 step 不得被多个 cell 重复声明。
-- 新 `obsidianlink/drivers/casting_c3.py` 提供 `run_casting_c3_driver` + 72 步固定 plan + 公共 `MacroAction` 协议 + 封闭 R5 白名单。
-- 恢复协议基于公开信号：后端 `backend.step()` 抛 `RecoverableBackendError` 时 driver 在 per-step 预算和总预算内重试同一动作。预算耗尽后 fail closed，恢复动作仍经过同一白名单和预算检查。
-- `FakeEnvironmentBackend` 暴露 `set_continuous_casting_evaluation_state` / `get_continuous_casting_evaluation_state`，与 R3 单块表面对称，identity-guarded，`reset` / `step` / `close` 自动清空。
-- 3-cell success 可在 FakeBackend 上确定性重放；部分成功和中间失败不会误报 success；R4 / R3 / R2 全部测试无回归。
-- `vendor/minerl` 未修改；未启动 MineRL / Gradle / 模型 API。
-- `casting_c3_fixed` 已纳入 R2 capability gate，缺桶动作或 evaluator 真值能力时在 reset 前 fail closed。
-- CLI 阶段推进到 `reset_5_continuous_casting`，`python -m obsidianlink --check` 同时验证 R4 单块合同和 R5 连续浇筑合同。
-- R5 evaluator 56 个 + R5 driver 56 个，并新增 3 个 capability gate 与 1 个 benchmark 文件合同测试；R4 之前 286 个，总计 402 个离线用例全过。
+### R7：模型与受控变化
 
-## R6：完整门框与点火
+确定性路径稳定后接入受安全约束的模型，并引入有限、可审计的场景变化。
 
-在固定受控场景完成门框、点火和进入下界，并由 PortalEvaluator 验证。
+### 后续 Casting 扩展
 
-## R7：模型与更完整任务
+随机布局、资源不完整、执行噪声和错误恢复；每项变化都需要显式 difficulty parameters、baseline 和回归合同。
 
-确定性流程稳定后再接入 VLM。之后才考虑资源获取、废弃传送门、随机布局和双 Agent。
+## Suite B — Ruined Portal
 
-每个阶段都必须有自动评估、受控证据和必要的人工复核。
+- P1：废弃传送门结构契约；
+- P2：结构识别 evaluator；
+- P3：固定场景确定性修复；
+- P4：探索与定位；
+- P5：完整修复、点火和进入 Nether；
+- P6：随机布局与资源差异。
+
+“找到废弃传送门”始终只是里程碑，P5 才覆盖该 family 的端到端成功。
+
+## Suite C — Adaptive Routing
+
+- A1：单可行路线判断；
+- A2：路线选择 evaluator；
+- A3：两条路线成本比较；
+- A4：失败后的路线切换；
+- A5：模型规划与动态重规划。
+
+早期先使用只有一条路线可行的可审计场景。可行路线集合和参考成本只属于 evaluator，不能泄漏给 Agent。
+
+## Suite D — Multi-Agent
+
+- M1：多 Agent observation、memory、身份和 evaluator truth 隔离；
+- M2：有限消息协议与共享任务板；
+- M3：固定分工任务；
+- M4：Casting-M；
+- M5：Ruined-M；
+- M6：Adaptive-M；
+- M7：通信受限和协作失败测试。
+
+Suite D 提供正交的 Agent mode 能力，不创建第四个任务族。每个 family 的 Multi-Agent 任务仍使用对应 C/R/A level。
+
+## Benchmark Release
+
+完成任务族与模式的基础验证后，依次建设：
+
+- 场景生成器；
+- train/dev/test 划分与去泄漏规则；
+- baseline agents；
+- 统一 runner；
+- 统一结果格式和 evaluator versioning；
+- benchmark 数据发布；
+- leaderboard；
+- 论文实验。
+
+以上均为长期规划。B0 不创建相关实现代码，也不代表 Ruined、Adaptive、Multi-Agent 或真实 MineRL 已受支持。
