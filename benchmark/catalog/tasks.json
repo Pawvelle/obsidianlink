@@ -44,6 +44,66 @@
       "live_run_allowed": false
     },
     {
+      "kind": "benchmark",
+      "canonical_name": "casting_s_c3_fixed",
+      "compatibility_id": "casting_s_c3_fixed",
+      "task_instance_id": "casting_s_c3_fixed_seed_0",
+      "workflow": "casting_s_c3_fixed",
+      "taxonomy": {
+        "task_family": "casting",
+        "agent_mode": "single",
+        "task_level": "C3",
+        "layout_type": "fixed"
+      },
+      "instance_path": "benchmark/instances/casting/single/casting_s_c3_fixed.json",
+      "experiment_paths": [
+        "configs/experiments/active/casting_s_c3_contract.json"
+      ],
+      "implementation_status": "contract_only",
+      "benchmark_visible": true,
+      "live_run_allowed": false
+    },
+    {
+      "kind": "benchmark",
+      "canonical_name": "casting_s_c4_fixed",
+      "compatibility_id": "casting_s_c4_fixed",
+      "task_instance_id": "casting_s_c4_fixed_seed_0",
+      "workflow": "casting_s_c4_fixed",
+      "taxonomy": {
+        "task_family": "casting",
+        "agent_mode": "single",
+        "task_level": "C4",
+        "layout_type": "fixed"
+      },
+      "instance_path": "benchmark/instances/casting/single/casting_s_c4_fixed.json",
+      "experiment_paths": [
+        "configs/experiments/active/casting_s_c4_contract.json"
+      ],
+      "implementation_status": "contract_only",
+      "benchmark_visible": true,
+      "live_run_allowed": false
+    },
+    {
+      "kind": "benchmark",
+      "canonical_name": "casting_s_c5_fixed",
+      "compatibility_id": "casting_s_c5_fixed",
+      "task_instance_id": "casting_s_c5_fixed_seed_0",
+      "workflow": "casting_s_c5_fixed",
+      "taxonomy": {
+        "task_family": "casting",
+        "agent_mode": "single",
+        "task_level": "C5",
+        "layout_type": "fixed"
+      },
+      "instance_path": "benchmark/instances/casting/single/casting_s_c5_fixed.json",
+      "experiment_paths": [
+        "configs/experiments/active/casting_s_c5_contract.json"
+      ],
+      "implementation_status": "contract_only",
+      "benchmark_visible": true,
+      "live_run_allowed": false
+    },
+    {
       "kind": "calibration",
       "canonical_name": "calibration_route_a_a0_development",
       "compatibility_id": "route_a_a0_development",

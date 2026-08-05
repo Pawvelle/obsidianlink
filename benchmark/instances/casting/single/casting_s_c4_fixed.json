@@ -1,0 +1,105 @@
+{
+  "schema_version": "0.1",
+  "task_id": "casting_s_c4_fixed_seed_0",
+  "route": "lava_casting",
+  "difficulty": 3,
+  "agent_ids": ["agent_1"],
+  "world_seed": 0,
+  "instruction": "At the visible task-origin marker, use the provided water, lava, and cobblestone with vanilla block updates to cast the public full-ring 4x5 portal plan: plane_z, minimum corner [0,0,1] relative to the task origin, width 4, height 5, all four corners included (14 obsidian cells). Then hold flint_and_steel and use it on the single public ignition target [1,1,1] inside that frame. Do not enter the Nether. The task ends when that episode-built frame is activated, the budget runs out, or the driver stops.",
+  "spawn_positions": {
+    "agent_1": [0, 4, 0]
+  },
+  "initial_inventories": {
+    "agent_1": {
+      "water_bucket": 14,
+      "lava_bucket": 14,
+      "cobblestone": 28,
+      "flint_and_steel": 1
+    }
+  },
+  "workflow": "casting_s_c4_fixed",
+  "milestones": [
+    "task_reset",
+    "first_obsidian_cast",
+    "build_site_selected",
+    "valid_portal_frame",
+    "portal_activated"
+  ],
+  "limits": {
+    "max_environment_steps": 700,
+    "max_model_calls": 1,
+    "max_game_time_seconds": 640
+  },
+  "split": "development",
+  "scenario_parameters": {
+    "task_family": "casting",
+    "agent_mode": "single",
+    "task_level": "C4",
+    "layout_type": "fixed",
+    "compatibility_task_name": "casting_s_c4_fixed",
+    "implementation_status": "contract_only",
+    "world_dimension": "minecraft:overworld",
+    "layout": "fixed_controlled",
+    "mechanics_required": "vanilla_water_lava_block_update_and_flint_and_steel",
+    "public_task_spec": {
+      "coordinate_space": "task_origin_relative",
+      "task_origin_marker": "visible",
+      "frame_plan": {
+        "orientation": "plane_z",
+        "min_corner": [0, 0, 1],
+        "width": 4,
+        "height": 5,
+        "require_full_ring": true,
+        "minecraft_minimum_required_block_count": 10,
+        "benchmark_required_full_ring_block_count": 14,
+        "required_corner_count": 4,
+        "interior_allowlist": ["air", "nether_portal", "fire"],
+        "fixed_offsets": [
+          [0, 0, 1], [1, 0, 1], [2, 0, 1], [3, 0, 1],
+          [0, 4, 1], [1, 4, 1], [2, 4, 1], [3, 4, 1],
+          [0, 1, 1], [0, 2, 1], [0, 3, 1],
+          [3, 1, 1], [3, 2, 1], [3, 3, 1]
+        ]
+      },
+      "ignition_plan": {
+        "required": true,
+        "action": "use_item",
+        "item": "flint_and_steel",
+        "target_offset": [1, 1, 1],
+        "target_policy": "exact"
+      },
+      "nether_entry_goal": {
+        "required": false,
+        "designated_agent_ids": [],
+        "target_dimension": null
+      }
+    },
+    "evaluator_contract": {
+      "frame_attribution": {
+        "baseline_policy": "all_benchmark_frame_cells_non_obsidian",
+        "required_mechanism": "vanilla_water_lava_block_update",
+        "required_action_type": "use_item",
+        "required_items": ["water_bucket", "lava_bucket"],
+        "direct_obsidian_placement_allowed": false,
+        "causality_window_steps": 4,
+        "fail_closed_on_missing_truth": true,
+        "require_episode_and_step_identity": true
+      },
+      "activation_attribution": {
+        "required": true,
+        "require_episode_built_frame": true,
+        "require_exact_public_target": true,
+        "causality_window_steps": 4,
+        "require_latched_frame_identity_match": true,
+        "fail_closed_on_missing_truth": true
+      },
+      "nether_entry_attribution": {
+        "required": false
+      }
+    },
+    "allow_minecraft_commands": false,
+    "allow_evaluator_world_mutation": false,
+    "allow_live_run": false,
+    "requires_explicit_live_run_approval": true
+  }
+}

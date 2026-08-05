@@ -149,4 +149,6 @@ Multi-Agent 任务评测角色分工、私有观察、消息传递、共享任�
 
 ## 范围与兼容性
 
-该 taxonomy 冻结长期设计，不表示所有矩阵单元已经实现。当前 active implementation 包含 Casting-S-C1 的 `casting_c1_fixed` 和 Casting-S-C2 的 `casting_c3_fixed`，两者都仅在 FakeBackend 离线验证。Casting C3–C5、Ruined、Adaptive、Multi-Agent 和端到端进入 Nether 均属于后续计划。
+该 taxonomy 冻结长期设计，不表示所有矩阵单元已经实现。当前 active implementation 包含 Casting-S-C1 的 `casting_c1_fixed` 和 Casting-S-C2 的 `casting_c3_fixed`，两者都仅在 FakeBackend 离线验证。
+
+R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE 已在 [`benchmark/catalog/tasks.json`](../../benchmark/catalog/tasks.json) 中新增 Casting-S-C3 / C4 / C5 / fixed 三个 Benchmark 任务条目（`implementation_status="contract_only"`、`benchmark_visible=true`、`live_run_allowed=false`）。正式 C3–C5 继续要求水、熔岩与原版 block update；固定实例公开门框方案、C4 精确点火目标和 C5 指定 Agent/目标维度，隐藏的仅是运行时 grid、transition、frame identity 与评分真值。**evaluator、driver、真实 MineRL 接入、Gradle 与模型 API 全部未实现**；active_compatibility_id 仍为 `casting_c3_fixed`（C2），C3 / C4 / C5 在 R6 合同冻结阶段不冒充 active implementation。任务页与详细边界见 [C3](../../docs/tasks/casting/casting_s_c3_fixed.md) / [C4](../../docs/tasks/casting/casting_s_c4_fixed.md) / [C5](../../docs/tasks/casting/casting_s_c5_fixed.md)。Casting C3–C5 的真实端到端 evaluator、Ruined、Adaptive、Multi-Agent 与端到端进入 Nether 仍属于后续计划。

@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.1",
+  "experiment_id": "casting_s_c3_contract_seed_0",
+  "status": "contract_only",
+  "task_instance": "benchmark/instances/casting/single/casting_s_c3_fixed.json",
+  "backend": "not_implemented",
+  "planner": "not_implemented",
+  "evaluator": "not_implemented",
+  "allow_live_run": false,
+  "requires_gradle_approval": true,
+  "requires_minerl_run_approval": true,
+  "max_real_runs": 0,
+  "notes": "R6 contract freeze: Casting-S-C3 / fixed. The Agent must cast the public 4x5 full-ring plan from water and lava through vanilla block updates; no obsidian is supplied. Minecraft's 10-block minimum and this instance's stricter 14-block full-ring requirement are separate fields. No driver, evaluator, or MineRL backend wiring exists. The next sub-task is R6-C3-FRAME-EVALUATOR. This config must not be reported as a MineRL run or published task result."
+}

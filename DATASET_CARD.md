@@ -77,4 +77,6 @@ Agent-visible 数据与 evaluator-only truth 分开存储、授权和回放：
 
 ## 当前状态
 
-当前仓库仍未产生真实正式数据集。`casting_c1_fixed`（Casting-S-C1）和 `casting_c3_fixed`（兼容 ID，正式分类 Casting-S-C2）都只有离线测试和受控 FakeBackend 结果，真实 MineRL episode 尚未运行。C1/C2 的局部 success 不能冒充 Nether entry。Ruined、Adaptive、Multi-Agent、统一未来字段和正式 train/dev/test 发布都只是规划，不能声称已有数据支持。
+当前仓库仍未产生真实正式数据集。`casting_c1_fixed`（Casting-S-C1）和 `casting_c3_fixed`（兼容 ID，正式分类 Casting-S-C2）都只有离线测试和受控 FakeBackend 结果，真实 MineRL episode 尚未运行。C1/C2 的局部 success 不能冒充 Nether entry。
+
+R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE 已在 [catalog](benchmark/catalog/tasks.json) 中新增 3 个 Benchmark 任务条目（Casting-S-C3 / C4 / C5 / fixed），但 `implementation_status="contract_only"`，没有真实 episode 数据；任何对 C3 / C4 / C5 的统计与 leaderboard 数据必须在 evaluator 与 driver 真实离线验证后、并经用户单独授权 MineRL / Gradle / 模型 API 后，才能进入正式结果。Ruined、Adaptive、Multi-Agent、统一未来字段和正式 train/dev/test 发布都只是规划，不能声称已有数据支持。

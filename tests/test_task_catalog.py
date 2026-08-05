@@ -40,7 +40,7 @@ class TaskCatalogTests(unittest.TestCase):
         validate_catalog_references(self.catalog, ROOT)
         self.assertEqual(self.catalog.schema_version, "0.1")
         self.assertEqual(self.catalog.catalog_version, "2026-08-05")
-        self.assertEqual(len(self.catalog.entries), 4)
+        self.assertEqual(len(self.catalog.entries), 7)
 
     def test_active_entry_is_casting_c2_compatibility_task(self) -> None:
         active = self.catalog.active_entry

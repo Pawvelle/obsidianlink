@@ -44,9 +44,19 @@ B0 不实现新环境、evaluator、driver、planner 或通信逻辑。完成后
 
 建立严格、只读的任务 catalog，统一 canonical taxonomy、历史兼容 ID、实例/实验路径、实现状态、发布可见性和 live-run policy。现有 C1/C2 保持原路径；`route_a_a0` 明确归为 calibration/regression；CLI 和环境检查从 catalog 解析当前任务。B1 不移动历史文件、不修改 evaluator/driver/backend，也不实现 R6。
 
-### R6：完整门框、点火和进入 Nether（下一工程任务）
+### R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE（合同冻结完成；evaluator 与 driver 未实现）
 
-在固定受控场景完成有效门框、点火和 Nether entry，由独立 evaluator 验证。
+R6 阶段按 B0 taxonomy 冻结 3 个递进合同，但本轮**只冻结合同**：
+
+- Casting-S-C3：使用水、熔岩和原版 block update 浇筑公开固定 4×5 full ring；原版最小合法 10-block 规则与本实例额外要求的 14-block full-ring constraint 分开记录；
+- Casting-S-C4：在 C3 之上通过合法 `use_item(flint_and_steel)` 在唯一公开目标 `[1,1,1]` 点火；
+- Casting-S-C5：在 C4 之上由公开指定的 `agent_1` 通过本 episode 门框进入 Nether，且机器合同要求完整 frame-identity 与 transition 归因。
+
+合同冻结阶段交付：3 个 `benchmark/instances/casting/single/*.json` 实例、3 个 contract-only 实验配置、catalog 3 个新条目（`implementation_status=contract_only`、`benchmark_visible=true`、`live_run_allowed=false`）、3 个任务文档与离线合同测试。R6 合同冻结阶段**没有**实现任何 evaluator、driver、真实 MineRL 接入、Gradle 构建或模型 API 调用；`active_compatibility_id` 保持 `casting_c3_fixed`（C2）。下一子任务是 `R6-C3-FRAME-EVALUATOR`。
+
+### R6：完整门框、点火和进入 Nether（按子阶段推进）
+
+R6 将在 R6-C3 / R6-C4 / R6-C5 三阶段合同冻结基础上，由独立 evaluator 验证完整门框、点火和 Nether entry，并依次在 FakeBackend 上接确定性 driver；接真实 MineRL 与模型仍需要单独授权。
 
 ### R7：模型与受控变化
 

@@ -49,7 +49,7 @@ benchmark/instances/route_a_a0_development.json
 benchmark/instances/route_a_a0_phase3.json
 ```
 
-R6 起的新任务使用 canonical taxonomy 命名，并按 family/mode 建目录，例如：
+R6 起的新任务使用 canonical taxonomy 命名，并按 family/mode 建目录：
 
 ```text
 benchmark/instances/casting/single/casting_s_c3_fixed.json
@@ -57,7 +57,9 @@ benchmark/instances/casting/single/casting_s_c4_fixed.json
 benchmark/instances/casting/single/casting_s_c5_fixed.json
 ```
 
-只有在专门迁移阶段、所有实验配置和重放引用都有兼容映射时，才允许移动历史文件。本 B1 阶段不移动任何实例。
+R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE 阶段已在 `benchmark/instances/casting/single/` 下创建上述 3 个新任务实例，对应 B0 taxonomy 的 Casting-S-C3 / C4 / C5 / fixed，catalog 同步新增 3 个 `kind=benchmark` 条目（`implementation_status="contract_only"`、`benchmark_visible=true`、`live_run_allowed=false`）。这 3 个新任务**只冻结合同**，不实现 evaluator、driver、真实 MineRL 接入；`active_compatibility_id` 仍保持 `casting_c3_fixed`（C2），新任务不冒充 active implementation。
+
+只有在专门迁移阶段、所有实验配置和重放引用都有兼容映射时，才允许移动历史文件。本 R6 合同冻结阶段不移动任何历史实例；`route_a_a0_*` 仍为 calibration / legacy_regression。
 
 ## 严格验证
 

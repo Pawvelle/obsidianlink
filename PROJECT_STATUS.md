@@ -4,11 +4,13 @@
 
 ## 当前唯一目标
 
-任务：`B1-TASK-CATALOG-FOUNDATION`（兼容任务目录与严格验证已完成）
+任务：`R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE`（C3/C4/C5 合同已冻结，evaluator 与 driver 未实现）
 
-下一任务：`R6-COMPLETE-PORTAL-FRAME`（尚未开始）
+下一任务：`R6-C3-FRAME-EVALUATOR`（C3 frame evaluator + task-origin/truth-grid 坐标锚定；不实现 driver，不接入真实 MineRL）
 
-当前 active implementation：Casting-S-C2 / fixed 的 `casting_c3_fixed`。旧 ID 中的 `c3` 表示三个 target cell，不表示 B0 taxonomy 的 C3；文档级兼容名称为 `casting_s_c2_fixed`。`casting_c1_fixed` 保留为 Casting-S-C1 回归合同。
+当前 active implementation：Casting-S-C2 / fixed 的 `casting_c3_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 B0 taxonomy 的 C3；文档级兼容名称为 `casting_s_c2_fixed`。`casting_c1_fixed` 保留为 Casting-S-C1 回归合同。
+
+R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、live_run_allowed=false），但**未实现**：driver、evaluator、真实 MineRL 后端、Gradle、模型 API 全部不在本轮范围。
 
 ## B1 已完成
 
@@ -47,6 +49,50 @@
 8. 任务实例、CLI 和环境检查现已显式报告 Casting-S-C2 taxonomy，同时保留 `casting_c3_fixed` 兼容 ID。
 9. C1/C2 任务页、README、BENCHMARK_SPEC、ROADMAP、DATASET_CARD 和 taxonomy 已与实际离线能力统一。
 
+## R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE 已完成
+
+1. **审计** [`obsidianlink/evaluation/portal.py`](obsidianlink/evaluation/portal.py) 与 [`obsidianlink/evaluation/frame_geometry.py`](obsidianlink/evaluation/frame_geometry.py)：
+   - 现有 frame 几何在 `frame_geometry.detect_portal_frame` 中以 `MIN_WIDTH=4 / MAX_WIDTH=23 / MIN_HEIGHT=5 / MAX_HEIGHT=23` 冻结；两个朝向 `plane_z`（X-Y 平面，Z 恒定）与 `plane_x`（Y-Z 平面，X 恒定）；
+   - 4×5 frame 的 `2W + 2H - 4 = 14` 完整外周和 `2W + 2H - 8 = 10` 必需（不含角）cell 都被 `FrameCandidate` 显式表达，4 个角 cell 在 `allow_missing_corners=True` 时是可选的；
+   - `interior_allowlist = {air, nether_portal, fire}`，`dirt` / `bedrock` / `grass` / `grass_block` / `other` / `missing` 全部判为阻挡；`missing` / `other` 触发 fail-closed；
+   - `PortalEvaluator` 已有 latched `portal_built_by_episode` / `valid_portal_frame` / `portal_activated`、`latched_frame_identity` / `latched_activation_offsets`、`entered_via_episode_portal_by_agent` 和 `matched_frame_identity_by_agent`；激活与 Nether entry 严格绑定到本 episode 锁存的 frame identity；
+   - **`is_episode_built` 已经能证明"门框由当前 episode 建造"**：`is_geometric_valid=True` 且 baseline 中没有 required cell 是 `obsidian`；`PortalA0EnvSpec` 仍在用 14 obsidian + 1 flint_and_steel + 2 dirt 的固定受控 A0 资源。
+2. **新增 3 个 R6 Casting-S 任务实例**，统一放于 canonical `benchmark/instances/casting/single/`，遵循 B0 taxonomy 与 [TASK_REGISTRY.md](docs/architecture/TASK_REGISTRY.md) 目录规则：
+   - `casting_s_c3_fixed.json`：提供水、熔岩和支撑方块，通过原版 block update 浇筑公开 4×5 full-ring 方案；Minecraft 最小合法计数 10 与本实例额外要求的 14-block full ring 分开冻结；
+   - `casting_s_c4_fixed.json`：继承 C3，并公开冻结唯一计分点火目标 `[1,1,1]`、`use_item` 与 `flint_and_steel`；
+   - `casting_s_c5_fixed.json`：继承 C4，并公开指定 `agent_1` 进入 `minecraft:the_nether`；机器合同冻结 episode-portal、frame-identity、pre-transition-position 与 transition-step 归因要求。
+3. **新增 3 个 contract-only 实验配置**于 `configs/experiments/active/`，`backend="not_implemented"`、`planner="not_implemented"`、`evaluator="not_implemented"`、`status="contract_only"`、`max_real_runs=0`。
+4. **更新 [catalog](benchmark/catalog/tasks.json)**：新增 3 个 `kind=benchmark` 条目（`implementation_status="contract_only"`、`benchmark_visible=true`、`live_run_allowed=false`），保持 `active_compatibility_id="casting_c3_fixed"`（C2 仍为实际实现的 active slice，C3/C4/C5 仅为合同冻结）。
+5. **新增 3 个任务页** [C3](docs/tasks/casting/casting_s_c3_fixed.md) / [C4](docs/tasks/casting/casting_s_c4_fixed.md) / [C5](docs/tasks/casting/casting_s_c5_fixed.md)，明确公开任务规则与 evaluator-only 运行时真值边界、success / failure 边界、合同复用与未实现项。
+6. **更新 [TASK_REGISTRY.md](docs/architecture/TASK_REGISTRY.md)**：目录规则与路径示例已与 R6 canonical 一致；calibration `route_a_a0_*` 仍保持历史路径与 `legacy_regression` 分类。
+7. **更新 [TASK_TAXONOMY.md](docs/benchmark/TASK_TAXONOMY.md)**：C3/C4/C5 里程碑表与文档级命名规则保持与 B0 一致；明确说明 R6 合同已冻结但 evaluator/driver 未实现。
+8. **更新 [README.md](README.md) / [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md) / [DATASET_CARD.md](DATASET_CARD.md) / [ROADMAP.md](ROADMAP.md)**：把"当前阶段 = R6 合同冻结"和"C3/C4/C5 仅为合同、未实现"显式标注，不声称 Casting 端到端已支持。
+9. **新增离线合同测试** [tests/test_r6_casting_c3c4c5_contract.py](tests/test_r6_casting_c3c4c5_contract.py)：验证 Casting 资源/机制、公开 frame plan、C4 精确点火、C5 机器归因合同、公开/隐藏命名空间和现有 Agent 源码不读取 `scenario_parameters`，并验证 `route_a_a0_*` 仍为 calibration。R6 runtime 尚未实现，因此不能声称已验证未来 driver 的运行时隔离。
+
+## R6 已复用 / 未实现
+
+复用：
+
+- `frame_geometry.FrameCandidate` / `detect_portal_frame` 字段语义作为合同字段语义基准；
+- `obsidianlink.env.portal_spec.PORTAL_GRID_BLOCKS` 的 truth 编码与 `FrameCandidate` 几何语义；`PortalA0EnvSpec.PORTAL_INVENTORY` 的预置黑曜石仅属于历史 calibration，不复用于正式 Casting C3–C5；
+- `EvaluationState` 全部字段语义（包括 latched booleans / frame identity / activation offsets / entered-via-portal 归因 / 6 个稳定 failure types）；
+- `obsidianlink.env.portal_spec.PortalTransitionObservation` 提供的 `entered_via_portal` / `from_dimension` / `to_dimension` server-side truth 作为合同承认的上游 evaluator-only 真值。
+
+未实现（下一子任务）：
+
+- C3 frame evaluator（基于 `FrameCandidate` 的 `is_episode_built` 字段构造 `EvaluationState` 真值注入路径）；
+- C4 ignition evaluator（把 `use_item(flint_and_steel)` 与 `[1,1,1]` 内框 cell 的 `nether_portal` 关联到 `latched_frame_identity`）；
+- C5 Nether entry evaluator（绑定 `pre_transition_position_by_agent` 与 `latched_frame_identity` 的因果链）；
+- 任意 C3/C4/C5 deterministic driver；
+- 真实 MineRL 后端接通桶动作、公开选中物品、目标方块 truth、流体 truth 与维度切换 truth；
+- 真实 MineRL、Gradle 与模型 API 调用。
+
+已知 contract 局限（不在 R6 合同冻结阶段处理）：
+
+- `PORTAL_GRID_MIN/MAX = (-3,-1,0)–(3,5,6)` 已覆盖本固定合同 x=`0..3`、y=`0..4`、z=`1`；真实 backend 接入时仍需验证 task-origin marker 与 truth-grid origin 的锚定关系；
+- `obsidianlink/drivers/scripted_a0.py` 使用预置黑曜石和不同世界坐标，仍为 calibration，不冒充水/熔岩 Casting C3 合同；
+- R6 runtime 尚未实现；当前隔离测试只能证明现有 Agent/Planner 代码不读取 `scenario_parameters`。实现 driver 时必须增加显式 public-context 构造与端到端泄漏测试。
+
 ## 已完成历史（保留）
 
 ### R1 — `casting_c1_fixed` 任务合同
@@ -73,22 +119,27 @@
 
 `casting_c3_fixed` 的三 cell continuous evaluator、deterministic driver、per-cell 因果证据、部分完成和有限恢复已在 FakeBackend 完成，并映射为 Casting-S-C2。
 
+### B1-TASK-CATALOG-FOUNDATION — 严格 Catalog
+
+Task catalog、严格解析器、active entry 约束、calibration 分类与 C1/C2 可见性规则已在 catalog 落地；R6 合同冻结阶段继续把 C3/C4/C5 接入同一 catalog 体系。
+
 ## 当前限制
 
-- R5 只在 FakeBackend 验证，真实 MineRL 水/熔岩浇筑尚未验证；
+- R5 / R6 合同冻结都只在 FakeBackend 验证；真实 MineRL 浇筑与门框建造均未验证；
 - 真实 backend 仍未完整接通桶动作、公开 selected item、目标方块 truth 和流体 truth；
-- `casting_c3_fixed` 不是完整门框，C2 success 不等于进入 Nether；
-- 完整门框、点火、Nether entry、Ruined、Adaptive 和 Multi-Agent 均未实现；
+- `casting_c3_fixed` 是 C2 连续浇筑切片，C2 success 不等于进入 Nether；
+- R6 合同冻结阶段已存在但**未实现** Casting-S-C3 / C4 / C5：evaluator、driver、task-origin/truth-grid 坐标锚定、真实 backend 接线均未完成；
+- Ruined、Adaptive、Multi-Agent、真实 MineRL episode 集和 Benchmark 公开指标发布均未实现；
 - 当前没有正式真实 Benchmark 数据；
 - 禁止真实 MineRL、Gradle 和模型调用，除非用户针对每次操作单独授权；
-- `vendor/minerl`、固定依赖和任务兼容 ID 均不得在 R6 前顺手修改。
+- `vendor/minerl`、固定依赖和历史兼容 ID 在 R6 阶段均未改动。
 
 ## 测试要求
 
-Task catalog 解析/路径/分类正反例、R5 evaluator 56 个专项测试、R5 driver 56 个专项测试，以及 capability、benchmark file、CLI、R3/R4 回归和全量离线测试必须保持通过。任何结构整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同。
+Task catalog 解析/路径/分类正反例、R5 evaluator 与 driver 专项测试、capability、benchmark file、CLI、R3/R4 回归、portal / frame geometry 旧测试必须保持通过。本轮新增的 R6 contract 测试也必须全部通过；任何合同整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同。
 
-本轮验证：`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过；全量离线测试 414 个全部通过；`git diff --check` 干净；`vendor/minerl` 无修改。
+本轮验证：`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过；全量离线测试（含 R6 contract 新增测试）全部通过；`git diff --check` 干净；`vendor/minerl` 无修改。
 
 ## 下一任务
 
-`R6-COMPLETE-PORTAL-FRAME` 将从 Casting-S-C2 推进到固定场景的有效门框，并继续覆盖点火与 Nether entry 的阶段化 evaluator 合同。开始前必须先冻结 C3/C4/C5 边界、目标 frame geometry、合法原版更新证据和成功定义；不得直接接模型或真实 MineRL。
+`R6-C3-FRAME-EVALUATOR`：在 FakeBackend 上为 `casting_s_c3_fixed` 构造 frame evaluator；不实现 R6 driver；不接通真实 MineRL；不运行 Gradle；不调用模型。
