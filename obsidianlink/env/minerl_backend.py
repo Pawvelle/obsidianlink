@@ -10,22 +10,15 @@ import numpy as np
 from obsidianlink.actions.minerl_translator import translate_macro_action
 from obsidianlink.core.types import BackendStep, MacroAction, Observation, TaskInstance
 from obsidianlink.env.portal_spec import (
-    PORTAL_A1_DEPOSIT_WORLD_MAX,
-    PORTAL_A1_DEPOSIT_WORLD_MIN,
     PORTAL_GRID_BLOCKS,
     PORTAL_GRID_MAX,
     PORTAL_GRID_MIN,
     PORTAL_GRID_MISSING_ID,
     PORTAL_GRID_SIZE,
     PortalA0EnvSpec,
-    PortalA1EnvSpec,
     PortalGridObservation,
-    portal_a1_deposit_grid_offsets,
 )
-from obsidianlink.evaluation import (
-    DEFAULT_A1_OBSIDIAN_QUOTA,
-    EvaluationState,
-)
+from obsidianlink.evaluation import EvaluationState
 from obsidianlink.evaluation.frame_geometry import (
     CellOffset,
     detect_portal_frame_from_int_grid,
@@ -44,56 +37,19 @@ NETHER_PORTAL_ID = PORTAL_GRID_BLOCKS.index("nether_portal")
 MISSING_ID = PORTAL_GRID_BLOCKS.index("missing")
 
 
-def _resolve_obsidian_quota(task: TaskInstance) -> int:
-    """Return the A1 obsidian quota from ``scenario_parameters``.
-
-    The frozen Phase 4 A1 instance always sets
-    ``scenario_parameters.obsidian_required`` to a positive integer.
-    Tests and ad-hoc fixtures that omit it fall back to
-    ``DEFAULT_A1_OBSIDIAN_QUOTA``.
-    """
-    scenario = dict(task.scenario_parameters)
-    quota = scenario.get("obsidian_required", DEFAULT_A1_OBSIDIAN_QUOTA)
-    if type(quota) is not int or quota < 1:
-        raise ValueError(
-            "TaskInstance.scenario_parameters.obsidian_required must be a positive int"
-        )
-    return int(quota)
-
-
-def _specification_for_task(task: TaskInstance) -> PortalA0EnvSpec:
+def _default_env_factory(task: TaskInstance) -> Any:
     initial_inventory = tuple(
         {"type": item, "quantity": quantity}
         for item, quantity in task.initial_inventories["agent_1"].items()
         if quantity > 0
     )
-    specification_type = (
-        PortalA1EnvSpec
-        if task.workflow == "route_a_a1"
-        and task.scenario_parameters.get("variant") == "nearby_obsidian"
-        else PortalA0EnvSpec
-    )
-    return specification_type(
+    specification = PortalA0EnvSpec(
         max_episode_steps=task.limits["max_environment_steps"],
         max_game_time_seconds=task.limits["max_game_time_seconds"],
         initial_inventory=initial_inventory,
         initial_position=task.spawn_positions["agent_1"],
     )
-
-
-def _specification_name_for_task(task: TaskInstance) -> str:
-    """Return the MineRL env name implied by ``task``.
-
-    The backend must pass the same name to the action translator so
-    the right hotbar mapping is selected. A0 always uses the original
-    ``ObsidianLinkPortalA0-v0`` env; A1 routes to the obsidian-mining
-    variant.
-    """
-    return _specification_for_task(task).name
-
-
-def _default_env_factory(task: TaskInstance) -> Any:
-    return _specification_for_task(task).make()
+    return specification.make()
 
 
 class MineRLEnvironmentBackend:
@@ -138,18 +94,9 @@ class MineRLEnvironmentBackend:
         self._latest_raw: dict[str, Any] | None = None
         self._baseline_grid: np.ndarray | None = None
         self._latched: dict[str, Any] = self._fresh_latched_state()
-        # Track the active MineRL portal env name so the action
-        # translator can pick the right hotbar. ``None`` until reset
-        # succeeds.
-        self._env_name: str | None = None
         # Used by tests / replay scripts to mark termination without
         # requiring a real MineRL ``done`` flag.
         self._forced_termination: tuple[int, str] | None = None
-        # Fixed 4x1x4 grid offsets for the A1 obsidian deposit. The
-        # backend resolves the actual offsets from the real grid
-        # anchor at reset; this default is the canonical offset when
-        # the spawn matches the frozen task instance.
-        self._a1_deposit_offsets: tuple[tuple[int, int, int], ...] = ()
 
     @property
     def agent_ids(self) -> tuple[str, ...]:
@@ -170,14 +117,8 @@ class MineRLEnvironmentBackend:
         self._assert_owner()
         if task.agent_ids != ("agent_1",):
             raise ValueError("PortalA0 currently supports exactly agent_1")
-        supported_a0 = task.difficulty == 1 and task.workflow == "route_a_a0"
-        supported_a1 = (
-            task.difficulty == 2
-            and task.workflow == "route_a_a1"
-            and task.scenario_parameters.get("variant") == "nearby_obsidian"
-        )
-        if task.route != "obsidian_mining" or not (supported_a0 or supported_a1):
-            raise ValueError("MineRL backend supports only frozen Route A0/A1 tasks")
+        if task.route != "obsidian_mining" or task.difficulty != 1:
+            raise ValueError("PortalA0 currently supports Route A difficulty 1")
         self._task = task
         raw: Mapping[str, Any] | None = None
         last_error: Exception | None = None
@@ -214,24 +155,11 @@ class MineRLEnvironmentBackend:
         self._latched["latched_timestamps"][
             "task_reset"
         ] = time.time()
-        self._env_name = _specification_name_for_task(task)
-        self._latched["obsidian_quota_required"] = _resolve_obsidian_quota(task)
         self._latest_raw = self._validate_raw_observation(raw)
         self._baseline_grid = self._grid_from_raw(self._latest_raw).copy()
-        grid_anchor = self._grid_world_anchor(self._latest_raw)
-        self._latched["grid_world_anchor"] = grid_anchor
-        if supported_a1:
-            self._a1_deposit_offsets = self._resolve_a1_deposit_offsets(grid_anchor)
-            self._latched["baseline_deposit_obsidian_offsets"] = (
-                self._deposit_zone_obsidian(
-                    self._baseline_grid, self._a1_deposit_offsets
-                )
-            )
-            self._latched["current_deposit_obsidian_offsets"] = set(
-                self._latched["baseline_deposit_obsidian_offsets"]
-            )
-        else:
-            self._a1_deposit_offsets = ()
+        self._latched["grid_world_anchor"] = self._grid_world_anchor(
+            self._latest_raw
+        )
         return self._public_observations()
 
     def step(self, actions: Mapping[str, MacroAction]) -> BackendStep:
@@ -240,11 +168,7 @@ class MineRLEnvironmentBackend:
         if set(actions) != {"agent_1"}:
             raise ValueError("actions must contain exactly agent_1")
         action = actions["agent_1"]
-        translation = translate_macro_action(
-            action,
-            self.action_space,
-            env_name=self._env_name,
-        )
+        translation = translate_macro_action(action, self.action_space)
         # A credit is valid for this environment step only. It is added
         # only after strict macro translation succeeds, then consumed or
         # expired by ``_refresh_evaluation_milestones`` against cells
@@ -255,12 +179,6 @@ class MineRLEnvironmentBackend:
             and action.action_type == "place_block"
             and action.target == "obsidian"
         )
-        accepted_obsidian_mining = (
-            translation.accepted
-            and isinstance(action, MacroAction)
-            and action.action_type == "mine_target"
-            and action.target == "obsidian"
-        )
         raw, reward, done, info = self._env.step(translation.action)
         if isinstance(info, Mapping) and "error" in info:
             raise RuntimeError(f"MineRL step failed: {info['error']}")
@@ -268,17 +186,6 @@ class MineRLEnvironmentBackend:
         self._latest_raw = self._validate_raw_observation(raw)
         if accepted_obsidian_placement:
             self._latched["pending_place_block_obsidian"] += 1
-        if accepted_obsidian_mining:
-            # Per Phase 4 A1 evidence rules,
-            # ``obsidian_source_located`` is no longer latched on
-            # intent (the first accepted mine_target(obsidian)
-            # action). It is latched only when the first
-            # ``first_obsidian_mined`` evidence lands, in
-            # ``_refresh_evaluation_milestones``. Intent-only
-            # latching would let a driver claim "agent located
-            # the deposit" before the agent has actually removed
-            # a block or seen its inventory grow.
-            self._latched["pending_mine_obsidian"] += 1
         self._refresh_evaluation_milestones()
         if done:
             self._mark_terminated(
@@ -344,31 +251,6 @@ class MineRLEnvironmentBackend:
         else:
             raise ValueError(f"unsupported place_block target: {target!r}")
 
-    def _credit_pending_mine_for_test(
-        self,
-        target: str,
-        count: int = 1,
-    ) -> None:
-        """Inject test-only mine credits for a directly mutated fixture grid.
-
-        Production drivers must submit ``MacroAction`` objects through
-        ``step()``. This hook mirrors
-        ``_credit_pending_place_block_for_test`` and is used by the
-        A1 controlled-env fixture to verify that the grid delta and
-        the mine action credit agree on the cell count.
-        """
-        self._assert_owner()
-        if type(count) is not int or count < 0:
-            raise ValueError("count must be a non-negative integer")
-        if target != "obsidian":
-            raise ValueError(f"unsupported mine_target target: {target!r}")
-        self._latched["pending_mine_obsidian"] += count
-        # Note: ``obsidian_source_located_step`` is intentionally
-        # not latched here. The test fixture path must also wait
-        # for the next ``_refresh_evaluation_milestones`` call
-        # to credit the cell so source-located and
-        # first-obsidian-mined fire together.
-
     def get_evaluation_state(self) -> EvaluationState:
         task = self._require_task()
         raw = self._require_raw()
@@ -398,8 +280,6 @@ class MineRLEnvironmentBackend:
             self._step_id = 0
             self._owner_thread = None
             self._forced_termination = None
-            self._env_name = None
-            self._a1_deposit_offsets = ()
             self._opened = False
 
     # ------------------------------------------------------------------
@@ -435,80 +315,7 @@ class MineRLEnvironmentBackend:
             "transition_step_by_agent": {},
             "entered_via_episode_portal_by_agent": {},
             "matched_frame_identity_by_agent": {},
-            "obsidian_source_located_step": None,
-            "first_obsidian_mined_step": None,
-            "obsidian_quota_collected_step": None,
-            "obsidian_mined_count": 0,
-            "obsidian_mined_offsets": set(),
-            "external_mined_offsets": set(),
-            "pending_mine_obsidian": 0,
-            "obsidian_quota_required": DEFAULT_A1_OBSIDIAN_QUOTA,
-            "baseline_deposit_obsidian_offsets": set(),
-            "current_deposit_obsidian_offsets": set(),
         }
-
-    def _resolve_a1_deposit_offsets(
-        self,
-        anchor: tuple[int, int, int] | None,
-    ) -> tuple[tuple[int, int, int], ...]:
-        """Compute the A1 deposit zone grid offsets for the current anchor.
-
-        The A1 deposit lives at fixed world coordinates
-        ``(-3, 4, 3) .. (0, 4, 6)`` per the spec. The portal grid is
-        anchored to the actual spawn point, so the deposit is in the
-        grid only when the spawn places it within the grid's world
-        bounds. When the anchor is missing or unexpected, we return
-        the canonical offsets relative to ``(0, 4, 0)`` (the spec's
-        nominal spawn) so the offline fixtures still get a
-        deterministic zone to attribute against. Production drivers
-        must verify the deposit is reachable from the recorded anchor
-        before relying on this evidence.
-        """
-        canonical_anchor: tuple[int, int, int] = (0, 4, 0)
-        anchor_value: tuple[int, int, int]
-        if (
-            isinstance(anchor, tuple)
-            and len(anchor) == 3
-            and all(type(value) is int for value in anchor)
-        ):
-            anchor_value = anchor
-        else:
-            anchor_value = canonical_anchor
-        delta = (
-            anchor_value[0] - canonical_anchor[0],
-            anchor_value[1] - canonical_anchor[1],
-            anchor_value[2] - canonical_anchor[2],
-        )
-        offsets: list[tuple[int, int, int]] = []
-        for offset in portal_a1_deposit_grid_offsets():
-            offsets.append(
-                (
-                    offset[0] + delta[0],
-                    offset[1] + delta[1],
-                    offset[2] + delta[2],
-                )
-            )
-        return tuple(offsets)
-
-    def _deposit_zone_obsidian(
-        self,
-        grid: np.ndarray,
-        offsets: tuple[tuple[int, int, int], ...],
-    ) -> set[tuple[int, int, int]]:
-        if not offsets:
-            return set()
-        result: set[tuple[int, int, int]] = set()
-        for offset in offsets:
-            x, y, z = offset
-            if not (
-                0 <= x < grid.shape[0]
-                and 0 <= y < grid.shape[1]
-                and 0 <= z < grid.shape[2]
-            ):
-                continue
-            if int(grid[x, y, z]) == OBSIDIAN_ID:
-                result.add(offset)
-        return result
 
     def _mark_terminated(self, *, step_id: int, reason: str) -> None:
         if self._latched["episode_terminated"]:
@@ -837,77 +644,6 @@ class MineRLEnvironmentBackend:
         )
 
         # ------------------------------------------------------------
-        # 1a. Phase 4 A1 mining slice. Track the obsidian cells that
-        #     have been removed from the fixed deposit zone since
-        #     reset. A removed cell is only attributed to the agent
-        #     when the number of fresh removed cells exactly matches
-        #     the number of accepted ``mine_target(obsidian)`` actions
-        #     for this observation boundary (the same "exact-count"
-        #     contract as A0 obsidian placement). External deltas fail
-        #     closed to ``external_mined_offsets``.
-        # ------------------------------------------------------------
-        if self._a1_deposit_offsets:
-            grid_now = self._grid_from_raw(raw)
-            current_deposit = self._deposit_zone_obsidian(
-                grid_now, self._a1_deposit_offsets
-            )
-            baseline_deposit = self._latched["baseline_deposit_obsidian_offsets"]
-            fresh_removed = baseline_deposit - current_deposit
-            new_for_mining = (
-                fresh_removed
-                - self._latched["obsidian_mined_offsets"]
-                - self._latched["external_mined_offsets"]
-            )
-            pending_mines = self._latched["pending_mine_obsidian"]
-            if new_for_mining and len(new_for_mining) == pending_mines:
-                self._latched["obsidian_mined_offsets"].update(new_for_mining)
-            else:
-                self._latched["external_mined_offsets"].update(new_for_mining)
-            self._latched["pending_mine_obsidian"] = 0
-            self._latched["current_deposit_obsidian_offsets"] = current_deposit
-            self._latched["obsidian_mined_count"] = len(
-                self._latched["obsidian_mined_offsets"]
-            )
-            if (
-                self._latched["first_obsidian_mined_step"] is None
-                and self._latched["obsidian_mined_offsets"]
-            ):
-                self._latched["first_obsidian_mined_step"] = self._step_id
-                self._latched["latched_timestamps"][
-                    "first_obsidian_mined"
-                ] = time.time()
-                # Per Phase 4 A1 evidence rules, latch
-                # ``obsidian_source_located`` at the same step as
-                # the first attributed mining. We do not
-                # "locate" the deposit on intent; only an
-                # actually-credited mine counts. The
-                # exact-count contract in
-                # ``_refresh_evaluation_milestones`` already
-                # requires a matching ``pending_mine_obsidian``
-                # credit, so a latched
-                # ``first_obsidian_mined`` is a strong
-                # "the agent hit a deposit cell and got credit
-                # for it" signal.
-                if self._latched["obsidian_source_located_step"] is None:
-                    self._latched[
-                        "obsidian_source_located_step"
-                    ] = self._step_id
-                    self._latched["latched_timestamps"][
-                        "obsidian_source_located"
-                    ] = self._latched["latched_timestamps"][
-                        "first_obsidian_mined"
-                    ]
-            if (
-                self._latched["obsidian_quota_collected_step"] is None
-                and self._latched["obsidian_mined_count"]
-                >= self._latched["obsidian_quota_required"]
-            ):
-                self._latched["obsidian_quota_collected_step"] = self._step_id
-                self._latched["latched_timestamps"][
-                    "obsidian_quota_collected"
-                ] = time.time()
-
-        # ------------------------------------------------------------
         # 2. Build site selected: only via partial-candidate with
         #    structural-continuity rule, and only from episode-added
         #    obsidian (the detector already excludes baseline cells).
@@ -1140,7 +876,6 @@ class MineRLEnvironmentBackend:
             "missing_interior_cell_count": int(
                 detection.missing_interior_cell_count
             ),
-            "a1_mining_evidence": self._a1_mining_evidence_payload(),
         }
         latched_identity = self._latched["frame_identity"]
         if latched_identity is not None:
@@ -1225,71 +960,8 @@ class MineRLEnvironmentBackend:
             episode_obsidian_offsets=tuple(
                 sorted(self._latched["episode_obsidian_offsets"])
             ),
-            obsidian_source_located_step=self._latched[
-                "obsidian_source_located_step"
-            ],
-            first_obsidian_mined_step=self._latched["first_obsidian_mined_step"],
-            obsidian_quota_collected_step=self._latched[
-                "obsidian_quota_collected_step"
-            ],
-            obsidian_mined_count=int(self._latched["obsidian_mined_count"]),
-            obsidian_mined_offsets=tuple(
-                sorted(self._latched["obsidian_mined_offsets"])
-            ),
-            external_mined_offsets=tuple(
-                sorted(self._latched["external_mined_offsets"])
-            ),
-            pending_mine_obsidian=int(self._latched["pending_mine_obsidian"]),
-            obsidian_quota_required=int(
-                self._latched["obsidian_quota_required"]
-            ),
             evidence=evidence,
         )
-
-    def _a1_mining_evidence_payload(self) -> dict[str, Any]:
-        """Return the A1 mining-slice evidence (evaluator-only)."""
-        return {
-            "deposit_zone_offsets": [list(o) for o in self._a1_deposit_offsets],
-            "deposit_zone_world_bounds": {
-                "min": [
-                    int(PORTAL_A1_DEPOSIT_WORLD_MIN[0]),
-                    int(PORTAL_A1_DEPOSIT_WORLD_MIN[1]),
-                    int(PORTAL_A1_DEPOSIT_WORLD_MIN[2]),
-                ],
-                "max": [
-                    int(PORTAL_A1_DEPOSIT_WORLD_MAX[0]),
-                    int(PORTAL_A1_DEPOSIT_WORLD_MAX[1]),
-                    int(PORTAL_A1_DEPOSIT_WORLD_MAX[2]),
-                ],
-            },
-            "baseline_deposit_obsidian_count": len(
-                self._latched["baseline_deposit_obsidian_offsets"]
-            ),
-            "current_deposit_obsidian_count": len(
-                self._latched["current_deposit_obsidian_offsets"]
-            ),
-            "obsidian_mined_count": int(self._latched["obsidian_mined_count"]),
-            "obsidian_mined_offsets": [
-                list(o)
-                for o in sorted(self._latched["obsidian_mined_offsets"])
-            ],
-            "external_mined_offsets": [
-                list(o)
-                for o in sorted(self._latched["external_mined_offsets"])
-            ],
-            "obsidian_quota_required": int(
-                self._latched["obsidian_quota_required"]
-            ),
-            "obsidian_source_located_step": self._latched[
-                "obsidian_source_located_step"
-            ],
-            "first_obsidian_mined_step": self._latched[
-                "first_obsidian_mined_step"
-            ],
-            "obsidian_quota_collected_step": self._latched[
-                "obsidian_quota_collected_step"
-            ],
-        }
 
     def _offset_has_obsidian(
         self,

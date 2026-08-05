@@ -12,7 +12,6 @@ from obsidianlink.env.portal_spec import (
     PORTAL_GRID_SIZE,
     PORTAL_GRID_UNKNOWN_ID,
     PortalA0EnvSpec,
-    PortalA1EnvSpec,
     PortalGridObservation,
     PortalGridOriginObservation,
     PortalTransitionObservation,
@@ -145,45 +144,6 @@ class PortalA0EnvSpecTests(unittest.TestCase):
     def test_invalid_initial_position_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "integer"):
             PortalA0EnvSpec(initial_position=(0, 4.0, 0))
-
-
-class PortalA1EnvSpecTests(unittest.TestCase):
-    def test_xml_contains_fixed_nearby_obsidian_and_no_free_obsidian(self) -> None:
-        specification = PortalA1EnvSpec()
-        xml = specification.to_xml()
-        ElementTree.fromstring(xml)
-
-        self.assertEqual(specification.name, "ObsidianLinkPortalA1-v0")
-        self.assertIn("<DrawingDecorator>", xml)
-        self.assertIn(
-            '<DrawCuboid x1="-3" y1="4" z1="3" '
-            'x2="0" y2="4" z2="6" type="obsidian"/>',
-            xml,
-        )
-        self.assertIn('type="diamond_pickaxe" quantity="1"', xml)
-        self.assertNotIn('<InventoryObject type="obsidian"', xml)
-
-    def test_a1_deposit_matches_frozen_instance_bounds(self) -> None:
-        xml = PortalA1EnvSpec().to_xml()
-        root = ElementTree.fromstring(xml)
-        draw = root.find(".//{*}DrawCuboid")
-        self.assertIsNotNone(draw)
-        self.assertEqual(draw.attrib["type"], "obsidian")
-        block_count = (
-            abs(int(draw.attrib["x2"]) - int(draw.attrib["x1"])) + 1
-        ) * (
-            abs(int(draw.attrib["y2"]) - int(draw.attrib["y1"])) + 1
-        ) * (
-            abs(int(draw.attrib["z2"]) - int(draw.attrib["z1"])) + 1
-        )
-        self.assertGreaterEqual(block_count, 14)
-        self.assertLessEqual(
-            max(
-                abs(int(draw.attrib[key]))
-                for key in ("x1", "x2", "z1", "z2")
-            ),
-            8,
-        )
 
 
 if __name__ == "__main__":

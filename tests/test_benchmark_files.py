@@ -11,6 +11,36 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BenchmarkFileTests(unittest.TestCase):
+    def test_active_casting_c1_contract_is_explicitly_offline_only(self) -> None:
+        task_path = (
+            ROOT / "benchmark/instances/active/casting_c1_fixed.json"
+        )
+        config_path = (
+            ROOT / "configs/experiments/active/casting_c1_contract.json"
+        )
+        task = TaskInstance.from_dict(
+            json.loads(task_path.read_text(encoding="utf-8"))
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(task.task_id, "casting_c1_fixed_seed_0")
+        self.assertEqual(task.route, "lava_casting")
+        self.assertEqual(task.workflow, "casting_c1_fixed")
+        self.assertEqual(task.difficulty, 1)
+        self.assertEqual(
+            task.scenario_parameters["implementation_status"],
+            "contract_only",
+        )
+        self.assertFalse(task.scenario_parameters["allow_live_run"])
+        self.assertIn("first_obsidian_cast", task.milestones)
+        self.assertEqual(
+            config["task_instance"],
+            "benchmark/instances/active/casting_c1_fixed.json",
+        )
+        self.assertEqual(config["status"], "contract_only")
+        self.assertFalse(config["allow_live_run"])
+        self.assertEqual(config["max_real_runs"], 0)
+
     def test_development_instance_matches_core_contract(self) -> None:
         path = ROOT / "benchmark/instances/route_a_a0_development.json"
         task = TaskInstance.from_dict(json.loads(path.read_text(encoding="utf-8")))
@@ -51,44 +81,6 @@ class BenchmarkFileTests(unittest.TestCase):
                 )
                 self.assertTrue((ROOT / config["model_lock"]).is_file())
                 self.assertEqual(config["evaluator"], "portal_v0")
-
-    def test_phase_four_a1_instance_freezes_nearby_obsidian_contract(self) -> None:
-        path = ROOT / "benchmark/instances/route_a_a1_phase4.json"
-        task = TaskInstance.from_dict(json.loads(path.read_text(encoding="utf-8")))
-        inventory = task.initial_inventories["agent_1"]
-        scenario = task.scenario_parameters
-
-        self.assertEqual(task.task_id, "route_a_a1_phase4_seed_0")
-        self.assertEqual(task.workflow, "route_a_a1")
-        self.assertEqual(task.difficulty, 2)
-        self.assertNotIn("obsidian", inventory)
-        self.assertEqual(inventory["diamond_pickaxe"], 1)
-        self.assertEqual(scenario["variant"], "nearby_obsidian")
-        self.assertEqual(scenario["obsidian_required"], 14)
-        self.assertEqual(scenario["obsidian_deposit"]["minimum_blocks"], 14)
-        self.assertLessEqual(
-            scenario["obsidian_deposit"]["max_distance_blocks"], 8
-        )
-        self.assertIn("obsidian_quota_collected", task.milestones)
-        with self.assertRaises(TypeError):
-            scenario["obsidian_deposit"]["minimum_blocks"] = 13
-
-    def test_phase_four_a1_scripted_config_freezes_mining_slice(self) -> None:
-        path = ROOT / "configs/experiments/phase4_scripted_a1.json"
-        config = json.loads(path.read_text(encoding="utf-8"))
-        task_path = ROOT / config["task_instance"]
-        task = TaskInstance.from_dict(json.loads(task_path.read_text(encoding="utf-8")))
-        self.assertEqual(config["planner"], "scripted_a1")
-        self.assertEqual(config["obsidian_quota_required"], 14)
-        self.assertGreaterEqual(config["max_no_progress_retries"], 1)
-        self.assertGreaterEqual(config["max_cell_retry_attempts"], 1)
-        self.assertEqual(task.task_id, "route_a_a1_phase4_seed_0")
-        self.assertEqual(task.workflow, "route_a_a1")
-        self.assertNotIn("obsidian", task.initial_inventories["agent_1"])
-        self.assertEqual(
-            task.scenario_parameters["obsidian_required"], 14
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

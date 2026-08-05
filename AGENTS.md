@@ -1,31 +1,31 @@
-# ObsidianLink Development Constraints
+# Agent 工作规则
 
-ObsidianLink is a reproducible Minecraft benchmark for single-agent and
-two-agent Nether portal construction. Read `README.md`, `ROADMAP.md`, and
-`BENCHMARK_SPEC.md` before project work.
+开始前先读 `README.md`、`PROJECT_STATUS.md`、`ROADMAP.md` 和 `BENCHMARK_SPEC.md`。
 
-1. Work on the active roadmap phase only. Do not add Route B, multi-agent, or
-   large benchmark infrastructure before its prerequisite exit criteria pass.
-2. Do not independently change the pinned MineRL, Minecraft, Qwen, Python,
-   JDK, Gym, NumPy, or model revisions.
-3. Model output must pass strict structured parsing, an action allowlist,
-   type validation, and numeric clamping. Never execute model-generated code,
-   shell commands, raw Minecraft commands, or unbounded input events.
-4. Keep environment stepping decoupled from local and remote model inference.
-   The environment owner must not wait for planner I/O.
-5. Keep agent-visible observations separate from evaluator-only environment
-   truth. Evaluator state must never leak into a planner prompt or memory.
-6. Every observation, action, message, evaluation event, and log record must
-   carry `episode_id`, `agent_id` where applicable, and `step_id`.
-7. Prefer evaluator-first vertical slices: prove a task manually or with a
-   deterministic driver before using a VLM policy.
-8. `vendor/minerl` is an independent nested Git repository. The outer
-   repository must not commit, delete, rewrite, or repair its history.
-9. MineRL Gradle builds execute third-party code and require explicit user
-   approval before each build.
-10. Write generated results under `runs/`. Never commit API keys, local model
-    weights, raw secrets, or hidden model reasoning.
-11. A phase is complete only when its tests, controlled integration evidence,
-    automatic evaluation, and required manual review all pass.
-12. After structural or functional changes, run the relevant tests and report
-    the result and remaining limitations.
+1. 只做 `PROJECT_STATUS.md` 中的当前任务，不提前开发后续阶段。
+2. 当前主线是用原版水和熔岩机制生成黑曜石并构建传送门。
+3. 不自行改变 MineRL、Minecraft、Python、JDK、Gym、NumPy、Qwen 或模型版本。
+4. `vendor/minerl` 是独立仓库；未经授权不得修改。
+5. 每次 Gradle 构建、真实 MineRL/Minecraft 运行、付费 API 调用都要单独获得用户批准。
+6. 模型输出必须经过严格解析、动作白名单、类型检查和数值限制；不得执行模型生成的代码、命令或无限输入。
+7. Planner 不能阻塞环境 step 循环，过期决策必须丢弃。
+8. Agent 可见观察与 evaluator 真值必须分开，真值不能进入 prompt 或 memory。
+9. observation、action、message、evaluation 和 log 都应带 `episode_id`、`step_id`，适用时带 `agent_id`。
+10. 先用 FakeBackend 和确定性 driver 证明任务，再连接模型。
+11. 运行结果写入 `runs/`，不得保存密钥、模型权重或隐藏推理。
+12. 修改后运行相关离线测试，并报告结果和仍未验证的限制。
+
+## 开始检查
+
+```bash
+git status --short
+python -m obsidianlink --check
+```
+
+## 完成条件
+
+- 当前任务的代码和测试完成；
+- 离线测试通过；
+- 没有把 evaluator-only 信息泄漏给 Agent；
+- `PROJECT_STATUS.md` 已更新；
+- 未经授权不提交、不推送、不启动真实环境。

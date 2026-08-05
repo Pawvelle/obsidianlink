@@ -1,59 +1,29 @@
-# ObsidianLink Dataset Card
+# 运行数据说明
 
-## 状态
+ObsidianLink 的数据是每次 benchmark episode 产生的证据，不是训练数据集。
 
-**设计阶段，尚未发布数据集。**
+## 每次运行保存
 
-当前仓库只包含 TaskInstance Schema 和一个用于 Phase 0 结构验证的 A0 示例。
-示例不代表正式 train/dev/test 数据，也不构成任务成功证据。
+- 任务实例和实验配置；
+- 代码与依赖版本；
+- Agent 可见的初始、关键和最终画面；
+- observation、action、message 和 evaluation 事件；
+- 自动评分结果；
+- `manual_review.md`。
 
-## 计划内容
+所有记录使用 `episode_id` 和 `step_id`，适用时使用 `agent_id`。
 
-- 参数化任务模板和实例；
-- 路线 A/B 语义工作流与依赖图；
-- 第一人称观察帧；
-- 结构化宏动作与解析结果；
-- 环境状态变化和 evaluator 里程碑；
-- 多角色消息、共享任务板和物品交接事件；
-- 运行配置、模型/Prompt 标识、延迟和成本；
-- 决策摘要和失败分类；
-- 人工可完成性与抽样审查记录。
+## 信息隔离
 
-不会发布：
+Agent-visible 数据与 evaluator-only 真值分开保存。目标方块、流体真值和 Portal 结构不能进入 Agent prompt 或 memory。
 
-- API key、认证信息或本地机密；
+## 不保存
+
+- API key 或其他密钥；
 - 本地模型权重；
-- 模型隐藏推理链；
-- 无许可的第三方资源；
-- 无法说明来源或人工审查状态的数据。
+- 隐藏推理；
+- 与当前 episode 无关的个人数据。
 
-## 数据生成
+## 当前状态
 
-数据只来自固定版本的 ObsidianLink 任务和记录器。每条事件带有
-`episode_id`、`step_id`，角色事件还带有 `agent_id`。正式数据发布前必须冻结：
-
-- 环境与任务版本；
-- TaskInstance Schema；
-- 动作协议；
-- evaluator；
-- 图像预处理；
-- Prompt 和模型配置；
-- 数据划分策略。
-
-## 质量控制
-
-1. 每个任务实例先通过人工或确定性可完成性验证。
-2. PortalEvaluator 的成功和负例由人工轨迹校验。
-3. 自动批量运行后对成功、失败和边界案例分层抽查。
-4. 不覆盖失败运行；重试生成新的 episode ID。
-5. 数据版本变更必须记录 Schema、评测或任务语义变化。
-
-## 已知风险
-
-- Minecraft/MineRL 版本老旧，环境行为可能与现代 Minecraft 不同；
-- 路线 B 对精确操作要求高，早期成功率可能接近零；
-- 本地硬件会限制双客户端和本地模型并行；
-- 视觉帧不能覆盖所有环境真值，必须防止 evaluator 信息泄漏；
-- 小规模模板可能导致对固定工作流过拟合。
-
-正式版本将补充许可、规模、划分、统计、偏差、隐私和维护信息。
+`casting_c1_fixed` 尚未进行正式真实运行。当前阶段只产生离线测试结果，不产生 benchmark episode 数据。

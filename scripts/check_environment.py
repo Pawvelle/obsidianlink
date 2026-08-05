@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _check_project_files() -> dict[str, bool]:
     required = (
+        "PROJECT_STATUS.md",
+        "AGENTS.md",
         "README.md",
         "ROADMAP.md",
         "BENCHMARK_SPEC.md",
@@ -23,6 +25,9 @@ def _check_project_files() -> dict[str, bool]:
         "model.lock.json",
         "obsidianlink/__init__.py",
         "benchmark/schemas/task_instance.schema.json",
+        "benchmark/instances/active/casting_c1_fixed.json",
+        "configs/experiments/active/casting_c1_contract.json",
+        "docs/runbooks/FIRST_OBSIDIAN_BLOCK.md",
     )
     return {path: (ROOT / path).is_file() for path in required}
 
@@ -68,7 +73,9 @@ def main() -> int:
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "project_files": files,
-        "phase": "phase_0_clean_core",
+        "phase": "reset_2_capability_manifest",
+        "active_task": "casting_c1_fixed",
+        "live_run_allowed": False,
     }
     if args.runtime:
         result["runtime_versions"] = _runtime_versions()

@@ -10,26 +10,25 @@ from obsidianlink.evaluation.portal import EvaluationState, PortalEvaluator
 from obsidianlink.core.types import TaskInstance
 
 
-def _phase_zero_check() -> dict[str, object]:
+def _offline_contract_check() -> dict[str, object]:
     task = TaskInstance.from_dict(
         {
             "schema_version": "0.1",
-            "task_id": "phase0_fake_a0",
-            "route": "obsidian_mining",
+            "task_id": "casting_c1_contract_check",
+            "route": "lava_casting",
             "difficulty": 1,
             "agent_ids": ["agent_1"],
             "world_seed": 0,
-            "instruction": "Build, activate, and enter a Nether portal.",
+            "instruction": "Validate the offline casting task contract.",
             "spawn_positions": {"agent_1": [0, 64, 0]},
             "initial_inventories": {
-                "agent_1": {"obsidian": 10, "flint_and_steel": 1}
+                "agent_1": {"water_bucket": 1, "lava_bucket": 1}
             },
-            "workflow": "route_a_a0",
+            "workflow": "casting_c1_fixed",
             "milestones": [
                 "task_reset",
-                "valid_portal_frame",
-                "portal_activated",
-                "agent_entered_nether",
+                "liquid_resources_ready",
+                "first_obsidian_cast",
             ],
             "limits": {
                 "max_environment_steps": 500,
@@ -65,13 +64,18 @@ def _phase_zero_check() -> dict[str, object]:
 
     return {
         "status": "ok",
-        "phase": "phase_0_clean_core",
+        "phase": "reset_2_capability_manifest",
+        "active_task": "casting_c1_fixed",
+        "live_run_allowed": False,
         "task_id": task.task_id,
         "agent_ids": sorted(observations),
         "action_parser_accepted": parsed.accepted,
         "backend_step": step.step_id,
         "portal_evaluator_success": result.success,
-        "note": "FakeBackend contract check only; no real MineRL task was run.",
+        "note": (
+            "FakeBackend and PortalEvaluator core safety check only; "
+            "the casting evaluator is not implemented and no real MineRL task was run."
+        ),
     }
 
 
@@ -83,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="run the Phase 0 standard-library contract check",
+        help="run the offline core contract check without starting MineRL",
     )
     return parser
 
@@ -93,5 +97,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.check:
         build_parser().print_help()
         return 0
-    print(json.dumps(_phase_zero_check(), ensure_ascii=False, sort_keys=True))
+    print(json.dumps(_offline_contract_check(), ensure_ascii=False, sort_keys=True))
     return 0

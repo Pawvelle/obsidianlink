@@ -10,7 +10,6 @@ from minerl.herobraine.hero.handlers.translation import KeymapTranslationHandler
 
 
 PORTAL_ENV_NAME = "ObsidianLinkPortalA0-v0"
-PORTAL_A1_ENV_NAME = "ObsidianLinkPortalA1-v0"
 PORTAL_GRID_NAME = "portal_build_region"
 PORTAL_GRID_ORIGIN_NAME = f"{PORTAL_GRID_NAME}_origin"
 PORTAL_TRANSITION_NAME = "portal_transition"
@@ -48,67 +47,6 @@ PORTAL_INVENTORY = (
     {"type": "flint_and_steel", "quantity": 1},
     {"type": "dirt", "quantity": 2},
 )
-PORTAL_A1_INVENTORY = (
-    {"type": "diamond_pickaxe", "quantity": 1},
-    {"type": "flint_and_steel", "quantity": 1},
-    {"type": "dirt", "quantity": 2},
-)
-PORTAL_A1_OBSIDIAN_DEPOSIT = (
-    '<DrawCuboid x1="-3" y1="4" z1="3" '
-    'x2="0" y2="4" z2="6" type="obsidian"/>'
-)
-# World-coordinate bounds of the fixed A1 obsidian deposit. The
-# evaluator-only grid is anchored to ``PORTAL_GRID_MIN``, so the
-# deposit is read into the backend as a 4x1x4 slice in grid-relative
-# coordinates. The backend derives the grid offsets from these bounds
-# to keep the mining evidence aligned with the A1 mission spec.
-PORTAL_A1_DEPOSIT_WORLD_MIN = (-3, 4, 3)
-PORTAL_A1_DEPOSIT_WORLD_MAX = (0, 4, 6)
-
-
-def portal_a1_deposit_grid_offsets() -> tuple[tuple[int, int, int], ...]:
-    """Return the 16 (x, y, z) grid offsets for the A1 deposit zone.
-
-    The A1 deposit is a 4x1x4 horizontal slab at world y=4. The portal
-    evaluator grid is anchored to the actual agent spawn point. This
-    helper returns the *canonical* offsets relative to a spawn at
-    world ``(0, 4, 0)``: the grid origin is at world
-    ``(-3, 3, 0)`` and the deposit at world ``(-3, 4, 3)`` lives
-    at grid offset ``(0, 1, 3)``. The backend adjusts the offsets
-    at reset time using the recorded ``portal_grid_origin`` so the
-    evidence still aligns when MineRL places the agent elsewhere.
-    """
-    canonical_anchor: tuple[int, int, int] = (0, 4, 0)
-    wx_min, wy_min, wz_min = PORTAL_A1_DEPOSIT_WORLD_MIN
-    wx_max, wy_max, wz_max = PORTAL_A1_DEPOSIT_WORLD_MAX
-    if (wx_min, wy_min, wz_min) > (wx_max, wy_max, wz_max):
-        raise ValueError("A1 deposit world bounds are inverted")
-    offsets: list[tuple[int, int, int]] = []
-    for wx in range(wx_min, wx_max + 1):
-        for wy in range(wy_min, wy_max + 1):
-            for wz in range(wz_min, wz_max + 1):
-                offsets.append(
-                    (
-                        wx - (canonical_anchor[0] + PORTAL_GRID_MIN[0]),
-                        wy - (canonical_anchor[1] + PORTAL_GRID_MIN[1]),
-                        wz - (canonical_anchor[2] + PORTAL_GRID_MIN[2]),
-                    )
-                )
-    return tuple(offsets)
-
-
-class PortalA1DepositDecorator(handlers.Handler):
-    """Emit the fixed A1 deposit as XML without Jinja escaping it as text."""
-
-    def xml_template(self) -> str:
-        return (
-            "<DrawingDecorator>"
-            f"{PORTAL_A1_OBSIDIAN_DEPOSIT}"
-            "</DrawingDecorator>"
-        )
-
-    def to_string(self) -> str:
-        return "portal_a1_deposit"
 
 
 class PortalGridObservation(KeymapTranslationHandler):
@@ -363,7 +301,6 @@ class PortalA0EnvSpec(HumanSurvival):
         max_game_time_seconds: int = 120,
         initial_inventory: tuple[dict[str, Any], ...] = PORTAL_INVENTORY,
         initial_position: tuple[int, int, int] = (0, 4, 0),
-        env_name: str = PORTAL_ENV_NAME,
     ) -> None:
         if type(max_episode_steps) is not int or max_episode_steps < 1:
             raise ValueError("max_episode_steps must be a positive integer")
@@ -392,7 +329,7 @@ class PortalA0EnvSpec(HumanSurvival):
         self.initial_inventory = tuple(normalized_inventory)
         self.initial_position = initial_position
         super().__init__(
-            name=env_name,
+            name=PORTAL_ENV_NAME,
             max_episode_steps=max_episode_steps,
             resolution=(640, 360),
             guiscale_range=[1, 1],
@@ -457,33 +394,4 @@ class PortalA0EnvSpec(HumanSurvival):
         return (
             "Controlled A0 task: build, activate, and enter a Nether portal "
             "using provided obsidian and flint and steel."
-        )
-
-
-class PortalA1EnvSpec(PortalA0EnvSpec):
-    """Controlled A1 environment with a fixed nearby obsidian deposit."""
-
-    def __init__(
-        self,
-        *,
-        max_episode_steps: int = 900,
-        max_game_time_seconds: int = 900,
-        initial_inventory: tuple[dict[str, Any], ...] = PORTAL_A1_INVENTORY,
-        initial_position: tuple[int, int, int] = (0, 4, 0),
-    ) -> None:
-        super().__init__(
-            max_episode_steps=max_episode_steps,
-            max_game_time_seconds=max_game_time_seconds,
-            initial_inventory=initial_inventory,
-            initial_position=initial_position,
-            env_name=PORTAL_A1_ENV_NAME,
-        )
-
-    def create_server_decorators(self):
-        return [PortalA1DepositDecorator()]
-
-    def get_docstring(self) -> str:
-        return (
-            "Controlled A1 task: mine the fixed nearby obsidian deposit, then "
-            "build, activate, and enter a Nether portal."
         )
