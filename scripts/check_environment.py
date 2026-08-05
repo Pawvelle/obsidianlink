@@ -73,7 +73,7 @@ def main() -> int:
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "project_files": files,
-        "phase": "reset_2_capability_manifest",
+        "phase": "reset_3_casting_evaluator",
         "active_task": "casting_c1_fixed",
         "live_run_allowed": False,
     }

@@ -27,15 +27,29 @@ class ProjectDocumentationTests(unittest.TestCase):
 
     def test_current_status_names_one_offline_next_task(self) -> None:
         text = (ROOT / "PROJECT_STATUS.md").read_text(encoding="utf-8")
-        self.assertIn("R2-CAPABILITY-MANIFEST", text)
+        # The current task line is the one immediately under
+        # ``当前唯一目标``. The project must declare exactly one
+        # in-flight phase, and the safety reminder must stay
+        # present. The task id is the *current* one (R3 as of
+        # 2026-08-05), but the test is written to be robust when
+        # the project later advances to R4 / R5: it only requires
+        # the safety reminder and the explicit "next task" line.
         self.assertIn("当前唯一目标", text)
         self.assertIn("禁止真实 MineRL、Gradle 和模型调用", text)
+        self.assertRegex(
+            text,
+            r"下一任务：`(R[3-9]-[A-Z0-9-]+)`",
+        )
 
     def test_current_task_is_the_only_named_work_item(self) -> None:
         status = (ROOT / "PROJECT_STATUS.md").read_text(encoding="utf-8")
+        # Both R2 (the completed capability-manifest phase) and
+        # the current casting-c1 evaluator phase must remain
+        # referenced so the document doubles as a project history.
         self.assertIn("R2-CAPABILITY-MANIFEST", status)
         self.assertIn("BackendCapabilities", status)
-        self.assertIn("R3-CASTING-EVALUATOR", status)
+        self.assertIn("CastingEvaluationState", status)
+        self.assertIn("R4-DETERMINISTIC-CASTING-DRIVER", status)
 
     def test_root_docs_use_the_real_casting_mainline(self) -> None:
         for name in (

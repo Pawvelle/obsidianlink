@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Mapping, Protocol, runtime_checkable
 
 from obsidianlink.core.types import BackendStep, MacroAction, Observation, TaskInstance
+from obsidianlink.env.capabilities import BackendCapabilities
 from obsidianlink.evaluation.portal import EvaluationState
 
 
@@ -10,6 +11,9 @@ from obsidianlink.evaluation.portal import EvaluationState
 class EnvironmentBackend(Protocol):
     @property
     def agent_ids(self) -> tuple[str, ...]:
+        ...
+
+    def capabilities(self) -> BackendCapabilities:
         ...
 
     def open(self) -> None:

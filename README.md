@@ -4,18 +4,18 @@ ObsidianLink 是一个可复现的 Minecraft 单智能体基准。目标是让 A
 
 ## 当前任务
 
-当前阶段：`R2-CAPABILITY-MANIFEST`
+当前阶段：`R3-CASTING-EVALUATOR`
 
 当前任务实例：`casting_c1_fixed`
 
-本阶段只实现后端能力清单，确认系统能否支持：
+本阶段为 `casting_c1_fixed` 实现纯离线、类型严格、不可变、fail-closed 的 evaluator，用 evaluator-only 真值回答：
 
-- 选择并使用水桶、熔岩桶；
-- 读取 Agent 可见的库存和手持物品；
-- 让 evaluator 读取目标方块和流体真值；
-- 在关键能力缺失时提前停止任务。
+- 目标 cell 是否成功从非黑曜石变成黑曜石；
+- 是否同时满足 reset 状态、流体证据、相关动作因果、预算、正常终止等完整证据链；
+- 真值缺失时是否明确返回 `truth_missing` 而不是 `success`；
+- 错误方块、超预算、非正常终止、因果证据不足时是否给出稳定结果。
 
-下一位 Agent 应先阅读 [PROJECT_STATUS.md](PROJECT_STATUS.md)，按照其中列出的文件位置和完成条件工作。当前不启动 Minecraft，不运行 Gradle，不实现 casting evaluator、driver 或 VLM。
+下一位 Agent 应先阅读 [PROJECT_STATUS.md](PROJECT_STATUS.md)，按照其中列出的文件位置和完成条件工作。当前不启动 Minecraft，不运行 Gradle，不实现 driver 或 VLM。
 
 ## 项目目标
 
@@ -200,8 +200,8 @@ git diff --check
 ## 阶段顺序
 
 1. `R1`：冻结单块任务契约，已完成。
-2. `R2`：后端能力清单，当前阶段。
-3. `R3`：单块黑曜石 evaluator。
+2. `R2`：后端能力清单，已完成。
+3. `R3`：单块黑曜石 evaluator，当前阶段。
 4. `R4`：确定性单块 driver。
 5. `R5`：连续浇筑。
 6. `R6`：完整门框、点火和进入下界。

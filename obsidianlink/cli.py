@@ -6,6 +6,11 @@ from typing import Sequence
 
 from obsidianlink.actions.protocol import parse_macro_action
 from obsidianlink.env.fake import FakeEnvironmentBackend
+from obsidianlink.evaluation.casting import (
+    OUTCOME_TRUTH_MISSING,
+    CastingEvaluationState,
+    CastingEvaluator,
+)
 from obsidianlink.evaluation.portal import EvaluationState, PortalEvaluator
 from obsidianlink.core.types import TaskInstance
 
@@ -58,23 +63,42 @@ def _offline_contract_check() -> dict[str, object]:
                 entered_via_episode_portal_by_agent={"agent_1": True},
             )
         )
-        result = PortalEvaluator().evaluate(backend.get_evaluation_state())
+        portal_result = PortalEvaluator().evaluate(backend.get_evaluation_state())
+        backend.set_casting_evaluation_state(
+            CastingEvaluationState(
+                episode_id=task.task_id,
+                step_id=step.step_id,
+                agent_id="agent_1",
+                target_cell=(0, 64, 1),
+                max_environment_steps=task.limits["max_environment_steps"],
+                max_game_time_seconds=task.limits["max_game_time_seconds"],
+            )
+        )
+        casting_result = CastingEvaluator().evaluate(
+            backend.get_casting_evaluation_state()
+        )
+        if casting_result.outcome != OUTCOME_TRUTH_MISSING:
+            raise RuntimeError("casting evaluator must fail closed without truth")
     finally:
         backend.close()
 
     return {
         "status": "ok",
-        "phase": "reset_2_capability_manifest",
+        "phase": "reset_3_casting_evaluator",
         "active_task": "casting_c1_fixed",
         "live_run_allowed": False,
         "task_id": task.task_id,
         "agent_ids": sorted(observations),
         "action_parser_accepted": parsed.accepted,
         "backend_step": step.step_id,
-        "portal_evaluator_success": result.success,
+        "portal_evaluator_success": portal_result.success,
+        "casting_evaluator_outcome": casting_result.outcome,
         "note": (
-            "FakeBackend and PortalEvaluator core safety check only; "
-            "the casting evaluator is not implemented and no real MineRL task was run."
+            "FakeBackend + PortalEvaluator + casting_c1 evaluator offline "
+            "contract check only; no real MineRL task, no real casting "
+            "driver, and no model API call were made. The casting "
+            "evaluator is type-strict, fail-closed, and does not simulate "
+            "Minecraft fluid physics."
         ),
     }
 

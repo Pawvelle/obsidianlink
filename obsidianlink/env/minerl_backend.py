@@ -9,6 +9,10 @@ import numpy as np
 
 from obsidianlink.actions.minerl_translator import translate_macro_action
 from obsidianlink.core.types import BackendStep, MacroAction, Observation, TaskInstance
+from obsidianlink.env.capabilities import (
+    BackendCapabilities,
+    assert_backend_can_start_task,
+)
 from obsidianlink.env.portal_spec import (
     PORTAL_GRID_BLOCKS,
     PORTAL_GRID_MAX,
@@ -107,6 +111,52 @@ class MineRLEnvironmentBackend:
         self._require_env()
         return self._env.action_space
 
+    @staticmethod
+    def casting_c1_capabilities() -> BackendCapabilities:
+        """Return the honest manifest for the current MineRL backend.
+
+        The current MineRL translator (:mod:`obsidianlink.actions.minerl_translator`)
+        only wires the legacy Route A0 hotbar (``obsidian``,
+        ``flint_and_steel``, ``dirt``). It does not translate
+        ``equip_item`` or ``use_item`` for ``water_bucket`` /
+        ``lava_bucket``; the corresponding casting_c1 capabilities
+        must therefore be reported as ``False`` until a proper
+        translator is added. Selected-slot truth, per-cell fluid
+        ground truth, and per-cell target-block truth are likewise
+        absent from the current evaluator surface: the public
+        :meth:`get_evaluation_state` returns an :class:`EvaluationState`
+        that does not carry a typed ``target_cell`` truth the casting
+        evaluator can read, and the bridge does not expose a fluid
+        grid at all. The internal ``portal_grid`` is part of the
+        legacy A0 geometry detector and is *not* a stable,
+        type-explicit evaluator surface for the casting task.
+
+        The manifest is a *static* declaration: it must never read
+        MineRL state and must never depend on the current task. The
+        capability gate fails closed for this backend until the
+        missing features are implemented.
+        """
+        return BackendCapabilities(
+            can_select_water_bucket=False,
+            can_select_lava_bucket=False,
+            can_use_water_bucket=False,
+            can_use_lava_bucket=False,
+            exposes_public_inventory=True,
+            exposes_selected_item=False,
+            exposes_target_block_truth=False,
+            exposes_fluid_truth=False,
+        )
+
+    def capabilities(self) -> BackendCapabilities:
+        """Return the immutable manifest this backend declares.
+
+        Currently identical to :meth:`casting_c1_capabilities`
+        because the manifest is static. The instance method is kept
+        so the project can later introduce per-backend configuration
+        without changing call sites.
+        """
+        return self.casting_c1_capabilities()
+
     def open(self) -> None:
         if self._opened:
             raise RuntimeError("backend is already open")
@@ -115,6 +165,14 @@ class MineRLEnvironmentBackend:
 
     def reset(self, task: TaskInstance) -> Mapping[str, Observation]:
         self._assert_owner()
+        # Pre-episode capability gate. Runs *before* ``self._task`` is
+        # set, *before* the env factory is called, *before* any MineRL
+        # reset / warmup, and *before* the baseline grid is captured.
+        # An incomplete manifest must fail closed so the MineRL
+        # runtime is never touched for a casting-c1 task it cannot
+        # serve today. Non-casting workflows pass through untouched
+        # so the legacy Route A0 baseline keeps working.
+        assert_backend_can_start_task(self, task)
         if task.agent_ids != ("agent_1",):
             raise ValueError("PortalA0 currently supports exactly agent_1")
         if task.route != "obsidian_mining" or task.difficulty != 1:
