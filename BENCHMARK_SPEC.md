@@ -2,30 +2,30 @@
 
 ## 目标
 
-评估一个 Minecraft Agent 是否能用原版机制构建并使用下界传送门。当前只评估最小切片 `casting_c1_fixed`。
+评估一个 Minecraft Agent 是否能用原版机制构建并使用下界传送门。当前评估 R5 最小连续浇筑切片 `casting_c3_fixed`；R4 的 `casting_c1_fixed` 作为回归合同保留。
 
 ## 当前任务
 
 - 维度：Overworld
 - Agent：1 个
 - 布局：固定受控场景
-- 资源：水桶、熔岩桶和少量支撑方块
-- 目标：让指定 cell 从非黑曜石变成黑曜石
+- 资源：3 个水桶、3 个熔岩桶和 6 个支撑方块
+- 目标：让 3 个冻结、有序的目标 cell 从非黑曜石变成黑曜石
 - 禁止：Minecraft 命令和 evaluator 修改世界
 
-任务实例：[`benchmark/instances/active/casting_c1_fixed.json`](benchmark/instances/active/casting_c1_fixed.json)
+任务实例：[`benchmark/instances/active/casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)
 
 ## 成功条件
 
 以下条件全部满足才算成功：
 
-1. reset 后目标 cell 不是黑曜石；
+1. reset 后 3 个目标 cell 都不是黑曜石；
 2. Agent 在预算内执行白名单动作；
-3. 目标 cell 通过水与熔岩更新变成黑曜石；
-4. 变化发生在 Agent 相关动作后的有限时间窗口；
+3. 3 个目标 cell 都通过水与熔岩更新变成黑曜石；
+4. 每个变化都发生在该 cell 独占的相关动作后的有限时间窗口；
 5. episode 正常结束，自动评估和人工复核一致。
 
-真值缺失、因果不清、形成圆石、超预算或进程残留都不能算成功。
+少于或多于 3 个 cell、目标顺序错误、跨 cell 重用动作 step、真值缺失、因果不清、形成圆石、超预算或进程残留都不能算成功。完成非空有序前缀但未完成全部 cell 时只能得到 `partial_completion`。
 
 ## 信息边界
 

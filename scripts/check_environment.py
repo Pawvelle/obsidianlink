@@ -26,7 +26,9 @@ def _check_project_files() -> dict[str, bool]:
         "obsidianlink/__init__.py",
         "benchmark/schemas/task_instance.schema.json",
         "benchmark/instances/active/casting_c1_fixed.json",
+        "benchmark/instances/active/casting_c3_fixed.json",
         "configs/experiments/active/casting_c1_contract.json",
+        "configs/experiments/active/casting_c3_contract.json",
         "docs/runbooks/FIRST_OBSIDIAN_BLOCK.md",
     )
     return {path: (ROOT / path).is_file() for path in required}
@@ -73,8 +75,8 @@ def main() -> int:
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "project_files": files,
-        "phase": "reset_4_deterministic_casting_driver",
-        "active_task": "casting_c1_fixed",
+        "phase": "reset_5_continuous_casting",
+        "active_task": "casting_c3_fixed",
         "live_run_allowed": False,
     }
     if args.runtime:

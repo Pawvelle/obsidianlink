@@ -44,9 +44,24 @@
 
 完成条件（已达成）：公共 `MacroAction` 协议、24 步固定计划、计划/step/time/wait 硬上限、后端提前终止 fail closed、driver/evaluator 信息隔离、FakeBackend 可重放与全量离线测试通过。
 
-## R5：连续浇筑（下一阶段）
+## R5：连续浇筑（完成）
 
-把单块扩展为短区段，验证多次液体操作和恢复逻辑。
+把 R3 / R4 的单块扩展为短区段，验证多次液体操作、每 cell 独立因果证据、单 cell 失败不掩盖、有限恢复协议。
+
+完成条件（已达成）：
+
+- 任务实例 `casting_c3_fixed`（3 个有序目标 cell 的固定直线区段）已冻结在 `benchmark/instances/active/casting_c3_fixed.json`。
+- 新 `obsidianlink/evaluation/continuous_casting.py` 提供 `ContinuousCastingCellTruth` / `ContinuousCastingEvaluationState` / `ContinuousCastingEvaluationResult` / `ContinuousCastingEvaluator`，所有容器都是 frozen + 递归不可变 + `__post_init__` 严格校验。
+- 10 个稳定 outcome id（success / in_progress / partial_completion / wrong_block / truth_missing / step_budget_exceeded / time_budget_exceeded / invalid_initial_state / causality_missing / abnormal_termination）；`partial_completion` 表示完成非空有序前缀，中间空洞仍是 `wrong_block`。
+- evaluator 严格要求 3 个冻结、有序目标 cell；每个 cell 的 `relevant_action_steps` / `water_truth` / `lava_truth` / `transition_evidence` 都是 per-cell 的，相关动作 step 不得被多个 cell 重复声明。
+- 新 `obsidianlink/drivers/casting_c3.py` 提供 `run_casting_c3_driver` + 72 步固定 plan + 公共 `MacroAction` 协议 + 封闭 R5 白名单。
+- 恢复协议基于公开信号：后端 `backend.step()` 抛 `RecoverableBackendError` 时 driver 在 per-step 预算和总预算内重试同一动作。预算耗尽后 fail closed，恢复动作仍经过同一白名单和预算检查。
+- `FakeEnvironmentBackend` 暴露 `set_continuous_casting_evaluation_state` / `get_continuous_casting_evaluation_state`，与 R3 单块表面对称，identity-guarded，`reset` / `step` / `close` 自动清空。
+- 3-cell success 可在 FakeBackend 上确定性重放；部分成功和中间失败不会误报 success；R4 / R3 / R2 全部测试无回归。
+- `vendor/minerl` 未修改；未启动 MineRL / Gradle / 模型 API。
+- `casting_c3_fixed` 已纳入 R2 capability gate，缺桶动作或 evaluator 真值能力时在 reset 前 fail closed。
+- CLI 阶段推进到 `reset_5_continuous_casting`，`python -m obsidianlink --check` 同时验证 R4 单块合同和 R5 连续浇筑合同。
+- R5 evaluator 56 个 + R5 driver 56 个，并新增 3 个 capability gate 与 1 个 benchmark 文件合同测试；R4 之前 286 个，总计 402 个离线用例全过。
 
 ## R6：完整门框与点火
 

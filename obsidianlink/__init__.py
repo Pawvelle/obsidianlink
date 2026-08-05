@@ -1,11 +1,18 @@
 """ObsidianLink benchmark core."""
 
-from obsidianlink.core.types import BackendStep, MacroAction, Observation, TaskInstance
+from obsidianlink.core.types import (
+    BackendStep,
+    MacroAction,
+    Observation,
+    RecoverableBackendError,
+    TaskInstance,
+)
 
 __all__ = [
     "BackendStep",
     "MacroAction",
     "Observation",
+    "RecoverableBackendError",
     "TaskInstance",
 ]
 

@@ -48,6 +48,15 @@ from obsidianlink.env.minerl_backend import MineRLEnvironmentBackend
 from tests.helpers import casting_c1_task, sample_task
 
 
+def casting_c3_task():
+    return dataclasses.replace(
+        casting_c1_task(),
+        task_id="casting_c3_fixed_seed_0",
+        workflow="casting_c3_fixed",
+        difficulty=2,
+    )
+
+
 class BackendCapabilitiesImmutabilityTests(unittest.TestCase):
     def test_capability_id_tuple_is_canonical_and_ordered(self) -> None:
         expected = (
@@ -250,9 +259,9 @@ class MissingCapabilitiesAreReportedTests(unittest.TestCase):
 class BackendStartGateTests(unittest.TestCase):
     """``assert_backend_can_start_task`` is the workflow-aware wrapper.
 
-    The function must enforce the casting-c1 manifest only for the
-    ``casting_c1_fixed`` workflow. Other workflows must be a
-    no-op so the legacy Route A0 contract keeps working.
+    The function must enforce the casting manifest for both frozen
+    casting workflows. Unrelated workflows remain a no-op so the
+    legacy Route A0 contract keeps working.
     """
 
     def test_casting_c1_task_runs_the_gate(self) -> None:
@@ -265,6 +274,17 @@ class BackendStartGateTests(unittest.TestCase):
             assert_backend_can_start_task(backend, casting_c1_task())
         self.assertEqual(ctx.exception.missing, ("use_water_bucket",))
         self.assertEqual(ctx.exception.task_id, "casting_c1_fixed_seed_0")
+
+    def test_casting_c3_task_runs_the_same_gate(self) -> None:
+        caps = dataclasses.replace(
+            BackendCapabilities.full(),
+            exposes_fluid_truth=False,
+        )
+        backend = FakeEnvironmentBackend(capabilities=caps)
+        with self.assertRaises(CapabilityMismatchError) as ctx:
+            assert_backend_can_start_task(backend, casting_c3_task())
+        self.assertEqual(ctx.exception.missing, ("fluid_truth",))
+        self.assertEqual(ctx.exception.task_id, "casting_c3_fixed_seed_0")
 
     def test_non_casting_task_is_a_no_op_for_missing_caps(self) -> None:
         caps = dataclasses.replace(
@@ -351,6 +371,28 @@ class FakeBackendResetGateTests(unittest.TestCase):
             self.assertEqual(backend._task.workflow, "casting_c1_fixed")
             # Baseline evaluation state was created.
             self.assertIsNotNone(backend._evaluation_state)
+        finally:
+            backend.close()
+
+    def test_missing_cap_fake_backend_rejects_casting_c3_before_mutation(self) -> None:
+        caps = dataclasses.replace(
+            BackendCapabilities.full(),
+            can_use_lava_bucket=False,
+            exposes_target_block_truth=False,
+        )
+        backend = FakeEnvironmentBackend(capabilities=caps)
+        backend.open()
+        try:
+            with self.assertRaises(CapabilityMismatchError) as ctx:
+                backend.reset(casting_c3_task())
+            self.assertEqual(
+                ctx.exception.missing,
+                ("use_lava_bucket", "target_block_truth"),
+            )
+            self.assertEqual(ctx.exception.task_id, "casting_c3_fixed_seed_0")
+            self.assertIsNone(backend._task)
+            self.assertEqual(backend._step_id, 0)
+            self.assertIsNone(backend._evaluation_state)
         finally:
             backend.close()
 
@@ -590,6 +632,32 @@ class MineRLResetGateTests(unittest.TestCase):
             self.assertEqual(
                 ctx.exception.task_id, "casting_c1_fixed_seed_0"
             )
+        finally:
+            backend.close()
+
+    def test_minerl_casting_c3_reset_rejected_before_env_creation(self) -> None:
+        factory_calls: list[str] = []
+
+        def tracking_factory(task: object) -> object:
+            factory_calls.append("env_factory_called")
+            raise AssertionError(
+                "env_factory must not be called when the R5 gate fails"
+            )
+
+        backend = MineRLEnvironmentBackend(
+            env_factory=tracking_factory,  # type: ignore[arg-type]
+            reset_warmup_steps=0,
+        )
+        backend.open()
+        try:
+            with self.assertRaises(CapabilityMismatchError) as ctx:
+                backend.reset(casting_c3_task())
+            self.assertEqual(factory_calls, [])
+            self.assertIsNone(backend._task)
+            self.assertEqual(backend._step_id, 0)
+            self.assertIsNone(backend._env)
+            self.assertEqual(ctx.exception.task_id, "casting_c3_fixed_seed_0")
+            self.assertIn("fluid_truth", ctx.exception.missing)
         finally:
             backend.close()
 

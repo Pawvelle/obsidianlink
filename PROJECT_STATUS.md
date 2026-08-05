@@ -4,11 +4,11 @@
 
 ## 当前唯一目标
 
-任务：`R4-DETERMINISTIC-CASTING-DRIVER`（已完成）
+任务：`R5-CONTINUOUS-CASTING`（已完成）
 
-下一任务：`R5-CONTINUOUS-CASTING`（尚未开始）
+下一任务：`R6-COMPLETE-PORTAL-FRAME`（尚未开始）
 
-为 `casting_c1_fixed` 实现一个确定性、有限循环、Agent-visible 单块 driver，配合 R3 evaluator 在 FakeBackend 上跑通完整的 `success` 路径；driver 绝不读取或调用 evaluator-only casting truth，truth 注入与 `CastingEvaluator` 调用由测试编排侧负责。
+把 `casting_c1_fixed` 的单块浇筑扩展为 `casting_c3_fixed`（3 个有序目标 cell 的固定直线区段），在 FakeBackend 上验证多次液体操作的因果证据分别归属于对应 cell、单个 cell 的失败不会被掩盖、恢复/重试有严格硬上限、driver 不读取 evaluator-only 真值、evaluator 独立判定。
 
 ## 建议修改位置（R4 实际完成）
 
@@ -139,17 +139,175 @@ git status --short -- vendor/minerl                         → 空（vendor 未
 
 ## 下一任务
 
-任务：`R5-CONTINUOUS-CASTING`（尚未开始）
+任务：`R6-COMPLETE-PORTAL-FRAME`（尚未开始）
 
-把单块扩展为短区段（多 cell 连续浇筑），验证多次液体操作和恢复逻辑；驱动与 evaluator 的 truth 表面、有限循环、信息隔离接口保持稳定；待 R5 需求细化后单独立项。
+在固定受控场景完成门框、点火和进入下界，由 PortalEvaluator 验证。
 
-不要实现 R6（完整门框与点火）、R7（VLM），不要改 `vendor/minerl`，不要启动 MineRL。
+不要实现 R7（VLM），不要改 `vendor/minerl`，不要启动 MineRL。
+
+## R5 合同（冻结）
+
+- 新 workflow：`casting_c3_fixed`。
+- 新 task instance：`benchmark/instances/active/casting_c3_fixed.json`。
+- 新 experiment config：`configs/experiments/active/casting_c3_contract.json`。
+- 3 个有序目标 cell，固定直线区段：(2, 4, 3) / (3, 4, 3) / (4, 4, 3)。
+- 初始库存：water_bucket=3、lava_bucket=3、cobblestone=6。
+- 预算：max_environment_steps=240、max_game_time_seconds=180、max_wait_steps≤96、max_recoveries_per_action=2、total_recovery_budget≤8（默认 1 / 3）。
+- evaluator outcome 封闭集合（10 个）：`success` / `in_progress` / `partial_completion` / `wrong_block` / `truth_missing` / `step_budget_exceeded` / `time_budget_exceeded` / `invalid_initial_state` / `causality_missing` / `abnormal_termination`。
+- 优先级（高→低）：step_budget → time_budget → invalid_initial_state → abnormal_termination → truth_missing → in_progress → causality_missing → ordered-prefix partial_completion / wrong_block → success。
+- driver 动作白名单：`equip_item` / `use_item` / `place_block` / `wait`，目标白名单 `water_bucket` / `lava_bucket` / `cobblestone`。
+- 可恢复信号：仅来自公开 `Observation` 或类型受控的 `RecoverableBackendError` 异常（来自 `obsidianlink.core.types`）；`use_item` 步可携带 `recoveries_allowed` 预算，总恢复次数受 `total_recovery_budget` 硬约束。
+- 不实现 R6 / R7，不启动 MineRL / Gradle / 模型 API。
+
+## R5 交付内容
+
+1. 一个不可变、类型严格、可 JSON 序列化的 `ContinuousCastingCellTruth`（`obsidianlink/evaluation/continuous_casting.py`），承载每个 cell 的 `target_cell` / `initial_block` / `current_block` / `water_truth` / `lava_truth` / `transition_evidence` / `relevant_action_steps`。 ✓
+2. 一个不可变、JSON 可序列化的 `ContinuousCastingEvaluationState`（`episode_id` / `step_id` / `agent_id` / 有序 `cells` tuple / 因果窗口 / 终止信号 / 时间预算 / 辅助 evidence），构造时严格要求恰好 3 个冻结、有序 target cell，拒绝跨 cell 重复声明 action step，并校验所有证据不来自未来。 ✓
+3. 一个不可变、JSON 可序列化的 `ContinuousCastingEvaluationResult`（`success` / `outcome` / `completed_cells` / `total_cells` / `per_cell_outcomes` / `first_failed_cell` / `blocking_conditions` / `evidence` / `failure_type` / `failure_step` / `episode_terminated` / `terminated_step` / `terminated_reason`），`as_dict()` 返回与内部状态分离、可被 `json.dumps` 序列化的快照。 ✓
+4. 一个 `ContinuousCastingEvaluator` 纯函数/纯对象：相同输入产生相同结果，从不读取 Agent 文本 / 图像 / Planner 输入；AST 扫描锁住 `obsidianlink.evaluation.continuous_casting` 不引用 `MacroAction` / `VLM` / `Qwen` / `obsidianlink.drivers` / `obsidianlink.agents` / `obsidianlink.workflows`。 ✓
+5. 10 个稳定 outcome id + 锁定优先级：完成非空严格有序前缀且剩余 cell 真值完整但不是黑曜石时返回 `partial_completion`；中间有空洞或零进展返回 `wrong_block`；success 只在 3 个冻结 cell 全部为 `cell_success` 且 episode 正常终止、预算未超时的情况下返回。 ✓
+6. 有限因果窗口：R5 复用 R3 `causality_window_steps`（默认 4，上限 32），每个 cell 独立计算。 ✓
+7. `FakeEnvironmentBackend` 暴露 `set_continuous_casting_evaluation_state` / `get_continuous_casting_evaluation_state`：与 R3 单块表面对称，identity-guarded（`episode_id` 匹配当前 task、`step_id` 匹配当前 backend step）；未注入 / 越步 / open 之前分别报错；`reset` / `step` / `close` 自动清空；`Observation.frame` / `visible_inventory` / `messages` / `workflow_stage` 不含任何 R5 真值。 ✓
+8. 一个 `run_casting_c3_driver` 入口：72 步固定 plan（3 cell × 24 step），只使用公共动作协议中的 R5 白名单；每个 `use_item` 步携带 `recoveries_allowed`；不调用任何模型代码、不打开 shell、不接 VLM。 ✓
+9. 一个 `CastingC3DriverResult`（`status` ∈ {`completed` / `blocked` / `failed`}、有限计数、events 带 `episode_id` / `agent_id` / `step_id` / `cell_index` / `label` / `phase` / `action_type` / `target` / `relevant_action` / `attempt`、per_cell_relevant_action_steps、recovery 计数、终止标志 + 阻断原因、recovery metadata）；`as_dict()` 提供分离的 JSON 快照。 ✓
+10. 三类硬上限 + 一个计划上限 + 两个恢复上限：`max_environment_steps` / `max_game_time_seconds` / `max_wait_steps` / `plan length` / `max_recoveries_per_action` / `total_recovery_budget`；`max_environment_steps` / `max_game_time_seconds` 不得超过 task 合同，调用方只能收紧不能放宽；budget 耗尽以 `status="blocked"` 报告。 ✓
+11. 恢复协议：driver 捕获类型受控的 `RecoverableBackendError`，递增 `recovery_attempts` 与该步 `attempt`，按预算决定是否重试；预算不足时 `status="blocked"`，event `budget_exceeded: "recovery"` / `"recovery_per_step"`；`RuntimeError` / `OSError` / `TypeError`（非 `RecoverableBackendError` 子类）依旧 fail closed。 ✓
+12. 一个信息隔离的 source 守卫：driver 永不 `import` `ContinuousCastingEvaluator` / `ContinuousCastingEvaluationState` / `ContinuousCastingEvaluationResult` / `ContinuousCastingCellTruth` / `ContinuousCastingWorldTruth` / 任何 `OUTCOME_*` 常量（AST 扫描测试锁定）；永不调用 `backend.set_continuous_casting_evaluation_state` / `backend.get_continuous_casting_evaluation_state`（spy 测试锁定）；永不读取 `Observation` 上任何 `target_cell` / `target_cells` / `initial_block` / `current_block` / `water_truth` / `lava_truth` / `transition_evidence` / `relevant_action_steps` / `casting_*` / `success` / `outcome` / `failure_type` / `per_cell_outcomes` / `first_failed_cell` / `completed_cells` 字段（monkey-patch 测试锁定）。 ✓
+13. 一个测试侧编排器（`tests/test_continuous_casting_driver.py` 内的 `run_orchestrator` / `_state` / `ContinuousCastingWorldTruth`）：唯一允许调用 `set_continuous_casting_evaluation_state` / `get_continuous_casting_evaluation_state` 和 `ContinuousCastingEvaluator` 的位置；从 `driver_result.per_cell_relevant_action_steps` 与 `ContinuousCastingWorldTruth` 构造 `ContinuousCastingEvaluationState`。 ✓
+14. 完整端到端覆盖：3-cell success、只完成第 1 / 前 2 个 cell → `partial_completion`、中间 cell wrong_block、严格三格/固定顺序、跨 cell 重复动作 step 在 state 构造时拒绝、缺 water / lava / transition 证据、transition 早于相关动作、transition 超出因果窗口、reset 时 cell 已是 obsidian、step/time budget 超限、abnormal termination、提前 terminated / truncated、有限恢复、step_id 跳跃 / stale、replay 稳定、as_dict 深度分离和信息隔离。 ✓
+15. CLI 离线 contract check 与 `scripts/check_environment.py` 阶段都推进到 `reset_5_continuous_casting`，并在 CLI 报告 `r5.c3_driver_status="completed"`、`r5.c3_evaluator_outcome="success"`、`r5.c3_evaluator_completed_cells=3`。 ✓
+
+## R5 已完成
+
+### Driver 公开表面（`obsidianlink/drivers/casting_c3.py`）
+
+- `ALLOWED_C3_ACTION_TYPES`（frozenset，4 项）+ `ALLOWED_C3_TARGETS`（frozenset，3 项）：所有计划动作都能通过项目公共 `parse_macro_action`。
+- `DRIVER_STATUS_*`（`completed` / `blocked` / `failed`）：driver 永不返回 `passed` / `success`——verdict 由 evaluator 决定。
+- `PHASE_*`（`prepare` / `place_support` / `place_lava` / `place_water` / `wait_for_obsidian` / `recovery`）：`recovery` 仅由 driver 内部事件使用，plan builder 不发射。
+- `ContinuousCastingPlanStep`（`cell_index` / `label` / `phase` / `action` / `relevant_action` / `recoveries_allowed`）：`__post_init__` 严格校验 cell_index 非负、phase 封闭、recoveries_allowed 在 `[0, MAX_RECOVERIES_PER_ACTION]`、relevant_action 与 `place_block` / `use_item` 一致。
+- `build_continuous_casting_action_plan(*, cell_count, support_block_wait_steps, fluid_settle_wait_steps, obsidian_wait_steps, recoveries_per_use_item) -> tuple[ContinuousCastingPlanStep, ...]`：默认 72 步（3 cell × 24 step），固定顺序，wait 计数受 `MAX_C3_PLAN_WAIT_STEPS=96` 约束，参数严格类型校验。
+- `run_casting_c3_driver(backend, task, *, plan, max_wait_steps, max_environment_steps, max_game_time_seconds, total_recovery_budget, recoveries_per_use_item, event_sink) -> CastingC3DriverResult`：driver 入口；按计划调 `backend.step()`，每步前置 inventory / allowlist / step / wait / 恢复预算 检查，后置严格校验 episode 与 step 必须恰好递增 1；提前 termination/truncation / 超限 / `RecoverableBackendError` 超预算 / 非 `RecoverableBackendError` 异常 都会 fail closed。
+
+### Driver 永不触碰 evaluator-only 表面
+
+- AST 扫描（`test_driver_source_does_not_import_continuous_evaluator`）锁定 `obsidianlink/drivers/casting_c3.py` 顶层 `import` / `import from` 集合不含 `ContinuousCastingEvaluator` / `ContinuousCastingEvaluationState` / `ContinuousCastingEvaluationResult` / `ContinuousCastingCellTruth` / `ContinuousCastingWorldTruth` / 任何 `OUTCOME_*` 常量；模块内任何 `Attribute` 节点都不拼出 `set_continuous_casting_evaluation_state` / `get_continuous_casting_evaluation_state`。
+- Spy 测试（`test_driver_does_not_call_casting_truth_surface`）在 backend 上 monkey-patch 这两个方法，断言 driver 整个生命周期调用次数为 0。
+- `Observation.__getattribute__` 守卫（`test_driver_does_not_leak_truth_into_observation`）拦截任何对 `target_cell` / `target_cells` / `initial_block` / `current_block` / `water_truth` / `lava_truth` / `transition_evidence` / `relevant_action_steps` / `casting_*` / `success` / `outcome` / `failure_type` / `per_cell_outcomes` / `first_failed_cell` / `completed_cells` 的访问，driver 跑通完整 plan 不触发。
+- 截取所有 driver 期间的 `Observation`（`test_all_driver_observations_are_clean`）逐个检查 `hasattr(observation, f)` 与 `observation.frame` 中都不含上述 forbidden 字段。
+
+### Driver 固定动作流程（默认 plan 72 步）
+
+| step_id 区间 | 动作 | phase | cell_index | `relevant_action` |
+|---|---|---|---|---|
+| 1 | `equip_item(lava_bucket)` | `prepare` | 0 | False |
+| 2 | `wait` | `prepare` | 0 | False |
+| 3 | `place_block(cobblestone)` | `place_support` | 0 | True |
+| 4 | `wait` | `place_support` | 0 | False |
+| 5 | `place_block(cobblestone)` | `place_support` | 0 | True |
+| 6 | `wait` | `place_support` | 0 | False |
+| 7 | `equip_item(lava_bucket)` | `place_lava` | 0 | False |
+| 8 | `wait` | `place_lava` | 0 | False |
+| 9 | `use_item(lava_bucket)` | `place_lava` | 0 | True |
+| 10–13 | `wait` × 4 | `place_lava` | 0 | False |
+| 14 | `equip_item(water_bucket)` | `place_water` | 0 | False |
+| 15 | `wait` | `place_water` | 0 | False |
+| 16 | `use_item(water_bucket)` | `place_water` | 0 | True |
+| 17–20 | `wait` × 4 | `place_water` | 0 | False |
+| 21–24 | `wait` × 4 | `wait_for_obsidian` | 0 | False |
+| 25–48 | (cell 1 镜像 cell 0) | … | 1 | … |
+| 49–72 | (cell 2 镜像 cell 0) | … | 2 | … |
+
+`per_cell_relevant_action_steps` 在 FakeBackend 上稳定为 `{0: (3, 5, 9, 16), 1: (27, 29, 33, 40), 2: (51, 53, 57, 64)}`；orchestrator 把它按 cell 注入 evaluator 的 `ContinuousCastingCellTruth.relevant_action_steps`。
+
+### 恢复协议（确定性、有限、公开信号）
+
+- **可恢复信号**：`backend.step()` 抛 `obsidianlink.core.types.RecoverableBackendError`（带 `recoverable_kind: str`、`attempt: int`）。其他 `RuntimeError` / `OSError` / `TypeError` 不被识别为可恢复，依旧 fail closed。
+- **per-step 预算**：每个 `use_item` plan 步的 `recoveries_allowed` ∈ [0, 2]；driver 内部用 `attempt` 计数，第二次 raise 触发 `per-step recovery budget exhausted`。
+- **总预算**：`total_recovery_budget` ∈ [0, 8]；`recovery_attempts > total_recovery_budget` 触发 `recovery budget exhausted`。
+- **重试动作**：与原步完全相同的 `MacroAction`，重新过白名单和预算检查；重试前不打 step 预算（被异常消耗的 step_id 不算 backend step）。
+- **不允许无界重试**：`while not submitted` 严格受 `attempt` 与 `recovery_attempts` 控制；无 `for` 重试外层。
+- **不允许执行模型代码**：`run_casting_c3_driver` 没有任何 `eval` / `exec` / `subprocess` 入口；`event_sink` 接收的是 detached snapshot。
+
+### 如何保证有限循环与信息隔离
+
+- **动作白名单 + 严格类型/数值限制**：`ALLOWED_C3_ACTION_TYPES` / `ALLOWED_C3_TARGETS` 是封闭 `frozenset`；`build_continuous_casting_action_plan` 构造时调 `_require_c3_action` 逐条 plan 步验证；`run_casting_c3_driver` 在每次 `step` 调用前再校验一次 plan step 的 action + target + duration。
+- **总步数硬上限**：默认读取 task 的 240 step，调用方只能收紧不能放宽；在提交下一动作前检查，step 240 的预算绝不会执行 step 241。
+- **总时间硬上限**：`max_game_time_seconds` 默认 180.0，构造时拒绝 0 / 负数 / `inf` / `nan`；每步后置检查 `next_observation.timestamp - reset_timestamp > max_game_time_seconds`（**elapsed time 不是 wall-clock**），超出立即 `status="blocked"`，event `budget_exceeded: "time"`。
+- **等待/计划硬上限**：`max_wait_steps <= 96` 且在 wait 提交前检查；计划构建器也在分配 tuple 前检查总 wait，不接受超大输入。
+- **提前终止**：后端在完整计划前返回 `terminated` / `truncated` 时，driver 返回 `blocked` 并原样记录标志，不再误报 `completed`。
+- **恢复预算**：`total_recovery_budget` 与 `recoveries_per_use_item` 都在 plan 执行前校验，driver 内部不允许 `attempt` 超过 `recoveries_allowed + 1`。
+- **无重试 / 无循环**：plan 是固定 tuple，driver 仅 `for plan_step in plan` 单次遍历；遇到 `step.terminated=True` 或后端抛 `RuntimeError` / `OSError` / `TypeError` 立即 `break` 并设 `blocked_reason`。
+- **信息隔离三道闸**：(a) driver 不 import 连续 evaluator 模块（AST 扫描），(b) driver 不调 `set/get_continuous_casting_evaluation_state`（spy），(c) driver 不读 `Observation` 上的 casting 字段（`__getattribute__` 守卫 + 截取所有 observation 静态扫描）。evaluator 表面只在测试编排器 `run_orchestrator` / `_state` / `ContinuousCastingWorldTruth` 内出现。
+
+### 测试结果（R5 及审查修复新增 116 个 + R4 保留 286 个 = 402 个）
+
+```text
+python -m obsidianlink --check                              → status=ok, phase=reset_5_continuous_casting, r4.driver_status=completed, r4.driver_success_outcome=success, r5.c3_driver_status=completed, r5.c3_evaluator_outcome=success, r5.c3_evaluator_completed_cells=3
+python scripts/check_environment.py                         → project_files 全部存在, phase=reset_5_continuous_casting
+python -m unittest tests.test_continuous_casting_evaluation -v → Ran 56 tests — OK
+python -m unittest tests.test_continuous_casting_driver -v     → Ran 56 tests — OK
+python -m unittest tests.test_casting_evaluation -v             → Ran 63 tests — OK (无回归)
+python -m unittest tests.test_casting_driver -v                 → Ran 43 tests — OK (无回归)
+python -m unittest tests.test_cli -v                            → Ran 1 test — OK
+python -m unittest discover -s tests -p 'test_*.py'             → Ran 402 tests in 54.181s — OK
+git diff --check                                                → 干净
+git status --short -- vendor/minerl                             → 空（vendor 未修改）
+```
+
+### R5 新增测试覆盖范围
+
+`tests/test_continuous_casting_evaluation.py` 共 56 个用例；新增严格三格与冻结目标顺序反例，并保留全部 outcome、隔离和 FakeBackend 状态测试：
+
+- `OutcomeContractTests`（3）—— outcome 常量互不相同、覆盖必需集合、`partial_completion` id 稳定。
+- `StateImmutabilityTests`（14）—— 不可变；空 / 少于或多于三格 / 重复 target / 冻结目标顺序 / 未来 step / 非 cell truth / terminated/time/budget 参数 / result 快照。
+- `DeterminismTests`（2）—— 相同 state 重复 evaluate 完全相同；混合失败时优先级稳定。
+- `SuccessPathTests`（2）—— 3-cell success；causality delta=0 仍 success。
+- `PartialCompletionTests`（5）—— 只第 1 / 前 2 / 错位 cell 等多 cell 混合的 outcome 路径。
+- `WrongBlockTests`（1）—— 中间 cell wrong_block 的 cell-N 条件格式。
+- `TruthMissingTests`（4）—— 单 cell 缺 water / lava / transition / 借其他 cell 的 relevant actions。
+- `CausalityTests`（5）—— transition 早于动作 / 超窗口 / 缺水 / 缺熔岩 / transition 非 obsidian。
+- `ResetStateTests`（1）—— reset 时 cell 已是 obsidian → invalid_initial_state。
+- `InProgressTests`（1）—— 未终止 → in_progress 且 per_cell_outcomes 全 `cell_not_evaluated`。
+- `AbnormalTerminationTests`（2）—— 非 NORMAL 原因 → abnormal_termination；NORMAL 原因 → 透传到 per-cell。
+- `BudgetOutcomeTests`（2）—— step / time budget 超限。
+- `FakeBackendContinuousCastingStateTests`（8）—— set/get 正常路径；未注入 / wrong episode_id / wrong step_id / 非 state 类型 / step 清空 / close 清空 / reset+step 路径 observation 不漏 R5 真值。
+- `EvaluatorIsolationTests`（2）—— 源码不引用 `MacroAction` / `VLM` / `Qwen` / `obsidianlink.drivers` / `obsidianlink.agents` / `obsidianlink.workflows`；签名只接收 `ContinuousCastingEvaluationState`。
+
+`tests/test_continuous_casting_driver.py` 共 56 个用例，分布在 7 个 TestCase 中：
+
+- `DriverContractTests`（13）—— 动作 / 目标 / 状态白名单；plan 长度 + 12 个相关动作；phase 集合；allowlist 全覆盖；recoveries_allowed 边界；`parse_macro_action` 公共协议兼容；参数校验；`cell_count` / `recoveries_per_use_item` / `total_waits` 边界。
+- `DriverArgumentValidationTests`（9）—— task 类型 / 错误 workflow / max_wait_steps / max_environment_steps / max_game_time_seconds / total_recovery_budget / plan 长度上限。
+- `FakeBackendDriverTests`（13）—— 完整 plan；event step_id 严格递增；cell_index 标对；step / time / wait budget；早期 termination / truncation fail closed；evidence 不可变；event_sink 不可改 evidence；缺 cobblestone；replay 稳定；不调 evaluator truth 表面；不漏 truth 到 observation。
+- `RecoveryProtocolTests`（7）—— 可恢复异常一次后成功；总预算耗尽；per-step 预算耗尽；recoverable metadata 写进 event；恢复与 step budget 解耦；非可恢复异常 fail closed；`total_recovery_budget=0` 仍可跑。
+- `OrchestratorOutcomeTests`（6）—— 3-cell success；only cell 0；first two cells；中间 wrong_block；truth_missing via orchestrator；invalid_initial_state；partial_completion 路径（被 per-cell truth 压制）。
+- `StaleStepAndReplayTests`（4）—— step 跳跃拒绝；event step_id 唯一且单调；replay+orchestrator 稳定；evaluator 用 driver 的 per-cell actions。
+- `ObservationLeakageTests`（2）—— driver 后 + orchestrator 后 observation 不含 R5 真值；驱动跑期间所有 observation 静态扫描均无 R5 真值。
+- `DriverBackendShapeTests`（1）—— 最小 backend（仅 `reset` / `step`）可被 driver 接受并跑完完整 plan。
+
+合计 R5 evaluator/driver 单测 112 个；另新增 3 个 capability gate 与 1 个 benchmark 文件合同测试；R4 之前 286 个；总计 402 个离线用例全部通过。
+
+### 本轮没有启动以下任何一项
+
+- Minecraft / MineRL / Gradle / 付费模型 API；
+- `vendor/minerl` 未修改（`git status --short -- vendor/minerl` 为空）；
+- 未实现 R6 完整门框 / 点火 / 进入下界 / VLM 接入；
+- 未生成 `runs/` 真实运行证据；
+- 未 `git commit`、未 `git push`；
+- 未修改固定依赖版本。
+
+## 当前限制
+
+- 真实 MineRL backend 仍缺 7 项能力（详见 R2 段）。任何真实 casting episode 必须先把能力补齐并诚实更新 `casting_c1_capabilities()`，否则 `assert_backend_can_start_task` 在 `reset` 最早处 fail closed。R5 的 `casting_c3_fixed` 任务对应的 capability 清单与 R3 一致；真实 MineRL 上线前需要先补齐。
+- `CastingEvaluator` 与 `ContinuousCastingEvaluator` 仍只能从 `FakeEnvironmentBackend` 的对应 truth 表面接收真值。真实 MineRL 仍没有把目标 cell / 流体 / `target_update_evidence` 接到 `get_evaluation_state()`。
+- R5 driver 仍只在 FakeBackend 上验证。真实 MineRL driver 需用户单独授权（按 AGENTS.md §5 单独申请 Gradle + 真实环境运行）。
+- `run_orchestrator` / `_state` / `ContinuousCastingWorldTruth` 故意只放在 `tests/test_continuous_casting_driver.py`——它们是测试编排，不是 driver / 环境的一部分。
+- 当前后端默认不抛 `RecoverableBackendError`，driver 的恢复协议是"准备好但不被触发"。测试通过 fault-injection backend 子类验证恢复逻辑。
+- 真实 episode 仍禁止真实 MineRL、Gradle 和模型调用。
 
 ## 下一 Agent 直接执行
 
-> R4 已完成：`obsidianlink/drivers/casting_c1.py` 提供公共动作协议兼容的 24 步固定 plan + 有限 driver；task 预算不可放宽，step/wait 前置拦截，提前终止 fail closed，结果证据递归不可变；测试编排器端到端跑过 9 个 outcome；286 个离线用例全过（其中 R4 新增 43 个）；vendor/minerl 未动。
-> 本轮**不要**重做 R3 / R4；本轮**不要**启动 MineRL / Gradle / 模型 API。
-> 开始 R5：把单块 driver 扩成短区段（多 cell 连续浇筑）需要先冻结新的 task instance、新的 evaluator outcome 集合、以及新的 driver plan；任何上述改动请先在 R5 状态文件里登记，不要在本轮做。
+> R5 已完成离线实现并修复合同审查问题：`casting_c3_fixed` 严格要求 3 个冻结、有序目标 cell；跨 cell 不能重复声明相关动作 step；完成非空有序前缀返回 `partial_completion`，只有三格全部成功才返回 `success`；`casting_c3_fixed` 已纳入 capability fail-closed 门禁。
+> 下一任务是 R6 完整门框与点火。不要重做 R3 / R4 / R5，不要启动 MineRL / Gradle / 模型 API，除非用户另行明确授权。
 
 ## R3 历史交付内容
 

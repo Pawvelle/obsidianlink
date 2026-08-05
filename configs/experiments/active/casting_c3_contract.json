@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.1",
+  "experiment_id": "casting_c3_contract_seed_0",
+  "status": "offline_fake_verified",
+  "task_instance": "benchmark/instances/active/casting_c3_fixed.json",
+  "backend": "fake",
+  "planner": "deterministic_casting_c3",
+  "evaluator": "continuous_casting_v1",
+  "allow_live_run": false,
+  "requires_gradle_approval": true,
+  "requires_minerl_run_approval": true,
+  "max_real_runs": 0,
+  "notes": "R5 offline contract. The 3-cell deterministic driver and continuous evaluator are verified only on FakeBackend. Real MineRL remains disabled until its casting capability manifest is complete and the user separately approves Gradle and live execution."
+}

@@ -41,6 +41,33 @@ class BenchmarkFileTests(unittest.TestCase):
         self.assertFalse(config["allow_live_run"])
         self.assertEqual(config["max_real_runs"], 0)
 
+    def test_active_casting_c3_contract_is_offline_verified_and_fixed(self) -> None:
+        task_path = ROOT / "benchmark/instances/active/casting_c3_fixed.json"
+        config_path = ROOT / "configs/experiments/active/casting_c3_contract.json"
+        task = TaskInstance.from_dict(
+            json.loads(task_path.read_text(encoding="utf-8"))
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(task.task_id, "casting_c3_fixed_seed_0")
+        self.assertEqual(task.workflow, "casting_c3_fixed")
+        self.assertEqual(task.difficulty, 2)
+        self.assertEqual(
+            task.scenario_parameters["target_cells"],
+            ((2, 4, 3), (3, 4, 3), (4, 4, 3)),
+        )
+        self.assertEqual(
+            task.scenario_parameters["implementation_status"],
+            "offline_fake_verified",
+        )
+        self.assertFalse(task.scenario_parameters["allow_live_run"])
+        self.assertEqual(config["status"], "offline_fake_verified")
+        self.assertEqual(config["backend"], "fake")
+        self.assertEqual(config["planner"], "deterministic_casting_c3")
+        self.assertEqual(config["evaluator"], "continuous_casting_v1")
+        self.assertFalse(config["allow_live_run"])
+        self.assertEqual(config["max_real_runs"], 0)
+
     def test_development_instance_matches_core_contract(self) -> None:
         path = ROOT / "benchmark/instances/route_a_a0_development.json"
         task = TaskInstance.from_dict(json.loads(path.read_text(encoding="utf-8")))

@@ -9,6 +9,9 @@ from obsidianlink.env.capabilities import (
     assert_backend_can_start_task,
 )
 from obsidianlink.evaluation.casting import CastingEvaluationState
+from obsidianlink.evaluation.continuous_casting import (
+    ContinuousCastingEvaluationState,
+)
 from obsidianlink.evaluation.portal import EvaluationState
 
 
@@ -50,6 +53,13 @@ class FakeEnvironmentBackend:
         # the Portal evaluator never reads casting truth. R3 keeps
         # both surfaces frozen and strictly identity-guarded.
         self._casting_evaluation_state: CastingEvaluationState | None = None
+        # R5 continuous-casting truth lives on a *third* slot so the
+        # single-cell R3 surface and the multi-cell R5 surface never
+        # cross-contaminate. The driver / orchestrator contract
+        # guarantees that the single-cell slot is only used for
+        # ``casting_c1_fixed`` and the multi-cell slot only for
+        # ``casting_c3_fixed``.
+        self._continuous_casting_evaluation_state: ContinuousCastingEvaluationState | None = None
 
     @classmethod
     def with_capabilities(
@@ -98,6 +108,9 @@ class FakeEnvironmentBackend:
         # inject a fresh state via ``set_casting_evaluation_state``
         # after each step.
         self._casting_evaluation_state = None
+        # Continuous casting truth follows the same rule: cleared
+        # on every reset so a stale read fails closed.
+        self._continuous_casting_evaluation_state = None
         return self._observations()
 
     def step(self, actions: Mapping[str, MacroAction]) -> BackendStep:
@@ -123,6 +136,8 @@ class FakeEnvironmentBackend:
         # clear it so a stale read fails closed instead of being
         # silently accepted at the wrong step.
         self._casting_evaluation_state = None
+        # Continuous casting truth follows the same rule.
+        self._continuous_casting_evaluation_state = None
         return BackendStep(
             episode_id=task.task_id,
             step_id=self._step_id,
@@ -195,12 +210,54 @@ class FakeEnvironmentBackend:
             raise RuntimeError("casting evaluation state is unavailable")
         return self._casting_evaluation_state
 
+    def set_continuous_casting_evaluation_state(
+        self, state: ContinuousCastingEvaluationState
+    ) -> None:
+        """Inject evaluator-only R5 continuous-casting truth.
+
+        Mirrors :meth:`set_casting_evaluation_state` for the R5
+        multi-cell surface. The state lives on a separate slot so
+        the single-cell R3 surface and the multi-cell R5 surface
+        never cross-contaminate. The fake backend never copies
+        truth into an :class:`Observation`.
+        """
+        task = self._require_task()
+        if not isinstance(state, ContinuousCastingEvaluationState):
+            raise TypeError(
+                "continuous casting evaluation state must be a "
+                "ContinuousCastingEvaluationState, "
+                f"got {type(state).__name__}"
+            )
+        if state.episode_id != task.task_id:
+            raise ValueError(
+                "continuous casting evaluation state episode_id must match "
+                "current task"
+            )
+        if state.step_id != self._step_id:
+            raise ValueError(
+                "continuous casting evaluation state step_id must match "
+                "current backend step"
+            )
+        self._continuous_casting_evaluation_state = state
+
+    def get_continuous_casting_evaluation_state(
+        self,
+    ) -> ContinuousCastingEvaluationState:
+        """Return the previously injected R5 continuous-casting truth."""
+        self._require_task()
+        if self._continuous_casting_evaluation_state is None:
+            raise RuntimeError(
+                "continuous casting evaluation state is unavailable"
+            )
+        return self._continuous_casting_evaluation_state
+
     def close(self) -> None:
         self._opened = False
         self._task = None
         self._step_id = 0
         self._evaluation_state = None
         self._casting_evaluation_state = None
+        self._continuous_casting_evaluation_state = None
 
     def _require_open(self) -> None:
         if not self._opened:

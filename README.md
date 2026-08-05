@@ -4,18 +4,20 @@ ObsidianLink 是一个可复现的 Minecraft 单智能体基准。目标是让 A
 
 ## 当前任务
 
-当前阶段：`R4-DETERMINISTIC-CASTING-DRIVER`（已完成）
+当前阶段：`R5-CONTINUOUS-CASTING`（已完成）
 
-当前任务实例：`casting_c1_fixed`
+当前任务实例：`casting_c3_fixed`
 
-本阶段已经在 FakeBackend 上实现确定性、有限循环的单块浇筑 driver，并由 R3 evaluator 独立判断结果：
+本阶段已经在 FakeBackend 上实现确定性、有限循环的多 cell 连续浇筑 driver，并由 R5 连续浇筑 evaluator 独立判断结果：
 
-- driver 只使用 Agent-visible observation，不读取 evaluator-only 真值；
-- 动作使用公共 `MacroAction` 协议和封闭 R4 白名单；
-- step、时间、等待和计划长度都有硬上限；
-- 后端提前终止、预算耗尽或证据缺失都不会伪装成成功。
+- driver 在 R4 单块 driver 的基础上扩展为 3 个有序目标 cell 的固定直线区段；
+- 动作使用公共 `MacroAction` 协议和封闭 R5 白名单；
+- 每个 cell 的相关动作、水/熔岩、transition 证据分别归属于该 cell，evaluator 永不混用；
+- step、时间、等待、计划长度、总恢复次数都有硬上限；
+- 后端通过抛出类型受控的 `RecoverableBackendError` 触发 driver 的有限恢复协议；
+- 单 cell 失败不会掩盖其他 cell 的成功/失败。
 
-下一任务是 R5 连续浇筑。开始前先阅读 [PROJECT_STATUS.md](PROJECT_STATUS.md)；当前仍不启动 Minecraft、不运行 Gradle、不接 VLM。
+下一任务是 R6 完整门框与点火。开始前先阅读 [PROJECT_STATUS.md](PROJECT_STATUS.md)；当前仍不启动 Minecraft、不运行 Gradle、不接 VLM。
 
 ## 项目目标
 
@@ -29,19 +31,19 @@ ObsidianLink 是一个可复现的 Minecraft 单智能体基准。目标是让 A
 
 ## 当前 Benchmark
 
-`casting_c1_fixed` 是当前最小任务：
+`casting_c3_fixed` 是当前最小连续浇筑任务：
 
 | 项目 | 内容 |
 |---|---|
 | 世界 | 固定受控 Overworld 场景 |
 | Agent | 1 个 |
-| 初始资源 | 水桶、熔岩桶、8 个圆石 |
-| 目标 | 让指定 cell 从空气变成黑曜石 |
-| 环境预算 | 最多 160 step、120 秒 |
+| 初始资源 | 3 个水桶、3 个熔岩桶、6 个圆石 |
+| 目标 | 让 3 个有序目标 cell 全部从空气变成黑曜石 |
+| 环境预算 | 最多 240 step、180 秒、3 次总恢复 |
 | 世界修改 | 只能通过 Agent 的白名单动作 |
-| 当前状态 | R4 离线 driver 已完成；真实 MineRL 能力仍缺失 |
+| 当前状态 | R5 离线 driver + 连续 evaluator 已完成；真实 MineRL 能力仍缺失 |
 
-任务定义位于 [`benchmark/instances/active/casting_c1_fixed.json`](benchmark/instances/active/casting_c1_fixed.json)，离线实验约束位于 [`configs/experiments/active/casting_c1_contract.json`](configs/experiments/active/casting_c1_contract.json)。
+任务定义位于 [`benchmark/instances/active/casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)，离线实验约束位于 [`configs/experiments/active/casting_c3_contract.json`](configs/experiments/active/casting_c3_contract.json)。`casting_c1_fixed` 仍作为 R4 历史单块任务保留。
 
 ## 系统架构
 
@@ -85,12 +87,12 @@ Evaluator 使用独立的环境真值判断任务结果。Agent-visible observat
 
 ## 成功如何判定
 
-当前单块任务只有在以下条件全部满足时才成功：
+当前连续浇筑任务只有在以下条件全部满足时才成功：
 
-1. reset 后目标 cell 不是黑曜石；
+1. reset 后 3 个冻结目标 cell 都不是黑曜石；
 2. Agent 在预算内执行合法动作；
-3. 目标 cell 通过水和熔岩更新变成黑曜石；
-4. 方块变化发生在相关 Agent 动作后的有限时间窗口；
+3. 3 个目标 cell 都通过水和熔岩更新变成黑曜石；
+4. 每个变化都发生在该 cell 独占的相关 Agent 动作后的有限时间窗口；
 5. episode 正常终止；
 6. 自动结果与人工复核一致。
 
@@ -203,8 +205,8 @@ git diff --check
 2. `R2`：后端能力清单，已完成。
 3. `R3`：单块黑曜石 evaluator，已完成。
 4. `R4`：确定性单块 driver，已完成。
-5. `R5`：连续浇筑，下一阶段。
-6. `R6`：完整门框、点火和进入下界。
+5. `R5`：连续浇筑，已完成。
+6. `R6`：完整门框、点火和进入下界，下一阶段。
 7. `R7`：接入 VLM 和更完整任务。
 
 详细退出条件见 [ROADMAP.md](ROADMAP.md)。

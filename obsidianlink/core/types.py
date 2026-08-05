@@ -12,6 +12,45 @@ def _require_identifier(value: str, field_name: str) -> str:
     return value.strip()
 
 
+class RecoverableBackendError(RuntimeError):
+    """Typed, public signal a backend may raise from ``step()`` to request a retry.
+
+    R5 continuous casting drivers may catch this exception, run a
+    bounded recovery protocol, and re-submit the same action. Drivers
+    must not catch it for *all* ``RuntimeError`` instances: only this
+    specific subclass carries the public "I would like to retry"
+    semantics. Any other ``RuntimeError`` / ``OSError`` / ``TypeError``
+    from the backend is still treated as a hard failure.
+
+    Attributes
+    ----------
+    recoverable_kind : str
+        Stable id (e.g. ``"bucket_use_transient"``) the driver can
+        switch on for evidence. Closed set; unknown kinds are
+        surfaced via the message but do not change the retry
+        budget.
+    attempt : int
+        1-based attempt number. Always 1 on the first raise.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        recoverable_kind: str = "transient",
+        attempt: int = 1,
+    ) -> None:
+        if not isinstance(message, str) or not message.strip():
+            raise ValueError("RecoverableBackendError message must be a non-empty string")
+        if not isinstance(recoverable_kind, str) or not recoverable_kind.strip():
+            raise ValueError("recoverable_kind must be a non-empty string")
+        if type(attempt) is not int or isinstance(attempt, bool) or attempt < 1:
+            raise ValueError("attempt must be a positive int")
+        super().__init__(message)
+        self.recoverable_kind: str = recoverable_kind
+        self.attempt: int = attempt
+
+
 def _freeze_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:
     return MappingProxyType(dict(value))
 

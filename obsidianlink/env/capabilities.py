@@ -39,10 +39,9 @@ Stability contract
   ``missing`` tuple. Callers must not invent their own gate logic.
 * :func:`assert_backend_can_start_task` is the workflow-aware
   wrapper that backends call at the very start of ``reset``. It
-  dispatches to :func:`assert_casting_c1_capabilities` for the
-  current minimum benchmark workflow (``casting_c1_fixed``) and
-  is a no-op for other workflows so that non-casting tasks are
-  not over-constrained.
+  dispatches to :func:`assert_casting_c1_capabilities` for both
+  frozen casting workflows (``casting_c1_fixed`` and
+  ``casting_c3_fixed``) and is a no-op for unrelated workflows.
 """
 
 from __future__ import annotations
@@ -292,10 +291,12 @@ def assert_casting_c1_capabilities(
 
 
 # Workflows that the capability gate knows how to validate. The
-# gate intentionally narrows to ``casting_c1_fixed`` so that other
-# workflows (e.g. ``route_a_a0``) are not over-constrained by
-# casting-only capabilities.
-_GATED_WORKFLOWS: frozenset[str] = frozenset({"casting_c1_fixed"})
+# Both frozen casting workflows require the same bucket, public
+# inventory, target-block-truth, and fluid-truth capabilities. Keep
+# unrelated workflows (e.g. ``route_a_a0``) outside this gate.
+_GATED_WORKFLOWS: frozenset[str] = frozenset(
+    {"casting_c1_fixed", "casting_c3_fixed"}
+)
 
 
 def assert_backend_can_start_task(
@@ -304,9 +305,9 @@ def assert_backend_can_start_task(
 ) -> None:
     """Pre-episode capability gate that runs at backend reset time.
 
-    For tasks whose ``workflow`` is the current minimum benchmark
-    ``casting_c1_fixed``, the backend's capability manifest must
-    report every required capability as supported. Otherwise the
+    For tasks whose ``workflow`` is one of the frozen casting
+    benchmarks, the backend's capability manifest must report every
+    required capability as supported. Otherwise the
     gate fails closed by raising :class:`CapabilityMismatchError`
     with a canonical ordered ``missing`` tuple and the task id.
 
