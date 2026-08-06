@@ -173,9 +173,9 @@ Observation、action、message、evaluation 和 log 都包含 `episode_id`、`st
 
 `casting_c3_fixed` 是旧的数量型兼容 ID，其中 `c3` 表示三个 cell；它不属于 taxonomy C3（完整门框）。两个任务目前都只完成 FakeBackend 离线验证。
 
-R6 阶段已在 [catalog](benchmark/catalog/tasks.json) 中新增 3 个 Benchmark 任务条目，分别对应 B0 taxonomy 的 **Casting-S-C3 / Casting-S-C4 / Casting-S-C5 / fixed**。三个任务使用水、熔岩和原版 block update 继续 Casting 主线，并把 `public_task_spec`（门框方案、精确点火目标、指定 Agent/目标维度）与 `evaluator_contract`（baseline、因果窗口、frame identity、Nether entry 归因）分开冻结（`implementation_status="contract_only"`、`benchmark_visible=true`、`live_run_allowed=false`）。本阶段**没有**实现 evaluator、driver、真实 MineRL 接入、Gradle 构建或模型 API 调用。详见 [C3](docs/tasks/casting/casting_s_c3_fixed.md) / [C4](docs/tasks/casting/casting_s_c4_fixed.md) / [C5](docs/tasks/casting/casting_s_c5_fixed.md) 任务页。
+R6 阶段已在 [catalog](benchmark/catalog/tasks.json) 中新增 3 个 Benchmark 任务条目，分别对应 B0 taxonomy 的 **Casting-S-C3 / Casting-S-C4 / Casting-S-C5 / fixed**。三个任务使用水、熔岩和原版 block update 继续 Casting 主线，并把 `public_task_spec`（门框方案、精确点火目标、指定 Agent/目标维度）与 `evaluator_contract`（baseline、因果窗口、frame identity、Nether entry 归因）分开冻结（`implementation_status="contract_only"`、`benchmark_visible=true`、`live_run_allowed=false`）。R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator + task-origin / truth-grid 坐标锚定 + 独立 truth 注入路径；C4 / C5 evaluator、deterministic driver、真实 MineRL 接入、Gradle 构建、模型 API 调用仍未实现。详见 [C3](docs/tasks/casting/casting_s_c3_fixed.md) / [C4](docs/tasks/casting/casting_s_c4_fixed.md) / [C5](docs/tasks/casting/casting_s_c5_fixed.md) 任务页。
 
-`active_compatibility_id` 保持 `casting_c3_fixed`（C2），即 C3 / C4 / C5 在 R6 合同冻结阶段不冒充 active implementation；任何对 C3 / C4 / C5 的引用必须与 `implementation_status="contract_only"` 一起出现。
+`active_compatibility_id` 保持 `casting_c3_fixed`（C2），即 C3 / C4 / C5 在 R6 合同冻结阶段不冒充 active implementation；任何对 C3 / C4 / C5 的引用必须与 `implementation_status="contract_only"` 一起出现。R6-C3 frame evaluator 的 offline 证明只覆盖 evaluator 与 FakeBackend 边界；真实 driver / MineRL 接入仍需在 R6-C3-DETERMINISTIC-DRIVER 之后的 R6 阶段验证。
 
 当前不得声称：
 

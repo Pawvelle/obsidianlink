@@ -1,6 +1,6 @@
 # `casting_s_c3_fixed` 完整门框浇筑任务（C3 合同冻结）
 
-`casting_s_c3_fixed` 是 **Casting-S-C3 / fixed** 的正式 Benchmark 合同，实例 ID 为 `casting_s_c3_fixed_seed_0`。本阶段只冻结任务、信息边界和 evaluator 规则；R6 driver、evaluator 与真实 MineRL 接入均未实现。
+`casting_s_c3_fixed` 是 **Casting-S-C3 / fixed** 的正式 Benchmark 合同，实例 ID 为 `casting_s_c3_fixed_seed_0`。R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator + task-origin / truth-grid 坐标锚定；C3 deterministic driver、C4 ignition evaluator、C5 Nether-entry evaluator与真实 MineRL 接入仍未实现。
 
 C3 要求 Agent 使用水、熔岩、支撑方块和原版方块更新机制，把公开固定方案中的 14 个 cell 全部浇筑为黑曜石。C3 不要求点火或进入 Nether，也不允许直接提供或放置黑曜石。
 
@@ -71,6 +71,45 @@ C3 success 必须同时满足：
 
 `scenario_parameters.evaluator_contract.frame_attribution` 已机器冻结 baseline policy、合法机制、动作与物品集合、4-step 因果窗口和 fail-closed 规则。
 
+## R6-C3-FRAME-EVALUATOR 子阶段交付
+
+R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator 和 evaluator-only truth 注入路径；C3 deterministic driver、C4 ignition evaluator、C5 Nether-entry evaluator、真实 MineRL 接入、Gradle、模型 API 仍未实现。
+
+### Evaluator 表面
+
+`obsidianlink/evaluation/casting_frame_evaluator.py` 提供：
+
+- `FrozenFrameActionEvidence` / `FrozenFrameCellTruth` / `FrozenFrameInteriorCellTruth` / `FrozenFrameEvaluationState` / `FrozenFrameEvaluationResult` 均为 frozen / 类型严格 / 可序列化的 evaluator-only dataclass；每条相关动作都绑定 `episode_id` / `step_id` / `agent_id` / `target_cell`，且只接受 `use_item(water_bucket | lava_bucket)`；
+- 14 个 target cell 顺序与本合同的 `public_task_spec.frame_plan.fixed_offsets` 严格一致；6 个 interior cell 同样在合同中冻结；
+- 闭集 outcome：`success` / `in_progress` / `partial_completion` / `wrong_block` / `truth_missing` / `step_budget_exceeded` / `time_budget_exceeded` / `invalid_initial_state` / `causality_missing` / `abnormal_termination` / `interior_blocked`；
+- 闭集 outcome 优先级：step / time 预算 → `invalid_initial_state` → `abnormal_termination` → `truth_missing` → `interior_blocked` → `in_progress` → `causality_missing` → `partial_completion` → `wrong_block` → `success`；
+- C3 success 要求 14 个 target cell 全部 obsidian、6 个 interior cell 全部在 `INTERIOR_ALLOWED`（`air` / `nether_portal` / `fire`）内、且每 cell 在 `causality_window_steps`（默认 4，<= 32）内通过合法 `use_item(water_bucket | lava_bucket)` 完成 transition；
+- `partial_completion` 用于任意 1–13 个 cell 已成功、其余 cell 仍为 `air` / `water` / `lava` 的状态，与公开列表顺序无关；Minecraft 10-cell 最小合法门框 + 4 角仍为空会落入 `partial_completion`，绝不冒充 `success`；`cobblestone` / `stone` 等阻挡目标仍判为 `wrong_block`；
+- `evaluate(state)` 是纯函数：重复调用得到完全相同的 `FrozenFrameEvaluationResult` 与 `as_dict()` JSON 快照；不读取 Agent / driver / Agent-visible observation。
+
+### 任务原点 / truth-grid 坐标锚定
+
+- `FrozenFrameOriginAnchor` 是不可变、纯函数、类型严格的转换器，把 `task_origin_relative` 偏移转成 `truth_grid` 偏移；
+- 默认 `default_c3_anchor()` 把 task-origin 标记对齐到 grid 原点 `(0, 0, 0)`，grid 范围沿用 `obsidianlink.env.portal_spec.PORTAL_GRID_MIN/MAX` (`(-3,-1,0)`–`(3,5,6)`)；
+- 14 个公开 cell 在数值上落在 `x=0..3` / `y=0..4` / `z=1`，完全被现有 truth grid 数值范围覆盖；不为了本轮合同扩展 grid；
+- 越界、缺失 origin、bool 混入、grid 边界反向（`grid_min > grid_max`）全部 fail closed；
+- 不修改 MineRL `PortalA0EnvSpec`。
+
+### FakeBackend 注入路径
+
+- `FakeEnvironmentBackend` 新增独立 `_frame_evaluation_state` 槽位，与 `_casting_evaluation_state`（C1）和 `_continuous_casting_evaluation_state`（C2）严格隔离；
+- `set_frame_evaluation_state` 校验类型 / `episode_id` 与当前 task 一致 / `step_id` 与当前 backend step 一致 / `agent_id` 在 `task.agent_ids` 内，否则 fail closed；
+- `get_frame_evaluation_state` / `clear_frame_evaluation_state` 显式可调用；
+- `reset` / `step` / `close` 一律清空该槽位，杜绝跨 step 的 truth 泄漏；
+- 普通 `Observation`（`step_id=0` 与 `step_id=1`）不携带任何 frame / cell / outcome / 归因 / 截断 truth，公开 schema 字段集严格不变。
+
+### 信息隔离
+
+- 整个 evaluator 源文件 AST 检查锁定：不 import `obsidianlink.agents` / `obsidianlink.workflows` / `obsidianlink.drivers`；不读取 `scenario_parameters` / `evaluator_contract` / `instruction`；
+- `evaluate()` 唯一参数是 `state: FrozenFrameEvaluationState`；
+- C1 / C2 / portal 旧测试全部回归通过；R6-C3-FRAME-EVALUATOR 103 个专项测试全绿；全量 539 个离线测试通过；
+- R6 driver 仍未实现，因此不能声称已端到端隔离未来 driver；端到端隔离测试必须在 `R6-C3-DETERMINISTIC-DRIVER` 之后再补上。
+
 ## 信息隔离
 
 公开规则包括任务目标、固定布局、14 个目标 cell、资源、指定 Agent 和预算。Agent 必须知道这些内容才能执行任务。
@@ -82,12 +121,12 @@ C3 success 必须同时满足：
 - 相关动作 step、归因候选和外部世界修改；
 - `latched_frame_identity`、outcome、success、failure type 和里程碑时间戳。
 
-当前 R6 尚无 runtime，因此现阶段只能冻结公开/隐藏命名空间并验证现有 Agent 代码不读取 `scenario_parameters`。后续实现 driver 时必须新增显式的 public context 构造器，并测试其输出不包含 `evaluator_contract` 或运行时 truth。
+R6-C3-FRAME-EVALUATOR 子阶段把 evaluator / FakeBackend 边界上的隔离锁住了，但 driver 仍待实现：当前只能保证 Agent / workflow 源码不读取 `scenario_parameters` 或 `evaluator_contract`、FakeBackend Observation 不携带任何 frame / cell / outcome / 归因 truth。`R6-C3-DETERMINISTIC-DRIVER` 之后才能补上端到端的 public-context 隔离测试。
 
 ## 当前实现状态
 
-已冻结 C3 合同、catalog、配置、文档和离线一致性测试。未实现 C3 evaluator、deterministic driver、真实 MineRL 或模型接入。
+R6-C3-FRAME-EVALUATOR 子阶段已完成（FakeBackend 离线证明）：C3 frame evaluator + task-origin / truth-grid 坐标锚定 + FakeBackend 注入路径；C3 deterministic driver、C4 ignition evaluator、C5 Nether entry evaluator、真实 MineRL 接入、Gradle、模型 API 仍未实现。
 
-现有 portal truth grid 范围 `(-3,-1,0)–(3,5,6)` 已覆盖本合同的 x=`0..3`、y=`0..4`、z=`1`，因此无需为了该固定方案扩展 grid；真实 backend 的坐标锚定仍需在接入阶段验证。
+现有 portal truth grid 范围 `(-3,-1,0)–(3,5,6)` 已覆盖本合同的 x=`0..3`、y=`0..4`、z=`1`，因此无需为了该固定方案扩展 grid；真实 backend 的坐标锚定仍需在 driver / backend 接入阶段验证。
 
-下一子任务：`R6-C3-FRAME-EVALUATOR`。
+下一子任务：`R6-C3-DETERMINISTIC-DRIVER`（C3 deterministic driver；只在 R6-C3 frame evaluator + FakeBackend truth path + 全部离线回归真正完成后才能启动）。

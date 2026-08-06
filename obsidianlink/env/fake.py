@@ -9,6 +9,9 @@ from obsidianlink.env.capabilities import (
     assert_backend_can_start_task,
 )
 from obsidianlink.evaluation.casting import CastingEvaluationState
+from obsidianlink.evaluation.casting_frame_evaluator import (
+    FrozenFrameEvaluationState,
+)
 from obsidianlink.evaluation.continuous_casting import (
     ContinuousCastingEvaluationState,
 )
@@ -60,6 +63,14 @@ class FakeEnvironmentBackend:
         # ``casting_c1_fixed`` and the multi-cell slot only for
         # ``casting_c3_fixed``.
         self._continuous_casting_evaluation_state: ContinuousCastingEvaluationState | None = None
+        # R6 Casting-S-C3 frozen-frame truth lives on a *fourth* slot
+        # so the C2 multi-cell surface and the C3 frame surface never
+        # cross-contaminate. The driver / orchestrator contract
+        # guarantees that the multi-cell slot is only used for
+        # ``casting_c3_fixed`` (C2) and the frame slot only for
+        # ``casting_s_c3_fixed`` (C3). The frame slot is the
+        # evaluator-only truth path required by R6-C3-FRAME-EVALUATOR.
+        self._frame_evaluation_state: FrozenFrameEvaluationState | None = None
 
     @classmethod
     def with_capabilities(
@@ -111,6 +122,8 @@ class FakeEnvironmentBackend:
         # Continuous casting truth follows the same rule: cleared
         # on every reset so a stale read fails closed.
         self._continuous_casting_evaluation_state = None
+        # R6 C3 frame truth follows the same rule.
+        self._frame_evaluation_state = None
         return self._observations()
 
     def step(self, actions: Mapping[str, MacroAction]) -> BackendStep:
@@ -138,6 +151,8 @@ class FakeEnvironmentBackend:
         self._casting_evaluation_state = None
         # Continuous casting truth follows the same rule.
         self._continuous_casting_evaluation_state = None
+        # R6 C3 frame truth follows the same rule.
+        self._frame_evaluation_state = None
         return BackendStep(
             episode_id=task.task_id,
             step_id=self._step_id,
@@ -251,6 +266,63 @@ class FakeEnvironmentBackend:
             )
         return self._continuous_casting_evaluation_state
 
+    def set_frame_evaluation_state(
+        self, state: FrozenFrameEvaluationState
+    ) -> None:
+        """Inject evaluator-only R6 Casting-S-C3 frame truth.
+
+        Mirrors :meth:`set_casting_evaluation_state` and
+        :meth:`set_continuous_casting_evaluation_state` for the R6
+        C3 frozen-frame surface. The state lives on a separate slot
+        so the C2 multi-cell surface and the C3 frame surface never
+        cross-contaminate. The fake backend never copies truth into
+        an :class:`Observation`.
+
+        The state must match the current ``task_id`` and the
+        current backend ``step_id``; ``agent_id`` must be in the task's
+        ``agent_ids``. A wrong workflow / episode / step / agent fails
+        closed by raising.
+        """
+        task = self._require_task()
+        if not isinstance(state, FrozenFrameEvaluationState):
+            raise TypeError(
+                "frame evaluation state must be a "
+                "FrozenFrameEvaluationState, "
+                f"got {type(state).__name__}"
+            )
+        if task.workflow != "casting_s_c3_fixed":
+            raise ValueError(
+                "frame evaluation state requires casting_s_c3_fixed workflow"
+            )
+        if state.episode_id != task.task_id:
+            raise ValueError(
+                "frame evaluation state episode_id must match current task"
+            )
+        if state.step_id != self._step_id:
+            raise ValueError(
+                "frame evaluation state step_id must match current backend step"
+            )
+        if state.agent_id not in task.agent_ids:
+            raise ValueError(
+                "frame evaluation state agent_id must be in task.agent_ids"
+            )
+        self._frame_evaluation_state = state
+
+    def get_frame_evaluation_state(self) -> FrozenFrameEvaluationState:
+        """Return the previously injected R6 C3 frame truth."""
+        self._require_task()
+        if self._frame_evaluation_state is None:
+            raise RuntimeError("frame evaluation state is unavailable")
+        return self._frame_evaluation_state
+
+    def clear_frame_evaluation_state(self) -> None:
+        """Drop the R6 C3 frame truth slot.
+
+        Equivalent to ``reset``/``step``/``close`` clearing; exposed
+        so tests can prove the cleanup contract explicitly.
+        """
+        self._frame_evaluation_state = None
+
     def close(self) -> None:
         self._opened = False
         self._task = None
@@ -258,6 +330,7 @@ class FakeEnvironmentBackend:
         self._evaluation_state = None
         self._casting_evaluation_state = None
         self._continuous_casting_evaluation_state = None
+        self._frame_evaluation_state = None
 
     def _require_open(self) -> None:
         if not self._opened:

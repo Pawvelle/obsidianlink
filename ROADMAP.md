@@ -44,7 +44,7 @@ B0 不实现新环境、evaluator、driver、planner 或通信逻辑。完成后
 
 建立严格、只读的任务 catalog，统一 canonical taxonomy、历史兼容 ID、实例/实验路径、实现状态、发布可见性和 live-run policy。现有 C1/C2 保持原路径；`route_a_a0` 明确归为 calibration/regression；CLI 和环境检查从 catalog 解析当前任务。B1 不移动历史文件、不修改 evaluator/driver/backend，也不实现 R6。
 
-### R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE（合同冻结完成；evaluator 与 driver 未实现）
+### R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE（合同冻结完成；C3 frame evaluator 已离线验证；driver / C4 / C5 仍未实现）
 
 R6 阶段按 B0 taxonomy 冻结 3 个递进合同，但本轮**只冻结合同**：
 
@@ -52,7 +52,20 @@ R6 阶段按 B0 taxonomy 冻结 3 个递进合同，但本轮**只冻结合同**
 - Casting-S-C4：在 C3 之上通过合法 `use_item(flint_and_steel)` 在唯一公开目标 `[1,1,1]` 点火；
 - Casting-S-C5：在 C4 之上由公开指定的 `agent_1` 通过本 episode 门框进入 Nether，且机器合同要求完整 frame-identity 与 transition 归因。
 
-合同冻结阶段交付：3 个 `benchmark/instances/casting/single/*.json` 实例、3 个 contract-only 实验配置、catalog 3 个新条目（`implementation_status=contract_only`、`benchmark_visible=true`、`live_run_allowed=false`）、3 个任务文档与离线合同测试。R6 合同冻结阶段**没有**实现任何 evaluator、driver、真实 MineRL 接入、Gradle 构建或模型 API 调用；`active_compatibility_id` 保持 `casting_c3_fixed`（C2）。下一子任务是 `R6-C3-FRAME-EVALUATOR`。
+合同冻结阶段交付：3 个 `benchmark/instances/casting/single/*.json` 实例、3 个 contract-only 实验配置、catalog 3 个新条目（`implementation_status=contract_only`、`benchmark_visible=true`、`live_run_allowed=false`）、3 个任务文档与离线合同测试。R6 合同冻结阶段**没有**实现任何 evaluator、driver、真实 MineRL 接入、Gradle 构建或模型 API 调用；`active_compatibility_id` 保持 `casting_c3_fixed`（C2）。
+
+#### R6-C3-FRAME-EVALUATOR（C3 离线 frame evaluator + task-origin / truth-grid 坐标锚定）
+
+本子阶段在 R6 合同冻结基础上只前进 C3 frame evaluator：
+
+- `obsidianlink/evaluation/casting_frame_evaluator.py` 提供不可变、类型严格、可序列化的 `FrozenFrameCellTruth` / `FrozenFrameInteriorCellTruth` / `FrozenFrameEvaluationState` / `FrozenFrameEvaluationResult` / `FrozenFrameEvaluator`；
+- 闭集 outcome 与 R3 / R5 共享并新增 `interior_blocked`；
+- `FrozenFrameOriginAnchor` 是纯函数、不可变、类型严格的 task-origin → truth-grid 转换器；`default_c3_anchor()` 把任务原点对齐到 `obsidianlink.env.portal_spec.PORTAL_GRID_MIN/MAX` 范围内的 grid 原点；
+- `FakeEnvironmentBackend` 新增 `_frame_evaluation_state` 槽位 + `set_frame_evaluation_state` / `get_frame_evaluation_state` / `clear_frame_evaluation_state`，严格身份校验，`reset` / `step` / `close` 清空陈旧 truth；
+- 信息隔离：evaluator 源文件 AST 检查不 import `agents` / `workflows` / `drivers` 也不读取 `scenario_parameters` / `evaluator_contract` / `instruction`；FakeBackend `Observation` 不携带任何 frame / cell / outcome / 归因 truth；
+- C3 frame evaluator 103 个专项测试通过；C1 / C2 / portal 旧测试全部回归通过；全量 539 个离线测试通过。
+
+R6-C3-FRAME-EVALUATOR **没有**实现 C3 deterministic driver、C4 ignition evaluator、C5 Nether entry evaluator、真实 MineRL 接入、Gradle 构建或模型 API 调用。`active_compatibility_id` 仍为 `casting_c3_fixed`（C2），C3 / C4 / C5 仍**不是** active implementation。下一子任务是 `R6-C3-DETERMINISTIC-DRIVER`，**只有当 C3 frame evaluator、FakeBackend truth path 和全部离线回归真正完成后才能启动**。
 
 ### R6：完整门框、点火和进入 Nether（按子阶段推进）
 
