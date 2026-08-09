@@ -1,6 +1,6 @@
 # `casting_s_c3_fixed` 完整门框浇筑任务（C3 合同冻结）
 
-`casting_s_c3_fixed` 是 **Casting-S-C3 / fixed** 的正式 Benchmark 合同，实例 ID 为 `casting_s_c3_fixed_seed_0`。R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator + task-origin / truth-grid 坐标锚定；C3 deterministic driver、C4 ignition evaluator、C5 Nether-entry evaluator与真实 MineRL 接入仍未实现。
+`casting_s_c3_fixed` 是 **Casting-S-C3 / fixed** 的正式 Benchmark 合同，实例 ID 为 `casting_s_c3_fixed_seed_0`。R6-C3 已在 FakeBackend 上完成 frame evaluator、task-origin / truth-grid 数值锚定、严格 public context、capability gate 和 deterministic driver；C4 ignition evaluator/driver、C5 Nether-entry evaluator/driver 与真实 MineRL 接入仍未实现。
 
 C3 要求 Agent 使用水、熔岩、支撑方块和原版方块更新机制，把公开固定方案中的 14 个 cell 全部浇筑为黑曜石。C3 不要求点火或进入 Nether，也不允许直接提供或放置黑曜石。
 
@@ -23,7 +23,7 @@ C3 要求 Agent 使用水、熔岩、支撑方块和原版方块更新机制，�
 - 预算：640 environment steps、600 秒 game time、最多 1 次 model call
 - 状态：`contract_only`
 
-资源数量是固定开发实例的资源上限，不代表未来随机或挑战 split 的标准配置。后续 driver 必须继续沿用 R5 的严格动作协议、有限等待和恢复预算。
+资源数量是固定开发实例的资源上限，不代表未来随机或挑战 split 的标准配置。现有 C3 driver 沿用 R5 的严格动作协议、有限等待和恢复预算。
 
 ## Agent-visible 公开门框方案
 
@@ -73,7 +73,7 @@ C3 success 必须同时满足：
 
 ## R6-C3-FRAME-EVALUATOR 子阶段交付
 
-R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator 和 evaluator-only truth 注入路径；C3 deterministic driver、C4 ignition evaluator、C5 Nether-entry evaluator、真实 MineRL 接入、Gradle、模型 API 仍未实现。
+R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator 和 evaluator-only truth 注入路径；随后的 R6-C3-DETERMINISTIC-DRIVER 子阶段完成了严格 public context、capability gate、固定 14-cell plan、有限预算/恢复与独立测试编排。C4/C5 和真实 MineRL 仍未实现。
 
 ### Evaluator 表面
 
@@ -108,7 +108,7 @@ R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator �
 - 整个 evaluator 源文件 AST 检查锁定：不 import `obsidianlink.agents` / `obsidianlink.workflows` / `obsidianlink.drivers`；不读取 `scenario_parameters` / `evaluator_contract` / `instruction`；
 - `evaluate()` 唯一参数是 `state: FrozenFrameEvaluationState`；
 - C1 / C2 / portal 旧测试全部回归通过；R6-C3-FRAME-EVALUATOR 103 个专项测试全绿；全量 539 个离线测试通过；
-- R6 driver 仍未实现，因此不能声称已端到端隔离未来 driver；端到端隔离测试必须在 `R6-C3-DETERMINISTIC-DRIVER` 之后再补上。
+- R6-C3 driver 已通过 AST、Observation guard、backend spy 和独立 test orchestrator 锁定端到端信息隔离；driver 不读取 frame truth，也不调用 truth set/get/clear 表面。
 
 ## 信息隔离
 
@@ -121,12 +121,12 @@ R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator �
 - 相关动作 step、归因候选和外部世界修改；
 - `latched_frame_identity`、outcome、success、failure type 和里程碑时间戳。
 
-R6-C3-FRAME-EVALUATOR 子阶段把 evaluator / FakeBackend 边界上的隔离锁住了，但 driver 仍待实现：当前只能保证 Agent / workflow 源码不读取 `scenario_parameters` 或 `evaluator_contract`、FakeBackend Observation 不携带任何 frame / cell / outcome / 归因 truth。`R6-C3-DETERMINISTIC-DRIVER` 之后才能补上端到端的 public-context 隔离测试。
+R6-C3-DETERMINISTIC-DRIVER 子阶段已补齐端到端 public-context 隔离：唯一 context builder 只抽取公开 frame plan、身份、库存和预算并保持原始类型严格校验；driver 不接触原始 `scenario_parameters`、`evaluator_contract` 或 evaluator runtime truth。FakeBackend Observation 仍不携带 frame / cell / outcome / 归因 truth。
 
 ## 当前实现状态
 
-R6-C3-FRAME-EVALUATOR 子阶段已完成（FakeBackend 离线证明）：C3 frame evaluator + task-origin / truth-grid 坐标锚定 + FakeBackend 注入路径；C3 deterministic driver、C4 ignition evaluator、C5 Nether entry evaluator、真实 MineRL 接入、Gradle、模型 API 仍未实现。
+R6-C3 evaluator 与 deterministic driver 已完成 FakeBackend 离线证明：14-cell、336-step bounded plan，缺少 backend capability 时 reset 前 fail closed，测试 orchestrator 独立注入 truth 并由 evaluator 给出最终 verdict。C4 ignition evaluator/driver、C5 Nether entry evaluator/driver、真实 MineRL、Gradle和模型 API 仍未实现。
 
 现有 portal truth grid 范围 `(-3,-1,0)–(3,5,6)` 已覆盖本合同的 x=`0..3`、y=`0..4`、z=`1`，因此无需为了该固定方案扩展 grid；真实 backend 的坐标锚定仍需在 driver / backend 接入阶段验证。
 
-下一子任务：`R6-C3-DETERMINISTIC-DRIVER`（C3 deterministic driver；只在 R6-C3 frame evaluator + FakeBackend truth path + 全部离线回归真正完成后才能启动）。
+下一子任务：`R6-C4-IGNITION-EVALUATOR`；必须先完成点火 evaluator 的离线归因合同，再启动 C4 deterministic driver。

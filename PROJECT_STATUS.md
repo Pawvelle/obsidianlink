@@ -1,17 +1,60 @@
 # 当前状态
 
-更新时间：2026-08-06
+更新时间：2026-08-09
 
 ## 当前唯一目标
 
-任务：`R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE`（C3 / C4 / C5 合同已冻结，C3 frame evaluator + FakeBackend truth path 在本轮已离线验证；C3 driver、C4/C5 evaluator、真实 MineRL 仍未实现）
+任务：`R6-C3-DETERMINISTIC-DRIVER`（C3 deterministic driver；在 R6-C3 frame evaluator + FakeBackend truth path + 全部离线回归真正完成后启动；C3 driver 已离线实现，C4 / C5 evaluator、真实 MineRL 仍未实现）
 
-下一任务：`R6-C3-DETERMINISTIC-DRIVER`（C3 deterministic driver；只在上一轮 C3 frame evaluator + FakeBackend truth path + 全部离线回归真正完成后才能启动）
+下一任务：`R6-C4-IGNITION-EVALUATOR`（先冻结并离线验证 C4 ignition evaluator；只有 evaluator 完成后才能启动 C4 deterministic driver）
 
 当前 active implementation 仍是 Casting-S-C2 / fixed 的 `casting_c3_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 B0 taxonomy 的 C3；文档级兼容名称为 `casting_s_c2_fixed`。`casting_c1_fixed` 保留为 Casting-S-C1 回归合同。
 
-R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、live_run_allowed=false），并且 R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator + task-origin / truth-grid 坐标锚定；C3 driver、C4 ignition evaluator、C5 Nether-entry evaluator、真实 MineRL 接入、Gradle、模型 API 仍然不在本阶段范围。
+R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、live_run_allowed=false），R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 C3 frame evaluator + task-origin / truth-grid 坐标锚定；R6-C3-DETERMINISTIC-DRIVER 子阶段（本轮）在 FakeBackend 上完成了 C3 deterministic driver + 严格 public context 边界 + 端到端 driver / orchestrator / evaluator 离线证明；C4 ignition driver、C5 Nether-entry driver、真实 MineRL 接入、Gradle、模型 API 仍然不在本阶段范围。
 
+## R6-C3-DETERMINISTIC-DRIVER 已完成（FakeBackend 离线证明）
+
+1. **新增 C3 公开 14-cell 上下文边界** [`obsidianlink/core/casting_s_c3_frame_context.py`](obsidianlink/core/casting_s_c3_frame_context.py)：
+   - `build_public_c3_frame_driver_context_from_task(task)` 是整个 R6 C3 driver 家族中**唯一**允许读取 task `scenario_parameters` 的函数；它只读取 `public_task_spec.frame_plan.fixed_offsets` 与 task limits / initial inventories，**忽略** `evaluator_contract` 与任何 evaluator-only 字段；
+   - 返回严格冻结的 [`PublicC3FrameDriverContext`](obsidianlink/drivers/casting_s_c3_frame.py)：workflow / family / mode / level / layout / agent_id / 14 个有序 target offsets / 不可变 initial_inventory（MappingProxyType）/ task_step_limit / task_time_limit；任何未知 family / mode / level / layout、越界或重排 target offsets、bool 充当 int、缺失或重复 cell 都 fail closed。
+2. **新增 C3 deterministic driver** [`obsidianlink/drivers/casting_s_c3_frame.py`](obsidianlink/drivers/casting_s_c3_frame.py)：
+   - 显式接受 immutable `PublicC3FrameDriverContext` 作为唯一 TaskInstance-shaped 输入；`run_casting_s_c3_frame_driver` 不读取 scenario_parameters / evaluator_contract / `FrozenFrameEvaluationState` 或任何 evaluator-only 字段；
+   - 默认 plan：14 cell × 24 step = **336 step**，落在 640 step 任务预算内；每 cell 2 个 `use_item(water|lava)` 视为 evaluator 的 relevant action，2 个 `place_block(cobblestone)` 支撑方块是 plan 内的机械动作但不进入 per-cell evidence；
+   - 动作白名单严格闭合：`equip_item` / `use_item` / `place_block` / `wait`；目标白名单严格闭合：`water_bucket` / `lava_bucket` / `cobblestone`；永不放置 `obsidian`、永不点火、永不进 Nether；
+   - 预算硬上限：environment step 640、game time 600 秒、plan wait 320、plan length 640、per-action recovery 2、total recovery 32、per-step `duration_ticks` 1..40；
+   - 恢复只响应 typed `RecoverableBackendError`，受 per-action 与 total 双重预算；其他异常 fail closed；
+   - driver status 闭集 `completed` / `blocked` / `failed`；永不返回 `success` / `passed`（这些 verdict 仍由 `FrozenFrameEvaluator` 独立判定）；
+   - 结构化事件必须带 `episode_id` / `step_id` / `agent_id` / `cell_index` / `target_offset` / `label` / `phase` / `action_type` / `target` / `relevant_action` / `attempt`；结果对象 `CastingC3FrameDriverResult` 不可变、类型严格、可序列化、暴露 `as_dict()`；
+   - 新增 `per_cell_relevant_action_records`（cell_index → `((step_id, item), …)` 序列）与 `per_cell_target_offset`（cell_index → 公开 `(x, y, z)`），让 orchestrator 完全不读 evaluator truth 即可独立构造 per-cell `FrozenFrameActionEvidence`。
+3. **不重命名旧 driver**：旧 `obsidianlink/drivers/casting_c3.py` 仍是 R5 / Casting-S-C2 的三 cell 连续浇筑 driver；新模块明确命名为 `casting_s_c3_frame.py`，反映 B0 taxonomy 的 C3（完整 4×5 full-ring 14 cell），与历史 ID 命名解耦。
+4. **新增 95 个专项离线测试** [`tests/test_r6_casting_c3_frame_driver.py`](tests/test_r6_casting_c3_frame_driver.py)，覆盖：
+   - 公开上下文严格解析与不可变性（含 family / mode / level / layout / agent / 14 cell / grid 边界 / 重复 / 重排 / bool 充当 int / 库存缺失 / 库存 bool / 库存未知 item / step 预算下限）；
+   - 固定 14-cell plan 顺序、坐标与确定性（默认 336 step / 14 × 2 = 28 relevant action / 14 × 17 = 238 wait / 14 个 cell 顺序匹配 `CASTING_S_C3_FRAME_CELLS` / 与 evaluator 模块同名常量交叉校验 / 通过 `parse_macro_action` 反向接受）；
+   - 动作与物品白名单（`ALLOWED_C3_FRAME_ACTION_TYPES` / `ALLOWED_C3_FRAME_TARGETS` / 默认 plan 每个 action 都用 `parse_macro_action` 通过）；
+   - 默认计划长度 / wait 计数 / recovery 预算处于任务预算内；
+   - 640 step / 600 秒 / wait / plan / recovery 预算失败的 fail-closed 行为；
+   - 重复 `RecoverableBackendError` 有限重试、per-step 与 total budget 各自独立耗尽、metadata 透传；
+   - 非 `RecoverableBackendError` 异常立即 fail closed；
+   - backend 提前 terminated / truncated 的 blocked 行为；
+   - 每个事件的 episode / step / agent / cell / target_offset / relevant_action 身份；
+   - 相同输入的 action 序列、events 与 `as_dict()` 快照完全一致（确定性 replay）；
+   - AST + 源码双门锁：driver 源文件**不** import frame evaluator、**不**调用 `set_frame_evaluation_state` / `get_frame_evaluation_state` / `clear_frame_evaluation_state` / `_frame_evaluation_state`、**不**以代码形式访问 `scenario_parameters` / `evaluator_contract`；
+   - `Observation.__getattribute__` 守护禁止 driver 读取 `target_cell` / `current_block` / `success` / `outcome` / `per_cell_outcomes` / `first_failed_cell` / `completed_cells` / `interior_blocker_cells` 等隐藏字段；
+   - backend spy 验证 driver 不调用 frame truth set / get / clear 表面；
+   - test orchestrator 独立构造 `FrozenFrameEvaluationState` 并通过 `set_frame_evaluation_state` 注入 14-cell truth 后，`FrozenFrameEvaluator` 返回 `success`；
+   - 1–13 cell 仅得 `partial_completion`（覆盖 `completed` ∈ {1..13} 的全参数子测试）；
+   - 错误方块（cell 7 = cobblestone）→ `wrong_block`；内框阻挡（interior[0] = dirt）→ `interior_blocked`；缺失因果（cell 0 transition_evidence=None）→ `truth_missing`；transition 越界 4 步窗口 → `causality_missing`；身份不一致（cell 0 evidence `agent_2`）→ 状态构造即 fail closed。
+5. **C1 / C2 / portal / 既有 R6 C3 frame evaluator 回归不受影响**：完整测试集 635 个全过（`python -m unittest discover -s tests -p 'test_*.py'`），`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过；`git diff --check` 干净。
+6. **未验证限制**：
+   - 真实 MineRL / Minecraft 浇筑与门框建造仍未验证；
+   - 真实 backend 仍未完整接通桶动作、公开 selected item、目标方块 truth 和流体 truth；
+   - C4 ignition driver、C5 Nether-entry driver、真实坐标锚定、Ruined / Adaptive / Multi-Agent 仍**未**实现；
+   - 当前仅在 FakeBackend 上完成离线证明；C3 / C4 / C5 driver 与真实 backend 的接线下游仍需后续阶段验证。
+7. **evaluator-only 信息隔离验证**：
+   - 整个 driver 源文件（`obsidianlink/drivers/casting_s_c3_frame.py`）的 AST + 字符串双门锁确认：`set_frame_evaluation_state` / `get_frame_evaluation_state` / `clear_frame_evaluation_state` / `_frame_evaluation_state` / `FrozenFrame*` 名称均**只**出现在 docstring 的明示性引用中，从不作为代码访问；
+   - `scenario_parameters` / `evaluator_contract` 在 driver 源文件中仅以 docstring 文字出现，AST `ast.Attribute` / `ast.Name` 扫描零命中；
+   - test orchestrator 在 `tests/test_r6_casting_c3_frame_driver.py` 内**独立**通过 `set_frame_evaluation_state` 注入 truth；driver 表面无访问 frame truth 接口的能力。
+8. **下一任务只能根据本次真实完成范围谨慎填写**：本轮 R6-C3-DETERMINISTIC-DRIVER 已完成 C3 deterministic driver 离线实现，**没有**提前实现 C4 ignition evaluator/driver、C5 Nether-entry evaluator/driver、真实 MineRL、Gradle或模型 API；下一任务严格限定为 `R6-C4-IGNITION-EVALUATOR`。
 
 ## B1 已完成
 
@@ -89,7 +132,7 @@ R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、ta
 
 ## 下一任务
 
-`R6-C3-DETERMINISTIC-DRIVER`：在 R6-C3 frame evaluator + FakeBackend truth path + 全部离线回归完成后启动 C3 deterministic driver；仍不接通真实 MineRL，不运行 Gradle，不调用模型。
+`R6-C3-DETERMINISTIC-DRIVER` 已完成（C3 deterministic driver 离线实现、95 个专项测试通过、全量 635 个测试通过）。下一阶段唯一任务是 `R6-C4-IGNITION-EVALUATOR`：先实现并离线验证 C4 点火归因，仍不得提前实现 C4 driver、C5、R7 或真实 MineRL。C4 / C5 继续保持 `implementation_status="contract_only"`。
 
 ## R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE 已完成（保留历史）
 
@@ -122,12 +165,13 @@ R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、ta
 
 未实现（下一子任务）：
 
-- C3 deterministic driver 与 evaluator truth 采集编排；
 - C4 ignition evaluator（把 `use_item(flint_and_steel)` 与 `[1,1,1]` 内框 cell 的 `nether_portal` 关联到 `latched_frame_identity`）；
 - C5 Nether entry evaluator（绑定 `pre_transition_position_by_agent` 与 `latched_frame_identity` 的因果链）；
-- 任意 C3/C4/C5 deterministic driver；
+- C4 / C5 deterministic driver；
 - 真实 MineRL 后端接通桶动作、公开选中物品、目标方块 truth、流体 truth 与维度切换 truth；
 - 真实 MineRL、Gradle 与模型 API 调用。
+
+R6-C3-DETERMINISTIC-DRIVER 子阶段已完成：C3 deterministic driver + 严格 public context 边界 + capability gate + 95 个专项测试通过（详见上方 R6-C3-DETERMINISTIC-DRIVER 已完成节）。
 
 已知 contract 局限（不在 R6 合同冻结阶段处理）：
 
@@ -167,10 +211,10 @@ Task catalog、严格解析器、active entry 约束、calibration 分类与 C1/
 
 ## 当前限制
 
-- R5 / R6 合同冻结都只在 FakeBackend 验证；真实 MineRL 浇筑与门框建造均未验证；
+- R5 / R6 / R6-C3 driver 都只在 FakeBackend 验证；真实 MineRL 浇筑与门框建造均未验证；
 - 真实 backend 仍未完整接通桶动作、公开 selected item、目标方块 truth 和流体 truth；
 - `casting_c3_fixed` 是 C2 连续浇筑切片，C2 success 不等于进入 Nether；
-- R6 Casting-S-C3 frame evaluator 与 task-origin/truth-grid 数值锚定已离线完成，但 C3 driver、C4/C5 evaluator/driver 与真实 backend 接线均未完成；
+- R6 Casting-S-C3 frame evaluator + task-origin/truth-grid 数值锚定 + C3 deterministic driver 已在 FakeBackend 离线实现，但 C4/C5 evaluator/driver 与真实 backend 接线仍均未完成；
 - Ruined、Adaptive、Multi-Agent、真实 MineRL episode 集和 Benchmark 公开指标发布均未实现；
 - 当前没有正式真实 Benchmark 数据；
 - 禁止真实 MineRL、Gradle 和模型调用，除非用户针对每次操作单独授权；
@@ -178,10 +222,10 @@ Task catalog、严格解析器、active entry 约束、calibration 分类与 C1/
 
 ## 测试要求
 
-Task catalog 解析/路径/分类正反例、R5 evaluator 与 driver 专项测试、capability、benchmark file、CLI、R3/R4 回归、portal / frame geometry 旧测试必须保持通过。本轮新增的 R6 contract 测试也必须全部通过；任何合同整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同。
+Task catalog 解析/路径/分类正反例、R5 evaluator 与 driver 专项测试、R6-C3 frame evaluator 专项测试、R6-C3 deterministic driver 专项测试、capability、benchmark file、CLI、R3/R4 回归、portal / frame geometry 旧测试必须保持通过。任何合同整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同。
 
-本轮验证：`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过；全量 539 个离线测试（含 103 个 C3 frame evaluator 专项测试）全部通过；`git diff --check` 干净。本轮没有修改 `vendor/minerl`；该独立仓库中已有的其他工作区改动不属于本任务，保持原状。
+R6-C3-DETERMINISTIC-DRIVER 本轮验证：`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过；全量 635 个离线测试（含 R6-C3 driver 95 个专项测试 + 既有 R6-C3 frame evaluator 103 个专项测试）全部通过；`git diff --check` 干净。本轮没有修改 `vendor/minerl`；该独立仓库中已有的其他工作区改动不属于本任务，保持原状。
 
 ## 下一任务
 
-`R6-C3-DETERMINISTIC-DRIVER`：为 `casting_s_c3_fixed` 实现受限、确定性的 FakeBackend driver；不接通真实 MineRL；不运行 Gradle；不调用模型。
+`R6-C3-DETERMINISTIC-DRIVER` 已完成。下一子任务：`R6-C4-IGNITION-EVALUATOR`；本轮不提前实现 C4 driver、C5 或 R7。

@@ -44,7 +44,7 @@ B0 不实现新环境、evaluator、driver、planner 或通信逻辑。完成后
 
 建立严格、只读的任务 catalog，统一 canonical taxonomy、历史兼容 ID、实例/实验路径、实现状态、发布可见性和 live-run policy。现有 C1/C2 保持原路径；`route_a_a0` 明确归为 calibration/regression；CLI 和环境检查从 catalog 解析当前任务。B1 不移动历史文件、不修改 evaluator/driver/backend，也不实现 R6。
 
-### R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE（合同冻结完成；C3 frame evaluator 已离线验证；driver / C4 / C5 仍未实现）
+### R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE（合同冻结完成；C3 evaluator + driver 已离线验证；C4 / C5 仍未实现）
 
 R6 阶段按 B0 taxonomy 冻结 3 个递进合同，但本轮**只冻结合同**：
 
@@ -65,7 +65,15 @@ R6 阶段按 B0 taxonomy 冻结 3 个递进合同，但本轮**只冻结合同**
 - 信息隔离：evaluator 源文件 AST 检查不 import `agents` / `workflows` / `drivers` 也不读取 `scenario_parameters` / `evaluator_contract` / `instruction`；FakeBackend `Observation` 不携带任何 frame / cell / outcome / 归因 truth；
 - C3 frame evaluator 103 个专项测试通过；C1 / C2 / portal 旧测试全部回归通过；全量 539 个离线测试通过。
 
-R6-C3-FRAME-EVALUATOR **没有**实现 C3 deterministic driver、C4 ignition evaluator、C5 Nether entry evaluator、真实 MineRL 接入、Gradle 构建或模型 API 调用。`active_compatibility_id` 仍为 `casting_c3_fixed`（C2），C3 / C4 / C5 仍**不是** active implementation。下一子任务是 `R6-C3-DETERMINISTIC-DRIVER`，**只有当 C3 frame evaluator、FakeBackend truth path 和全部离线回归真正完成后才能启动**。
+R6-C3-FRAME-EVALUATOR 子阶段本身没有实现 driver；随后的 `R6-C3-DETERMINISTIC-DRIVER` 已完成严格 public context、capability gate、336-step bounded plan、有限恢复、driver/evaluator 隔离和 FakeBackend 离线编排。`active_compatibility_id` 仍为 `casting_c3_fixed`（C2），C3 仍未接入正式 experiment runner 或真实 MineRL。
+
+#### R6-C3-DETERMINISTIC-DRIVER（完成，FakeBackend 离线证明）
+
+- `obsidianlink/drivers/casting_s_c3_frame.py` 实现固定 14-cell、336-step deterministic plan，只使用 `equip_item` / `use_item` / `place_block` / `wait`；
+- `obsidianlink/core/casting_s_c3_frame_context.py` 从公开任务合同构造严格、不可变 context，原始类型错误不被强制转换掩盖；
+- `casting_s_c3_fixed` 纳入 reset 前 capability gate，缺少桶动作、公开库存或 evaluator truth 能力时 fail closed；
+- driver 不读取 evaluator truth，测试 orchestrator 独立注入 `FrozenFrameEvaluationState`，最终 success 只由 evaluator 判定；
+- 下一子任务是 `R6-C4-IGNITION-EVALUATOR`；C4 driver 必须等 evaluator 离线完成后再启动。
 
 ### R6：完整门框、点火和进入 Nether（按子阶段推进）
 

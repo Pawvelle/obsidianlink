@@ -324,7 +324,7 @@ def _offline_contract_check() -> dict[str, object]:
     taxonomy["compatibility_task_name"] = active_entry.canonical_name
     return {
         "status": "ok",
-        "phase": "r6_complete_portal_frame_contract_freeze",
+        "phase": "r6_c3_deterministic_driver",
         "active_task": active_entry.compatibility_id,
         "task_taxonomy": taxonomy,
         "task_catalog_version": catalog.catalog_version,
@@ -340,9 +340,11 @@ def _offline_contract_check() -> dict[str, object]:
             "execution against Minecraft, and no model API call were made. "
             "The casting evaluators are type-strict, fail-closed, and do not "
             "simulate Minecraft fluid physics. "
-            "R6 contract freeze (Casting-S-C3 / C4 / C5 / fixed) is part of the "
-            "catalog and project files; no R6 driver, evaluator, or live "
-            "MineRL / Gradle / model API call was performed in this check."
+            "The R6 Casting-S-C3 frozen-frame evaluator and deterministic "
+            "FakeBackend driver are implemented and covered by the offline test "
+            "suite; this compact check does not execute that 336-step driver. "
+            "C4 / C5 runtime components and live MineRL remain unimplemented, "
+            "and no MineRL / Gradle / model API call was performed in this check."
         ),
     }
 

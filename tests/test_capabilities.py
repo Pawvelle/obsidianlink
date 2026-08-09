@@ -57,6 +57,15 @@ def casting_c3_task():
     )
 
 
+def casting_s_c3_task():
+    return dataclasses.replace(
+        casting_c1_task(),
+        task_id="casting_s_c3_fixed_seed_0",
+        workflow="casting_s_c3_fixed",
+        difficulty=3,
+    )
+
+
 class BackendCapabilitiesImmutabilityTests(unittest.TestCase):
     def test_capability_id_tuple_is_canonical_and_ordered(self) -> None:
         expected = (
@@ -302,6 +311,18 @@ class BackendStartGateTests(unittest.TestCase):
         self.assertIsNone(
             assert_backend_can_start_task(backend, casting_c1_task())
         )
+
+    def test_missing_cap_backend_fails_for_casting_s_c3(self) -> None:
+        caps = dataclasses.replace(
+            BackendCapabilities.full(),
+            can_use_lava_bucket=False,
+            exposes_fluid_truth=False,
+        )
+        backend = FakeEnvironmentBackend(capabilities=caps)
+        with self.assertRaises(CapabilityMismatchError) as ctx:
+            assert_backend_can_start_task(backend, casting_s_c3_task())
+        self.assertEqual(ctx.exception.missing, ("use_lava_bucket", "fluid_truth"))
+        self.assertEqual(ctx.exception.task_id, "casting_s_c3_fixed_seed_0")
 
     def test_gate_rejects_non_capabilities_return(self) -> None:
         class _BadBackend:

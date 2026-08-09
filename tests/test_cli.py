@@ -17,7 +17,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(
-            payload["phase"], "r6_complete_portal_frame_contract_freeze"
+            payload["phase"], "r6_c3_deterministic_driver"
         )
         self.assertEqual(payload["active_task"], "casting_c3_fixed")
         self.assertEqual(
@@ -48,6 +48,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["r5"]["c3_evaluator_total_cells"], 3)
         self.assertTrue(payload["r5"]["c3_evaluator_success"])
         self.assertIn("no real MineRL", payload["note"])
+        self.assertIn("R6 Casting-S-C3", payload["note"])
+        self.assertNotIn("no R6 driver", payload["note"])
 
 
 if __name__ == "__main__":

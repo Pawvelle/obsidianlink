@@ -39,9 +39,10 @@ Stability contract
   ``missing`` tuple. Callers must not invent their own gate logic.
 * :func:`assert_backend_can_start_task` is the workflow-aware
   wrapper that backends call at the very start of ``reset``. It
-  dispatches to :func:`assert_casting_c1_capabilities` for both
-  frozen casting workflows (``casting_c1_fixed`` and
-  ``casting_c3_fixed``) and is a no-op for unrelated workflows.
+  dispatches to :func:`assert_casting_c1_capabilities` for the
+  frozen casting workflows (``casting_c1_fixed``,
+  ``casting_c3_fixed``, and ``casting_s_c3_fixed``) and is a no-op
+  for unrelated workflows.
 """
 
 from __future__ import annotations
@@ -291,11 +292,11 @@ def assert_casting_c1_capabilities(
 
 
 # Workflows that the capability gate knows how to validate. The
-# Both frozen casting workflows require the same bucket, public
+# The frozen casting workflows require the same bucket, public
 # inventory, target-block-truth, and fluid-truth capabilities. Keep
 # unrelated workflows (e.g. ``route_a_a0``) outside this gate.
 _GATED_WORKFLOWS: frozenset[str] = frozenset(
-    {"casting_c1_fixed", "casting_c3_fixed"}
+    {"casting_c1_fixed", "casting_c3_fixed", "casting_s_c3_fixed"}
 )
 
 
