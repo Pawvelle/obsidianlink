@@ -24,19 +24,19 @@ Single-Agent 与 Multi-Agent 是和任务族正交的 Agent Modes：
 
 ## Current Implementation
 
-当前阶段：`R6-C3-DETERMINISTIC-DRIVER` 已完成离线实现（C3 frame evaluator、严格 public context、capability gate、确定性 FakeBackend driver 与独立 truth 编排已验证；C4/C5 evaluator/driver、真实 MineRL 仍未实现）
+当前阶段：`R6-C4-IGNITION-EVALUATOR` 已完成离线实现（C4 ignition evaluator + typed `FrozenFrameIdentity` + 精确目标/动作归因/4-step 因果窗口/latched frame identity 绑定/agent-id 一致性 + 严格 evaluator-only truth 隔离已验证；C4 deterministic driver、C5 evaluator/driver、真实 MineRL 仍未实现）
 
-当前 active implementation 是 `casting_c3_fixed`：三个有序 target cell 的固定连续浇筑任务，正式分类为 Casting-S-C2 / fixed，兼容名称为 `casting_s_c2_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 taxonomy 的 C3（完整门框）。`casting_c1_fixed` 继续作为 Casting-S-C1 回归合同保留。
+当前 active implementation 是 `casting_c3_fixed`：三个有序 target cell 的固定连续浇筑任务，正式分类为 Casting-S-C2 / fixed，兼容名称为 `casting_s_c2_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 taxonomy 的 C3（完整门框）。`casting_c1_fixed` 继续作为 Casting-S-C1 回归合同保留。R6-C4 ignition evaluator 已完成 FakeBackend 离线证明，**没有**实现 C4 driver、C5、Ruined/Adaptive/Multi-Agent、真实 MineRL、Gradle 或模型 API；下一唯一任务是 `R6-C4-DETERMINISTIC-DRIVER`。
 
 [`benchmark/catalog/tasks.json`](benchmark/catalog/tasks.json) 是任务身份、taxonomy、兼容路径和发布可见性的统一索引。早期 `route_a_a0` 实例被明确标为 calibration/regression，不计入正式 Benchmark task matrix；详细兼容规则见 [TASK_REGISTRY.md](docs/architecture/TASK_REGISTRY.md)。
 
 R6 合同冻结阶段已新增 3 个 Casting-S benchmark 任务实例，分类为 Casting-S-C3 / C4 / C5（`fixed`）。它们继续使用水、熔岩与原版 block update，并把公开门框/点火/进入目标与 evaluator attribution 合同分开冻结：
 
 - [Casting-S-C3 任务页](docs/tasks/casting/casting_s_c3_fixed.md) — 浇筑公开 4×5 full ring（原版最小合法 10 块，本固定实例要求含四角 14 块；不点火、不进入 Nether）；R6-C3-FRAME-EVALUATOR 子阶段在 FakeBackend 上完成了 `FrozenFrameEvaluator`、task-origin / truth-grid 坐标锚定和独立 truth 注入路径；
-- [Casting-S-C4 任务页](docs/tasks/casting/casting_s_c4_fixed.md) — 有效门框 + 合法 `use_item(flint_and_steel)` 点火；evaluator 与 driver 未实现；
+- [Casting-S-C4 任务页](docs/tasks/casting/casting_s_c4_fixed.md) — 有效门框 + 合法 `use_item(flint_and_steel)` 点火；R6-C4-IGNITION-EVALUATOR 子阶段在 FakeBackend 上完成了 `FrozenIgnitionEvaluator`、typed `FrozenFrameIdentity`、精确目标/动作归因/4-step 因果窗口/latched frame identity 绑定/agent-id 一致性、独立 truth 注入路径和 AST 锁定的 evaluator-only 隔离；C4 deterministic driver 仍未实现；
 - [Casting-S-C5 任务页](docs/tasks/casting/casting_s_c5_fixed.md) — 有效门框 + 合法点火 + 指定 Agent 通过本 episode 门框进入 Nether；evaluator 与 driver 未实现。
 
-3 个新任务在 catalog 中仍标为 `implementation_status="contract_only"`、`live_run_allowed=false`；`active_compatibility_id` 保持 `casting_c3_fixed`（C2），因此 C3/C4/C5 还没有接入正式 experiment runner 或 live implementation。R6-C3 已在 `obsidianlink/evaluation/casting_frame_evaluator.py`、`obsidianlink/drivers/casting_s_c3_frame.py` 与 `obsidianlink/env.fake.FakeEnvironmentBackend` 上完成 evaluator、严格 public context、capability gate、336-step deterministic driver 和独立 truth 编排的离线证明；C4 ignition evaluator/driver、C5 Nether-entry evaluator/driver、真实 MineRL 接入、Gradle、模型 API 仍未实现。
+3 个新任务在 catalog 中仍标为 `implementation_status="contract_only"`、`live_run_allowed=false`；`active_compatibility_id` 保持 `casting_c3_fixed`（C2），因此 C3/C4/C5 还没有接入正式 experiment runner 或 live implementation。R6-C3 已在 `obsidianlink/evaluation/casting_frame_evaluator.py`、`obsidianlink/drivers/casting_s_c3_frame.py` 与 `obsidianlink/env.fake.FakeEnvironmentBackend` 上完成 evaluator、严格 public context、capability gate、336-step deterministic driver 和独立 truth 编排的离线证明。R6-C4 ignition evaluator 已在 `obsidianlink/evaluation/casting_ignition_evaluator.py` 与 `obsidianlink/env.fake.FakeEnvironmentBackend` 上完成 typed `FrozenFrameIdentity` + 精确目标/动作归因/4-step 因果窗口/latched frame identity 绑定/agent-id 一致性的离线证明；C4 deterministic driver、C5 Nether-entry evaluator/driver、真实 MineRL 接入、Gradle、模型 API 仍未实现。
 
 当前已验证范围：
 
@@ -54,17 +54,19 @@ R6 合同冻结阶段已新增 3 个 Casting-S benchmark 任务实例，分类�
 - AST 锁定的 evaluator 信息隔离：源文件不 import `agents` / `workflows` / `drivers` 也不读取 `scenario_parameters` / `evaluator_contract` / `instruction`。
 - C3 14-cell、336-step deterministic driver，严格 public context、动作白名单、有限预算/恢复、clean-import 边界和缺失 backend capability 时 reset 前 fail closed；
 - 测试 orchestrator 独立注入 evaluator-only truth，driver 不读取 frame truth，最终 verdict 只由 `FrozenFrameEvaluator` 给出。
+- C4 ignition evaluator：typed `FrozenFrameIdentity` 强制 orientation / min_corner / max_corner / width / height / target_offsets / interior_offsets / required_corner_count / required_full_ring_count / activation_offsets / episode_id / step_id / agent_id 全部冻结可序列化；target/interior offsets 必须与 C3 合同精确同序且无重复，activation offsets 必须是非空、无重复、canonical-order 的内部子集并包含实际观测激活点。`build_c4_c3_frame_identity` 构造规范身份，任意 mapping、重排/重复 offsets 或矛盾 activation snapshot 都不能冒充成功。`IgnitionActionEvidence` 构造期只做结构/类型检查（语义白名单由 evaluator 判定），`PortalActivationEvidence.agent_id` 必填且必须与 ignition action agent 一致；wrong agent / action / item / target / external activation / activation 早于 ignition / 超出 4 步窗口 / identity missing / identity mismatch / identity geometry mismatch 都通过公开构造 API 可达并由 evaluator 产出稳定 fail-closed outcome。
+- FakeBackend 独立 C4 ignition evaluation state 槽位 + 严格 workflow / 身份校验（`casting_s_c4_fixed` / `episode_id` / `step_id` / `agent_id`） + `reset` / `step` / `close` 自动清空 + Observation 不泄漏 + 与 C1/C2/C3 槽位互不污染。
 
 当前未验证或未实现：
 
 - 真实 MineRL/Minecraft 浇筑与门框建造；
-- C4 ignition evaluator、C5 Nether entry evaluator（合同已冻结，evaluator 未实现）；
+- C5 Nether entry evaluator（合同已冻结，evaluator 未实现）；
 - 任意 C4/C5 deterministic driver；
 - 真实 MineRL 中 task-origin marker 与 evaluator truth-grid origin 的世界坐标锚定；现有 `(-3,-1,0)–(3,5,6)` grid 数值范围已经覆盖固定 4×5 full-ring 方案；
 - Ruined Portal、Adaptive Routing 和 Multi-Agent；
 - 正式 benchmark episode 数据集。
 
-C2 实例位于 [`casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)，C2 离线合同位于 [`casting_c3_contract.json`](configs/experiments/active/casting_c3_contract.json)，详细规则见 [`casting_c3_fixed` 任务页](docs/tasks/casting/casting_c3_fixed.md)。基础回归规则见 [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md)。R6 合同冻结的 C3 / C4 / C5 实例位于 [`benchmark/instances/casting/single/`](benchmark/instances/casting/single/)，离线合同位于 [`configs/experiments/active/casting_s_c3_contract.json`](configs/experiments/active/casting_s_c3_contract.json) 等。下一工程任务是 `R6-C4-IGNITION-EVALUATOR`。
+C2 实例位于 [`casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)，C2 离线合同位于 [`casting_c3_contract.json`](configs/experiments/active/casting_c3_contract.json)，详细规则见 [`casting_c3_fixed` 任务页](docs/tasks/casting/casting_c3_fixed.md)。基础回归规则见 [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md)。R6 合同冻结的 C3 / C4 / C5 实例位于 [`benchmark/instances/casting/single/`](benchmark/instances/casting/single/)，离线合同位于 [`configs/experiments/active/casting_s_c3_contract.json`](configs/experiments/active/casting_s_c3_contract.json) 等。下一工程任务是 `R6-C4-DETERMINISTIC-DRIVER`。
 
 ## 系统架构
 

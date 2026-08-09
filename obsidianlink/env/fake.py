@@ -12,6 +12,9 @@ from obsidianlink.evaluation.casting import CastingEvaluationState
 from obsidianlink.evaluation.casting_frame_evaluator import (
     FrozenFrameEvaluationState,
 )
+from obsidianlink.evaluation.casting_ignition_evaluator import (
+    FrozenIgnitionEvaluationState,
+)
 from obsidianlink.evaluation.continuous_casting import (
     ContinuousCastingEvaluationState,
 )
@@ -71,6 +74,15 @@ class FakeEnvironmentBackend:
         # ``casting_s_c3_fixed`` (C3). The frame slot is the
         # evaluator-only truth path required by R6-C3-FRAME-EVALUATOR.
         self._frame_evaluation_state: FrozenFrameEvaluationState | None = None
+        # R6 Casting-S-C4 ignition truth lives on a *fifth* slot so
+        # the C3 frame surface and the C4 ignition surface never
+        # cross-contaminate. The C4 state itself embeds the C3 frame
+        # state, but it still rides on its own backend slot so the
+        # FakeBackend can validate ``workflow`` / ``episode_id`` /
+        # ``step_id`` / ``agent_id`` independently of the C3 surface.
+        # This slot is the evaluator-only truth path required by
+        # R6-C4-IGNITION-EVALUATOR.
+        self._ignition_evaluation_state: FrozenIgnitionEvaluationState | None = None
 
     @classmethod
     def with_capabilities(
@@ -124,6 +136,8 @@ class FakeEnvironmentBackend:
         self._continuous_casting_evaluation_state = None
         # R6 C3 frame truth follows the same rule.
         self._frame_evaluation_state = None
+        # R6 C4 ignition truth follows the same rule.
+        self._ignition_evaluation_state = None
         return self._observations()
 
     def step(self, actions: Mapping[str, MacroAction]) -> BackendStep:
@@ -153,6 +167,8 @@ class FakeEnvironmentBackend:
         self._continuous_casting_evaluation_state = None
         # R6 C3 frame truth follows the same rule.
         self._frame_evaluation_state = None
+        # R6 C4 ignition truth follows the same rule.
+        self._ignition_evaluation_state = None
         return BackendStep(
             episode_id=task.task_id,
             step_id=self._step_id,
@@ -323,6 +339,66 @@ class FakeEnvironmentBackend:
         """
         self._frame_evaluation_state = None
 
+    def set_ignition_evaluation_state(
+        self, state: FrozenIgnitionEvaluationState
+    ) -> None:
+        """Inject evaluator-only R6 Casting-S-C4 ignition truth.
+
+        Mirrors :meth:`set_frame_evaluation_state` for the R6 C4
+        ignition surface. The state lives on a separate slot so the
+        C3 frame surface and the C4 ignition surface never
+        cross-contaminate even though the C4 state embeds the C3
+        frame state. The fake backend never copies truth into an
+        :class:`Observation`.
+
+        The state must match the current ``task_id``, the current
+        backend ``step_id``, and ``task.workflow`` must be
+        ``casting_s_c4_fixed``. ``agent_id`` must be in the task's
+        ``agent_ids``. A wrong workflow / episode / step / agent
+        fails closed by raising.
+        """
+        task = self._require_task()
+        if not isinstance(state, FrozenIgnitionEvaluationState):
+            raise TypeError(
+                "ignition evaluation state must be a "
+                "FrozenIgnitionEvaluationState, "
+                f"got {type(state).__name__}"
+            )
+        if task.workflow != "casting_s_c4_fixed":
+            raise ValueError(
+                "ignition evaluation state requires casting_s_c4_fixed "
+                "workflow"
+            )
+        if state.episode_id != task.task_id:
+            raise ValueError(
+                "ignition evaluation state episode_id must match current task"
+            )
+        if state.step_id != self._step_id:
+            raise ValueError(
+                "ignition evaluation state step_id must match current backend "
+                "step"
+            )
+        if state.agent_id not in task.agent_ids:
+            raise ValueError(
+                "ignition evaluation state agent_id must be in task.agent_ids"
+            )
+        self._ignition_evaluation_state = state
+
+    def get_ignition_evaluation_state(self) -> FrozenIgnitionEvaluationState:
+        """Return the previously injected R6 C4 ignition truth."""
+        self._require_task()
+        if self._ignition_evaluation_state is None:
+            raise RuntimeError("ignition evaluation state is unavailable")
+        return self._ignition_evaluation_state
+
+    def clear_ignition_evaluation_state(self) -> None:
+        """Drop the R6 C4 ignition truth slot.
+
+        Equivalent to ``reset``/``step``/``close`` clearing; exposed
+        so tests can prove the cleanup contract explicitly.
+        """
+        self._ignition_evaluation_state = None
+
     def close(self) -> None:
         self._opened = False
         self._task = None
@@ -331,6 +407,7 @@ class FakeEnvironmentBackend:
         self._casting_evaluation_state = None
         self._continuous_casting_evaluation_state = None
         self._frame_evaluation_state = None
+        self._ignition_evaluation_state = None
 
     def _require_open(self) -> None:
         if not self._opened:

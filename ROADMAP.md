@@ -75,6 +75,24 @@ R6-C3-FRAME-EVALUATOR 子阶段本身没有实现 driver；随后的 `R6-C3-DETE
 - driver 不读取 evaluator truth，测试 orchestrator 独立注入 `FrozenFrameEvaluationState`，最终 success 只由 evaluator 判定；
 - 下一子任务是 `R6-C4-IGNITION-EVALUATOR`；C4 driver 必须等 evaluator 离线完成后再启动。
 
+#### R6-C4-IGNITION-EVALUATOR（完成，FakeBackend 离线证明）
+
+- `obsidianlink/evaluation/casting_ignition_evaluator.py` 实现 C4 ignition evaluator + typed `FrozenFrameIdentity` + 分层构造合同 + 4-step 因果窗口；
+- `FrozenFrameIdentity` 是 frozen dataclass，13 个显式字段（`orientation` / `min_corner` / `max_corner` / `width` / `height` / `target_offsets` / `interior_offsets` / `required_corner_count` / `required_full_ring_count` / `activation_offsets` / `episode_id` / `step_id` / `agent_id`），`as_dict()` detached、JSON-serializable；target/interior offsets 精确同序且无重复，activation offsets 是非空、无重复、canonical-order 的内部子集并包含实际观测激活点；任意 mapping 或矛盾 activation snapshot 不再能冒充成功；
+- 单一权威构造器 `build_c4_c3_frame_identity(episode_id, step_id, agent_id="agent_1", activation_offsets=())`：从 C3 固定门框与 C4 公开几何常量化拼出唯一可被 evaluator 接受的 episode-built 身份；
+- 闭集 outcome `IGNITION_OUTCOMES` 19 个；闭集 per-event verdict 包括 ignition / activation / frame_identity / agent verdict 共 5+4+2+1=12 个；
+- 优先级 19 层：step_budget → time_budget → abnormal_termination → state-level frame identity geometry check（priority 4，**在任何 C3 success 检查之前** fail closed）→ C3 in_progress 透传 → frame_not_built → ignition_action_missing → wrong_ignition_agent → wrong_ignition_action → wrong_ignition_item → wrong_ignition_target → portal_activation_missing → activation agent 错（priority 13）→ activation_before_ignition → activation_outside_window → external_activation → frame_identity_mismatch → in_progress → success；
+- **分层构造合同**：`IgnitionActionEvidence` / `PortalActivationEvidence` / `FrozenFrameIdentity` / `FrozenIgnitionEvaluationState` 构造期只做结构/类型校验；语义白名单（agent / action_type / item / target_cell / interior set 成员 / agent_id 一致 / identity geometry）由 evaluator 产出 `OUTCOME_WRONG_IGNITION_*` / `OUTCOME_EXTERNAL_ACTIVATION` / `OUTCOME_FRAME_IDENTITY_MISMATCH`；
+- `PortalActivationEvidence.agent_id` 必填非空标识符；activation agent 与 ignition agent 不一致时 priority 13 产出 `OUTCOME_WRONG_IGNITION_AGENT`；
+- `causality_window_steps` 默认 4，inclusive on both ends（delta ∈ [0, 4]）；activation delta > 4 → `activation_outside_window`，delta < 0 → `activation_before_ignition`；
+- 闭集 `failure_type` 与 outcome 对齐；`as_dict()` 稳定快照；相同 state 重复 `evaluate()` 产生完全相同 result；
+- 复用 `FrozenFrameEvaluator` 重新验证 C3 14-cell 浇筑条件，**不**重复实现 frame 评估逻辑；
+- `obsidianlink/env/fake.py` 新增独立 `_ignition_evaluation_state` 槽位与 `set_ignition_evaluation_state` / `get_ignition_evaluation_state` / `clear_ignition_evaluation_state`；与 C1 / C2 / C3 槽位**互不污染**；`reset` / `step` / `close` 清空 C4 truth；`Observation` schema 字段集保持 8 个公开字段不变；
+- evaluator 源文件 AST 检查确认：未 import `obsidianlink.agents` / `obsidianlink.workflows` / `obsidianlink.drivers`；未读取 `scenario_parameters` / `evaluator_contract` / `instruction`；`evaluate()` 第二参数严格注解为 `FrozenIgnitionEvaluationState`；
+- 144 个专项测试通过：覆盖公开构造 API 下的 wrong agent / wrong action / wrong item / wrong target / external activation / activation 早于 ignition / 超出 4 步窗口 / identity missing / identity geometry mismatch / identity state-vs-activation mismatch / target/interior 重排与重复 / activation snapshot 缺失、重复及与观测点矛盾 / C3 non-success / truth missing / budget / abnormal termination / 确定性重放 / 稳定 `as_dict()` / FakeBackend C1/C2/C3/C4 槽位互不污染 / reset/step/close 清空 / Observation 不泄漏 / evaluator AST 隔离 / immutability 专项测试仅依赖 `object.__setattr__` 验证 `FrozenInstanceError` / C1/C2/C3/portal 回归；
+- 全量 779 个离线测试通过；`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 通过；`git diff --check` 干净；
+- 下一子任务是 `R6-C4-DETERMINISTIC-DRIVER`；C4 driver 必须等 ignition evaluator 离线完成后再启动。**没有**提前实现 C4 driver、C5 evaluator/driver、真实 MineRL、Gradle 或模型 API。
+
 ### R6：完整门框、点火和进入 Nether（按子阶段推进）
 
 R6 将在 R6-C3 / R6-C4 / R6-C5 三阶段合同冻结基础上，由独立 evaluator 验证完整门框、点火和 Nether entry，并依次在 FakeBackend 上接确定性 driver；接真实 MineRL 与模型仍需要单独授权。

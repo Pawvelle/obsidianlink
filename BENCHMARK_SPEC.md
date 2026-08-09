@@ -173,17 +173,18 @@ Observation、action、message、evaluation 和 log 都包含 `episode_id`、`st
 
 `casting_c3_fixed` 是旧的数量型兼容 ID，其中 `c3` 表示三个 cell；它不属于 taxonomy C3（完整门框）。两个任务目前都只完成 FakeBackend 离线验证。
 
-R6 阶段已在 [catalog](benchmark/catalog/tasks.json) 中新增 3 个 Benchmark 任务条目，分别对应 B0 taxonomy 的 **Casting-S-C3 / Casting-S-C4 / Casting-S-C5 / fixed**。三个任务使用水、熔岩和原版 block update 继续 Casting 主线，并把 `public_task_spec`（门框方案、精确点火目标、指定 Agent/目标维度）与 `evaluator_contract`（baseline、因果窗口、frame identity、Nether entry 归因）分开冻结（`implementation_status="contract_only"`、`benchmark_visible=true`、`live_run_allowed=false`）。R6-C3 已在 FakeBackend 上完成 frame evaluator、task-origin / truth-grid 数值锚定、独立 truth 注入路径、严格 public context、capability gate 与 336-step deterministic driver 的离线证明；C4 / C5 evaluator 和 deterministic driver、正式 experiment runner 接线、真实 MineRL、Gradle、模型 API 仍未实现。详见 [C3](docs/tasks/casting/casting_s_c3_fixed.md) / [C4](docs/tasks/casting/casting_s_c4_fixed.md) / [C5](docs/tasks/casting/casting_s_c5_fixed.md) 任务页。
+R6 阶段已在 [catalog](benchmark/catalog/tasks.json) 中新增 3 个 Benchmark 任务条目，分别对应 B0 taxonomy 的 **Casting-S-C3 / Casting-S-C4 / Casting-S-C5 / fixed**。三个任务使用水、熔岩和原版 block update 继续 Casting 主线，并把 `public_task_spec`（门框方案、精确点火目标、指定 Agent/目标维度）与 `evaluator_contract`（baseline、因果窗口、frame identity、Nether entry 归因）分开冻结（`implementation_status="contract_only"`、`benchmark_visible=true`、`live_run_allowed=false`）。R6-C3 与 R6-C4 都已在 FakeBackend 上完成离线证明：R6-C3 完成 frame evaluator、task-origin / truth-grid 数值锚定、独立 truth 注入路径、严格 public context、capability gate 与 336-step deterministic driver；R6-C4 完成 ignition evaluator + typed `FrozenFrameIdentity`（13 个显式字段、`build_c4_c3_frame_identity` 单一权威构造器、分层构造合同、4-step 因果窗口 priority 4 frame-identity geometry check、闭集 19 outcome + 5 ignition / 4 activation / 2 agent / 1 frame_identity verdict）、FakeBackend C1/C2/C3/C4 互不污染的独立 truth 槽位、Observation 不泄漏和 evaluator AST 隔离。C4 deterministic driver、C5 Nether-entry evaluator/driver、正式 experiment runner 接线、真实 MineRL、Gradle、模型 API 仍未实现。详见 [C3](docs/tasks/casting/casting_s_c3_fixed.md) / [C4](docs/tasks/casting/casting_s_c4_fixed.md) / [C5](docs/tasks/casting/casting_s_c5_fixed.md) 任务页。
 
-`active_compatibility_id` 保持 `casting_c3_fixed`（C2），即 C3 / C4 / C5 仍不冒充正式 active/live implementation；任何引用都必须同时说明 `implementation_status="contract_only"`。R6-C3 evaluator 与 deterministic driver 只完成 FakeBackend 离线证明，不代表真实 MineRL 门框建造或正式 Benchmark episode 已验证。
+`active_compatibility_id` 保持 `casting_c3_fixed`（C2），即 C3 / C4 / C5 仍不冒充正式 active/live implementation；任何引用都必须同时说明 `implementation_status="contract_only"`。R6-C3 与 R6-C4 离线证明仅代表 FakeBackend 上的 evaluator / driver 行为，不代表真实 MineRL 门框建造、点火、进入 Nether 或正式 Benchmark episode 已验证。
 
 当前不得声称：
 
 - 真实 MineRL 浇筑已经验证；
 - 完整门框、点火或进入 Nether 已完成；
-- Casting-S-C4 / C5 的 evaluator 或 driver 已实现；
+- Casting-S-C4 / C5 的 driver 已实现；
+- Casting-S-C5 的 evaluator 已实现；
 - Ruined Portal 环境或修复任务已实现；
 - Adaptive planner/evaluator 已实现；
 - Multi-Agent observation、通信或协作已实现。
 
-这些内容属于 [ROADMAP.md](ROADMAP.md) 的后续阶段，而不是 B0 / R6 合同冻结的交付。
+这些内容属于 [ROADMAP.md](ROADMAP.md) 的后续阶段，而不是 B0 / R6 合同冻结与 C3/C4 离线证明的交付。
