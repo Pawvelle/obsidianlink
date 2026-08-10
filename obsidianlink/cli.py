@@ -324,7 +324,7 @@ def _offline_contract_check() -> dict[str, object]:
     taxonomy["compatibility_task_name"] = active_entry.canonical_name
     return {
         "status": "ok",
-        "phase": "r6_c5_deterministic_driver",
+        "phase": "r6_c5_live_minerl_backend_wiring_done",
         "active_task": active_entry.compatibility_id,
         "task_taxonomy": taxonomy,
         "task_catalog_version": catalog.catalog_version,
@@ -344,9 +344,13 @@ def _offline_contract_check() -> dict[str, object]:
             "ignition evaluator/driver, and R6 Casting-S-C5 Nether-entry "
             "evaluator/driver are implemented and covered by the offline "
             "test suite; this compact check does not execute the 336-step C3, "
-            "340-step C4, or 347-step C5 driver. The C5 driver and the C5 "
-            "FakeBackend truth-slot path are limited to offline FakeBackend "
-            "proof; live MineRL, Gradle, and model API calls remain "
+            "340-step C4, or 347-step C5 driver. The R6-C5-LIVE-MINERL-BACKEND-WIRING "
+            "milestone now wires typed target-block / fluid truth through the "
+            "production MineRL backend (capabilities "
+            "exposes_target_block_truth / exposes_fluid_truth flipped to True "
+            "only after the typed truth surface, the per-step cast credit "
+            "history, and the reset / step / close cleanup passed the offline "
+            "test suite); live MineRL, Gradle, and model API calls remain "
             "unimplemented, and no MineRL / Gradle / model API call was "
             "performed in this check."
         ),

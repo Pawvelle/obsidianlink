@@ -139,6 +139,30 @@ R6-C3-FRAME-EVALUATOR 子阶段本身没有实现 driver；随后的 `R6-C3-DETE
 - C5 driver 142 个专项测试与全量 1089 个离线测试通过；`python -m obsidianlink --check`、`python scripts/check_environment.py` 与 `git diff --check` 均通过；
 - 下一任务冻结为 `R6-C5-LIVE-MINERL-BACKEND-WIRING`；仅冻结任务名，真实 backend、MineRL/Minecraft、Gradle 或模型 API 操作仍需用户单独授权。
 
+#### R6-C5-LIVE-MINERL-BACKEND-WIRING（完成，offline）
+
+- `obsidianlink/actions/minerl_translator.py` 扩展 `PORTAL_A0_HOTBAR` 与闭集 `TRANSLATOR_EQUIPPABLE_ITEMS` / `TRANSLATOR_PLACEABLE_ITEMS`，覆盖 R6 C3 / C4 / C5 driver 全部动作（`equip_item(water_bucket|lava_bucket|cobblestone|flint_and_steel)` / `use_item(water_bucket|lava_bucket|flint_and_steel)` / `place_block(cobblestone)` / bounded forward `move` / `wait`）以及 legacy A0 `obsidian` / `flint_and_steel` / `dirt`；strict 类型检查、有限数值限制、闭包空间验证、失败一律 fail closed；
+- `obsidianlink/core/types.py` `Observation` dataclass 新增 `selected_item: str | None = None` 公开字段（共 9 字段 schema）；非空字符串、严格不变；
+- selected-item 改用 MineRL `HumanSurvival` 自带的 `EquippedItemObservation`，严格读取 `equipped_items.mainhand.type`；
+- `obsidianlink/env/portal_spec.py` 只使用 Malmo schema 支持的 `ObservationFromGrid`；单一 `portal_grid` 闭集同时覆盖方块、水/流水、熔岩/流熔岩与 missing/other，范围扩展到 `(-3,-1,0)–(4,5,6)` 以覆盖 C2 x=4 目标；
+- `obsidianlink/env/minerl_backend.py` 严格读取 `equipped_items.mainhand.type`，使用任务库存顺序动态映射 hotbar，有限执行 `duration_ticks`，拒绝动作不再推进环境，workflow 保持闭集；新增 typed truth 公共面：
+  - `get_casting_evaluation_state(target_cell)` → C1 `CastingEvaluationState`；
+  - `get_continuous_casting_evaluation_state(target_cells)` → C2 `ContinuousCastingEvaluationState`；
+  - `get_frame_evaluation_state()` → C3 `FrozenFrameEvaluationState`；
+  - `get_ignition_evaluation_state()` → C4 `FrozenIgnitionEvaluationState`；
+  - `get_nether_entry_evaluation_state()` → C5 `FrozenNetherEntryEvaluationState`；
+- 上述 5 个 typed truth 入口 **仅** 从 `raw["portal_grid"]` / `raw["portal_transition"]` 读 world truth；water/lava/obsidian 每个 cell 的 action step 只在合法当前 action 与唯一对应世界变化同时出现时 latch，**永不** 根据 driver intent / action 参数 / Agent prompt 伪造 world truth；
+- cast credits 只在 macro translator 成功接受后追加；`action.target == "water_bucket" / "lava_bucket" / "flint_and_steel"` 才记入 credit history；翻译失败的 action **不**记入 credits（fail closed）；`duration_ticks=4` 也只记一次（macro 是一次翻译）；`MAX_TRANSLATOR_DURATION_TICKS=40` 硬上限；
+- first-observed water / lava per cell 在 latched state 上独立保留；C1 / C3 evaluator 在同一个 typed state 里同时要求 `water_truth.present=True` 和 `lava_truth.present=True`（水+熔岩会反应为黑曜石，bridge 无法同时返回），backend 通过 first-observation latch 满足；
+- pre-existing water / lava（baseline 已是水/熔岩）**不**算 causal credit；agent 不能在 episode 启动前免费拥有流体 truth；
+- `Observation` 仍是 9 字段；`target_block_truth` / `fluid_truth` / `portal_grid` / `latched_frame_identity` / `matched_frame_identity` / `agents_in_nether` / `entered_via_episode_portal` / `pre_transition_position` / `nether_entry_evaluation` 全部缺席于 `Observation` / `BackendStep.info` / driver event；
+- `reset` / `step` / `close` 都重新初始化 `cast_credit_history` / `first_obsidian_step_by_offset` / `first_water_step_by_offset` / `first_lava_step_by_offset` / `first_ignition_step` / `first_nether_portal_step`；
+- `casting_c1_capabilities()` 在 typed truth surface 全部通过离线测试后，将 `exposes_target_block_truth` 与 `exposes_fluid_truth` 报告为 `True`（offline-only）；失败的 production manifest 仍由同一 gate fail closed 测试覆盖；
+- 85 个专项离线测试覆盖：翻译器 allowlist / 正路径 / fail-closed / bounded forward `move` / `duration_ticks > 40` / selected item 严格 bridge 读取 / C1–C5 production-backend evaluator success / per-cell 因果归因 / 真值隔离；
+- C1 / C2 / C3 / C4 / C5 / portal / frame geometry / CLI / catalog 回归全部通过；全量 1175 个离线测试通过（`Ran 1175 tests in 170.485s → OK`）；`python -m obsidianlink --check` 输出 `phase: "r6_c5_live_minerl_backend_wiring_done"`；`python scripts/check_environment.py` 通过；`git diff --check` 干净；
+- **没有**启动真实 MineRL、Gradle 或模型 API；没有提交或推送；C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；
+- 真实 MineRL / Minecraft 中的 typed target-block / fluid / nether-transition truth 仍未验证；C1–C5 success 已在 stub raw trajectory 上通过 production backend + evaluator，但 C5 真实端到端仍取决于尚未验证的 `portal_transition` bridge。下一阶段仍需用户单独授权后才能运行真实 MineRL。
+
 ### R6：完整门框、点火和进入 Nether（按子阶段推进）
 
 R6 将在 R6-C3 / R6-C4 / R6-C5 三阶段合同冻结基础上，由独立 evaluator 验证完整门框、点火和 Nether entry，并依次在 FakeBackend 上接确定性 driver；接真实 MineRL 与模型仍需要单独授权。

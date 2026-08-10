@@ -104,7 +104,7 @@ def main() -> int:
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "project_files": files,
-        "phase": "r6_c5_deterministic_driver",
+        "phase": "r6_c5_live_minerl_backend_wiring_done",
         "active_task": active_entry.compatibility_id,
         "task_taxonomy": taxonomy,
         "task_catalog_version": catalog.catalog_version,

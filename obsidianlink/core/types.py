@@ -209,6 +209,7 @@ class Observation:
     timestamp: float
     frame: Any
     visible_inventory: Mapping[str, int] | None = None
+    selected_item: str | None = None
     messages: tuple[str, ...] = ()
     workflow_stage: str | None = None
 
@@ -232,6 +233,8 @@ class Observation:
             object.__setattr__(
                 self, "visible_inventory", MappingProxyType(inventory)
             )
+        if self.selected_item is not None:
+            _require_identifier(self.selected_item, "selected_item")
         if any(not isinstance(message, str) for message in self.messages):
             raise ValueError("messages must contain strings")
         if self.workflow_stage is not None:

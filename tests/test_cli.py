@@ -17,7 +17,7 @@ class CliTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(
-            payload["phase"], "r6_c5_deterministic_driver"
+            payload["phase"], "r6_c5_live_minerl_backend_wiring_done"
         )
         self.assertEqual(payload["active_task"], "casting_c3_fixed")
         self.assertEqual(

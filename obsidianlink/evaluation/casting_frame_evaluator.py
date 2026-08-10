@@ -1831,13 +1831,14 @@ def default_c3_anchor() -> FrozenFrameOriginAnchor:
     5) is expressed in ``task_origin_relative`` coordinates with the
     task origin at the scene-visible marker. The frozen anchor puts
     that marker at grid (0, 0, 0); the resulting 14 cells live at
-    grid ``x=0..3``/``y=0..4``/``z=1``, which is inside the existing
-    ``(-3,-1,0)–(3,5,6)`` truth grid.
+    grid ``x=0..3``/``y=0..4``/``z=1``, which is inside the shared
+    ``(-3,-1,0)–(4,5,6)`` truth grid (the extra x=4 column covers the
+    compatible C2 task's third target).
     """
     return FrozenFrameOriginAnchor(
         task_origin_in_grid=(0, 0, 0),
         grid_min=(-3, -1, 0),
-        grid_max=(3, 5, 6),
+        grid_max=(4, 5, 6),
     )
 
 

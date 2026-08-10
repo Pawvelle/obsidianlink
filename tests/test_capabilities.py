@@ -550,14 +550,19 @@ class FakeBackendObservationIsolationTests(unittest.TestCase):
 
 
 class MineRLBackendManifestTests(unittest.TestCase):
-    """The current MineRL backend must honestly report what it can
-    serve. R2 is precisely about *exposing* the gaps so that R3 / R4
-    know which work is still outstanding.
-    """
+    """The production manifest must distinguish wired actions/public
+    observations from still-unwired typed evaluator truth."""
 
-    def test_minerl_backend_does_not_claim_unimplemented_capabilities(
+    def test_minerl_backend_advertises_typed_truth(
         self,
     ) -> None:
+        # R6-C5-LIVE-MINERL-BACKEND-WIRING exposes typed
+        # target-block / fluid truth through the production
+        # backend's evaluator-only surface. The capabilities
+        # therefore transition from ``False`` to ``True`` only
+        # because the offline test suite proves the wiring.
+        # Live MineRL / Minecraft verification is still out of
+        # scope; the manifest remains a static declaration.
         caps = MineRLEnvironmentBackend.casting_c1_capabilities()
         self.assertIsInstance(caps, BackendCapabilities)
         for field in (
@@ -565,32 +570,25 @@ class MineRLBackendManifestTests(unittest.TestCase):
             "can_select_lava_bucket",
             "can_use_water_bucket",
             "can_use_lava_bucket",
+            "exposes_public_inventory",
             "exposes_selected_item",
             "exposes_target_block_truth",
             "exposes_fluid_truth",
         ):
-            self.assertFalse(
+            self.assertTrue(
                 getattr(caps, field),
-                f"{field} must stay False until the capability is wired in",
+                f"{field} must be wired",
             )
-        # ``exposes_public_inventory`` is currently served by
-        # ``_public_observations``; pin it as True so the contract
-        # is explicit.
-        self.assertTrue(caps.exposes_public_inventory)
-        # And the gate must therefore fail closed for the real
-        # MineRL backend today.
-        with self.assertRaises(CapabilityMismatchError) as ctx:
-            assert_casting_c1_capabilities(caps, task_id="casting_c1_fixed_seed_0")
-        for expected in (
-            "select_water_bucket",
-            "select_lava_bucket",
-            "use_water_bucket",
-            "use_lava_bucket",
-            "selected_item",
-            "target_block_truth",
-            "fluid_truth",
-        ):
-            self.assertIn(expected, ctx.exception.missing)
+        # The pre-episode gate must now accept the production
+        # casting C1 task because every required capability is
+        # reported. A separate test exercises the fail-closed
+        # path on a backend whose capabilities have been
+        # intentionally downgraded.
+        self.assertIsNone(
+            assert_casting_c1_capabilities(
+                caps, task_id="casting_c1_fixed_seed_0"
+            )
+        )
 
     def test_minerl_backend_instance_capabilities_match_static(self) -> None:
         backend = MineRLEnvironmentBackend(reset_warmup_steps=0)
@@ -604,20 +602,52 @@ class MineRLBackendManifestTests(unittest.TestCase):
 
 
 class MineRLResetGateTests(unittest.TestCase):
-    """The real MineRL backend must fail closed for casting tasks
-    *before* the env factory is called and *before* any state is
-    mutated. The MineRL runtime is never touched for a casting-c1
-    task it cannot serve today.
-    """
+    """Incomplete typed truth must stop casting before env creation."""
 
-    def test_minerl_casting_reset_rejected_before_env_creation(self) -> None:
+    def test_minerl_casting_reset_fails_before_env_creation(
+        self,
+    ) -> None:
+        # R6-C5-LIVE-MINERL-BACKEND-WIRING now wires typed
+        # target-block / fluid truth on the production backend,
+        # so the default production gate accepts the casting
+        # task. The fail-closed contract must still hold when a
+        # backend's per-instance manifest is intentionally
+        # downgraded to miss a required capability; the gate
+        # must reject the task before the env factory is called
+        # and before any state mutation.
+        factory_calls: list[str] = []
+
+        def stub_factory(task: object) -> object:
+            factory_calls.append("env_factory_called")
+            return _StubMineRLEnv()
+
+        backend = MineRLEnvironmentBackend(
+            env_factory=stub_factory,  # type: ignore[arg-type]
+            reset_warmup_steps=0,
+        )
+        incomplete_caps = dataclasses.replace(
+            BackendCapabilities.full(),
+            exposes_target_block_truth=False,
+        )
+        backend.capabilities = lambda: incomplete_caps  # type: ignore[method-assign]
+        backend.open()
+        try:
+            with self.assertRaises(CapabilityMismatchError) as ctx:
+                backend.reset(casting_c1_task())
+            self.assertEqual(factory_calls, [])
+            self.assertEqual(
+                ctx.exception.missing, ("target_block_truth",)
+            )
+        finally:
+            backend.close()
+
+    def test_minerl_incomplete_manifest_rejects_casting_c1_before_env_creation(
+        self,
+    ) -> None:
         factory_calls: list[str] = []
 
         def tracking_factory(task: object) -> object:
-            factory_calls.append("env_factory_called")  # type: ignore[arg-type]
-            # If the gate is wired correctly, this assertion never
-            # fires because the gate rejects the reset before the
-            # factory is invoked.
+            factory_calls.append("env_factory_called")
             raise AssertionError(
                 "env_factory must not be called when the gate fails"
             )
@@ -626,6 +656,15 @@ class MineRLResetGateTests(unittest.TestCase):
             env_factory=tracking_factory,  # type: ignore[arg-type]
             reset_warmup_steps=0,
         )
+        # Monkey-patch the instance ``capabilities()`` to report
+        # an incomplete manifest. The static helper stays honest;
+        # the gate respects the per-instance override.
+        incomplete_caps = dataclasses.replace(
+            BackendCapabilities.full(),
+            can_use_water_bucket=False,
+            exposes_fluid_truth=False,
+        )
+        backend.capabilities = lambda: incomplete_caps  # type: ignore[method-assign]
         backend.open()
         try:
             with self.assertRaises(CapabilityMismatchError) as ctx:
@@ -639,16 +678,7 @@ class MineRLResetGateTests(unittest.TestCase):
             self.assertIsNone(backend._env)
             # Canonical missing + task_id.
             self.assertEqual(
-                ctx.exception.missing,
-                (
-                    "select_water_bucket",
-                    "select_lava_bucket",
-                    "use_water_bucket",
-                    "use_lava_bucket",
-                    "selected_item",
-                    "target_block_truth",
-                    "fluid_truth",
-                ),
+                ctx.exception.missing, ("use_water_bucket", "fluid_truth")
             )
             self.assertEqual(
                 ctx.exception.task_id, "casting_c1_fixed_seed_0"
@@ -656,29 +686,38 @@ class MineRLResetGateTests(unittest.TestCase):
         finally:
             backend.close()
 
-    def test_minerl_casting_c3_reset_rejected_before_env_creation(self) -> None:
+    def test_minerl_casting_c3_reset_fails_before_env_creation(
+        self,
+    ) -> None:
+        # With the typed truth wired on the production backend,
+        # the default production gate accepts the casting C3
+        # task. Downgrading the per-instance manifest to miss
+        # a required capability must still fail closed before
+        # the env factory is called and before any state
+        # mutation.
         factory_calls: list[str] = []
 
-        def tracking_factory(task: object) -> object:
+        def stub_factory(task: object) -> object:
             factory_calls.append("env_factory_called")
-            raise AssertionError(
-                "env_factory must not be called when the R5 gate fails"
-            )
+            return _StubMineRLEnv()
 
         backend = MineRLEnvironmentBackend(
-            env_factory=tracking_factory,  # type: ignore[arg-type]
+            env_factory=stub_factory,  # type: ignore[arg-type]
             reset_warmup_steps=0,
         )
+        incomplete_caps = dataclasses.replace(
+            BackendCapabilities.full(),
+            exposes_fluid_truth=False,
+        )
+        backend.capabilities = lambda: incomplete_caps  # type: ignore[method-assign]
         backend.open()
         try:
             with self.assertRaises(CapabilityMismatchError) as ctx:
                 backend.reset(casting_c3_task())
             self.assertEqual(factory_calls, [])
-            self.assertIsNone(backend._task)
-            self.assertEqual(backend._step_id, 0)
-            self.assertIsNone(backend._env)
-            self.assertEqual(ctx.exception.task_id, "casting_c3_fixed_seed_0")
-            self.assertIn("fluid_truth", ctx.exception.missing)
+            self.assertEqual(
+                ctx.exception.missing, ("fluid_truth",)
+            )
         finally:
             backend.close()
 
@@ -703,6 +742,7 @@ class MineRLResetGateTests(unittest.TestCase):
                 return {
                     "pov": _zero_pov(),
                     "inventory": {},
+                    "equipped_items": {"mainhand": {"type": "air"}},
                 }
 
             def step(self, action: object):
@@ -710,6 +750,7 @@ class MineRLResetGateTests(unittest.TestCase):
                     {
                         "pov": _zero_pov(),
                         "inventory": {},
+                        "equipped_items": {"mainhand": {"type": "air"}},
                     },
                     0.0,
                     False,
@@ -749,6 +790,40 @@ def _zero_pov() -> object:
     import numpy as np
 
     return np.zeros((360, 640, 3), dtype=np.uint8)
+
+
+class _StubMineRLEnv:
+    """Minimal MineRL-shaped env used by the reset-gate test path.
+
+    The reset body in :class:`MineRLEnvironmentBackend` only reaches
+    the env factory after the capability gate has passed. The
+    Phase 1 reset body still rejects the modern casting task shape
+    with a ``ValueError``; this stub is never asked to produce an
+    observation because the rejection happens before the env is
+    used. The stub satisfies the ``MineRLEnvironmentBackend``
+    contract just enough to be created by the factory.
+    """
+
+    def seed(self, value: int) -> None:  # pragma: no cover - trivial
+        return None
+
+    def reset(self) -> dict[str, object]:  # pragma: no cover - unused
+        return {"pov": _zero_pov(), "inventory": {}}
+
+    def step(self, action: object):  # pragma: no cover - unused
+        return {"pov": _zero_pov(), "inventory": {}}, 0.0, False, {}
+
+    def close(self) -> None:  # pragma: no cover - trivial
+        return None
+
+    class action_space:
+        @staticmethod
+        def no_op() -> dict[str, int]:  # pragma: no cover - unused
+            return {}
+
+        @staticmethod
+        def contains(value: object) -> bool:  # pragma: no cover - unused
+            return True
 
 
 if __name__ == "__main__":

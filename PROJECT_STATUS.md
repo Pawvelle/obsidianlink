@@ -4,13 +4,132 @@
 
 ## 当前唯一目标
 
-任务：`R6-C5-DETERMINISTIC-DRIVER`（C5 evaluator 与 Nether-entry driver 已在 FakeBackend 上完成离线证明；真实 MineRL 仍未实现）
+任务：`R6-C5-LIVE-MINERL-BACKEND-WIRING`（在不启动真实 MineRL/Minecraft 的前提下，通过 stub/fake raw observations 和注入式 env_factory，为 MineRL backend 完成最小、严格、可离线测试的 C5 wiring；真实 backend 接入或 MineRL/Minecraft 运行仍需用户单独授权）
 
-下一任务：`R6-C5-LIVE-MINERL-BACKEND-WIRING`（仅冻结任务名；真实 backend、Gradle 或 MineRL/Minecraft 运行均需用户单独授权）
+当前未完成子项：无；R6-C5-LIVE-MINERL-BACKEND-WIRING 已通过严格离线测试完成。
 
 当前 active implementation 仍是 Casting-S-C2 / fixed 的 `casting_c3_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 B0 taxonomy 的 C3；文档级兼容名称为 `casting_s_c2_fixed`。`casting_c1_fixed` 保留为 Casting-S-C1 回归合同。
 
 R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、live_run_allowed=false）。R6-C3 与 R6-C4 已在 FakeBackend 上完成 evaluator + deterministic driver 离线证明。R6-C5 已完成 Nether-entry evaluator + 347-step deterministic driver 离线证明。C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；C5 不冒充正式 live implementation。
+
+## R6-C5-LIVE-MINERL-BACKEND-WIRING 完成（offline）
+
+R6-C5-LIVE-MINERL-BACKEND-WIRING 已通过严格离线测试完成 typed target-block / fluid truth 的 production MineRL backend wiring。`casting_c1_capabilities()` 现在将 `exposes_target_block_truth` 和 `exposes_fluid_truth` 报告为 `True`（offline-only），背后的 typed truth surface 由下列保障支撑：
+
+1. **Schema-legal unified grid bridge** [`obsidianlink/env/portal_spec.py`](obsidianlink/env/portal_spec.py)：
+   - 只使用 Malmo schema 支持的 `<ObservationFromGrid>`；`PORTAL_GRID_BLOCKS` 闭集同时包含 `water` / `flowing_water` / `lava` / `flowing_lava` 与门框方块，不声明不存在的 `<ObservationFromFluidGrid>`；
+   - evaluator grid 范围为 `(-3,-1,0)–(4,5,6)`，覆盖 C2 的 x=4 目标 cell；offline 测试通过 stub `env_factory` 的 `portal_grid` 提供严格的方块/流体 truth，**不**启动 MineRL 客户端。
+
+2. **Production backend typed truth surface** [`obsidianlink/env/minerl_backend.py`](obsidianlink/env/minerl_backend.py)：
+   - `get_casting_evaluation_state(target_cell)` → C1 typed `CastingEvaluationState`，`get_continuous_casting_evaluation_state(target_cells)` → C2 `ContinuousCastingEvaluationState`，`get_frame_evaluation_state()` → C3 `FrozenFrameEvaluationState`，`get_ignition_evaluation_state()` → C4 `FrozenIgnitionEvaluationState`，`get_nether_entry_evaluation_state()` → C5 `FrozenNetherEntryEvaluationState`。这些是 production MineRL backend **唯一**对外的 evaluator-only 入口；
+   - 每个 getter 严格从 `raw["portal_grid"]` / `raw["portal_transition"]` 读世界 truth，从 backend latched state 读经世界变化确认的 action step / identity，**永不**根据 driver 意图、action 参数或 Agent prompt 伪造 world truth；
+   - cast credits 只在 macro translator 成功接受后追加；`action.target == "water_bucket" / "lava_bucket" / "flint_and_steel"` 才记入 credit history，翻译失败的 action **不**记入 credits（fail closed）。
+
+3. **Causal action credit tracking**（`cast_credit_history` + `first_water_step_by_offset` / `first_lava_step_by_offset`）：
+   - 每个 backend step 严格最多记一次 cast credit（即使 `duration_ticks=4` 也只记一次，因为 macro 是一次翻译）；`MAX_TRANSLATOR_DURATION_TICKS=40` 硬上限确保 credit 不会爆炸；
+   - 只有当前 step 的合法 bucket action 与唯一 tracked cell 的预期流体变化同时出现，才为该 cell latch water/lava step；每个 cell 的水、熔岩、黑曜石转移独立归因，不借用全局最近 action；
+   - pre-existing water / lava（baseline 已是水/熔岩）**不**算 causal credit；agent 不能在 episode 启动前免费拥有流体 truth。
+
+4. **Capability honesty**（`casting_c1_capabilities()`）：
+   - `exposes_target_block_truth=True` 和 `exposes_fluid_truth=True` 是 *static* 声明，**仅**当 typed truth surface 与对应测试通过之后才置 `True`；任何 `capabilities()` 子类覆写（如 `CapabilityManifestFailClosedTests`）会被 pre-episode gate 拦截；
+   - 失败的 production manifest 仍由同一 gate fail closed 测试覆盖（`test_minerl_casting_reset_fails_before_env_creation` 使用 downgraded per-instance manifest）。
+
+5. **Reset / step / close 清理**（`_fresh_latched_state()`）：
+   - 每条 cast credit 都关联 `step_id`；`reset` 与 `close` 调用 `_fresh_latched_state()` 重新初始化 `cast_credit_history` / `first_obsidian_step_by_offset` / `first_water_step_by_offset` / `first_lava_step_by_offset` / `first_ignition_step` / `first_nether_portal_step`；
+   - `step` 在每条 macro action 末尾调用 `_refresh_evaluation_milestones`，但 stale credit 不会跨 step 生存（credit 是 step 内的因果凭证，不进入下一 step 的 attribution）；新的 truth 永远从当前 raw observation + 当前 step 推算。
+
+6. **Information isolation**（`Observation` schema 不变）：
+   - `Observation` 仍是 9 字段（`episode_id` / `agent_id` / `step_id` / `timestamp` / `frame` / `visible_inventory` / `selected_item` / `messages` / `workflow_stage`）；`target_block_truth` / `fluid_truth` / `portal_grid` / `latched_frame_identity` / `matched_frame_identity` / `agents_in_nether` / `entered_via_episode_portal` / `pre_transition_position` / `nether_entry_evaluation` 全部缺席于 `Observation` / `BackendStep.info` / driver event；
+   - `tests/test_r6_c5_live_minerl_backend_wiring.py` 的 `ObservationIsolationTests` 与 `DriverEventHygieneTests` 锁住 AST 锁，禁止任何 driver / evaluator 副作用进入 agent-visible 通道。
+
+7. **新增专项离线测试** [`tests/test_r6_c5_live_minerl_backend_wiring.py`](tests/test_r6_c5_live_minerl_backend_wiring.py)（85 个离线用例）：
+   - 翻译器 allowlist / 正路径 / fail-closed / bounded forward `move` / `duration_ticks > 40`；
+   - backend selected item 直接从 bridge `equipped_items.mainhand.type` 读，**不**根据 `equip_item` 意图伪造；未知 / 缺失 / 非 `PORTAL_SELECTABLE_ITEMS` 的 value 全部 fail closed；
+   - `get_*_evaluation_state` 全部在 stub `env_factory` 上跑：每条 typed state 的 `episode_id` / `step_id` / `agent_id` / `causality_window_steps` / `terminated_step` 都与 task 严格一致；
+   - C1 / C2 / C3 / C4 / C5 都有 production-backend evaluator success 路径；同时覆盖 pre-existing truth、错误流体类型、被拒绝 action、无世界变化 action 不得归因、以及 evaluator-only 信息隔离。
+
+8. **全量测试**：`1175` 个离线测试全部通过（`Ran 1175 tests in 170.485s → OK`）；`python -m obsidianlink --check` 输出 `phase: "r6_c5_live_minerl_backend_wiring_done"`；`python scripts/check_environment.py` 通过；`git diff --check` 干净。
+
+9. **未验证限制**：
+   - 真实 MineRL / Minecraft 中的 typed target-block / fluid / nether-transition truth 仍未验证；当前仅确认任务 XML 不再声明非法的 `ObservationFromFluidGrid`；
+   - 真实服务端能否让 14 个目标 cell 在 800 step 内以可重复的顺序全部 `air → water+lava → obsidian` 仍未在真实 Minecraft 验证；
+   - 真实服务端 `portal_transition` 字段在跨维度切档时是否同步返回，**未**验证；
+   - 真实服务端在 A0 MineRL `Hotbar.4-6` 上能否稳定执行 `use_item(water_bucket)` / `use_item(lava_bucket)` / `place_block(cobblestone)` 仍**未**验证；
+   - C2 网格已扩展到 x=4，C1–C5 production-backend evaluator success 已在 stub raw trajectory 中验证；这不等于真实 live 成功。C5 仍依赖尚未验证的 evaluator-only `portal_transition` bridge 字段。
+
+10. **未修改**：
+   - vendor/minerl：未触碰；
+   - MineRL / Minecraft / Python / JDK / Gym / NumPy / Qwen / 模型版本：未升级或回退；
+   - 没有启动真实 MineRL / Minecraft / Gradle / 付费模型 API / 提交 / 推送 / 创建 PR；
+   - C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；后续要进入 live run 仍需用户单独授权。
+
+## R6-C5-LIVE-MINERL-BACKEND-WIRING 部分完成（离线修正）
+
+本轮修正了早期 wiring 审查发现的虚报和 fail-open 问题：
+
+1. **MineRL 动作执行修正** [`obsidianlink/actions/minerl_translator.py`](obsidianlink/actions/minerl_translator.py) / [`obsidianlink/env/minerl_backend.py`](obsidianlink/env/minerl_backend.py)：
+   - hotbar 映射改为根据冻结初始库存顺序构造；C5 水桶 / 熔岩桶 / 圆石 / 打火石对应 slot 1–4；
+   - 闭集 `TRANSLATOR_EQUIPPABLE_ITEMS` 与 `TRANSLATOR_PLACEABLE_ITEMS` 明确锁定每种动作的目标允许集；
+   - `equip_item` / `use_item` / `place_block` / `move` / `wait` 的每条分支都经过严格类型检查、有限数值限制和闭包空间验证；
+   - translation 被拒绝时 backend 在 `env.step` 之前抛出受控错误，不再执行 no-op 并假装完成；
+   - `duration_ticks` 在 backend 内以有限循环真实提交低层动作，宏级 `step_id` 仍严格 +1。
+
+2. **Observation 扩展 selected_item 字段** [`obsidianlink/core/types.py`](obsidianlink/core/types.py)：
+   - 公开 `Observation` dataclass 新增 `selected_item: str | None = None` 字段；`__post_init__` 严格验证非空字符串；
+   - 字段顺序：episode_id / agent_id / step_id / timestamp / frame / visible_inventory / selected_item / messages / workflow_stage（共 9 个公开字段）；
+   - C3 / C4 / C5 driver / evaluator 离线测试已同步更新到 9 字段 schema。
+
+3. **MineRL selected-item 观察** [`obsidianlink/env/portal_spec.py`](obsidianlink/env/portal_spec.py)：
+   - 删除没有 XML / bridge 数据源的伪 `PortalSelectedItemObservation`；
+   - 改用 `HumanSurvival` 自带的 `EquippedItemObservation`，严格解析 `equipped_items.mainhand.type`；字段缺失或类型错误时 fail closed。
+
+4. **capability 诚实性与 workflow 闭集** [`obsidianlink/env/minerl_backend.py`](obsidianlink/env/minerl_backend.py)：
+   - `_selected_item_from_raw` 从 raw observation 的 `equipped_items.mainhand.type` 读取 bridge 值（空槽返回 `None`），永不根据 driver 请求的动作伪造成功；
+   - `reset` / `step` 走同一份 `_public_observations` 路径，Observation 上的 `selected_item` 字段是 Agent-visible 公开数据；
+   - `reset` 现在接受 C3 / C4 / C5 casting workflow（`route="lava_casting"`），保留 legacy Route A0 difficulty 1 校验；
+   - `get_evaluation_state()` 仍只返回 legacy portal `EvaluationState`，不冒充 typed target-block / fluid / C5 truth；
+   - `exposes_target_block_truth=False` / `exposes_fluid_truth=False`，真实 casting reset 在 env factory 前 fail closed；
+   - 只接受 `route_a_a0` 和已冻结 C1–C5 workflow，未知 `lava_casting` workflow 不再绕过 gate。
+
+5. **未完成边界**：
+   - R6-C5 wiring 之前，MineRL backend 的 `casting_c1_capabilities()` 报告 7 个能力为 `False`（`select_water_bucket` / `select_lava_bucket` / `use_water_bucket` / `use_lava_bucket` / `selected_item` / `target_block_truth` / `fluid_truth`），导致 reset gate 提前 fail closed；
+   - typed target-block / water / lava / fluid 因果证据尚未从 MineRL bridge 生成 C1–C5 evaluator state；
+   - 任何后端只要 per-instance 覆盖 `capabilities()` 让其报告不完整，gate 依然 fail closed **before** the env factory is called and **before** any state mutation;
+   - 没新增 `observation_only` 等其他分类；保留原始 `CAPABILITY_IDS` 8 项不动。
+
+6. **专项离线测试** [`tests/test_r6_c5_live_minerl_backend_wiring.py`](tests/test_r6_c5_live_minerl_backend_wiring.py)，覆盖：
+   - translator allowlist 与正路径（`equip_item`/`use_item`/`place_block`/`move`/`wait`/legacy A0）；
+   - translator 失败闭合：未知 item / 空 / None target / 未知 action / 越界数值 / 非有限数 / bool-as-int / duration_ticks > 40；
+   - selected_item 表面：bridge 提供值 / `empty` / 未知值 / 缺失键均严格处理，不根据 driver intent 伪造；
+   - production capability manifest 保持 target-block / fluid 为 False，gate 在 env factory 之前 fail closed；
+   - 完整 C5 evaluator outcome 闭集：success / external entry / missing entry / wrong source dim / wrong target dim / transition before activation / frame identity mismatch；
+   - 明确使用测试专用 full-capability stub 验证 347-step driver 动作边界，不冒充 production truth wiring；
+   - AST / 源码双门锁：C5 driver 源文件不引用 `selected_item` / `target_block_truth` / `fluid_truth` / `latched_frame_identity` / `matched_frame_identity` / `pre_transition_position` / `entered_via_episode_portal` / `agents_in_nether` / `latched_activation_offsets` / `nether_entry_evaluation` 任一属性；
+   - driver 事件不携带任何 evaluator-only token（10 个 token 全部缺席）；
+   - Observation 8→9 字段 schema 锁住，`target_block_truth` / `fluid_truth` / `portal_grid` / `latched_frame_identity` / `matched_frame_identity` / `agents_in_nether` / `entered_via_episode_portal` / `pre_transition_position` / `nether_entry_evaluation` 全部缺席于 Observation / driver event / public context；
+   - reset / step / close 清空 backend latched state；
+   - 动态 hotbar slot 1–4、`duration_ticks` 有限重复、translation reject 不调用 env.step、未知 workflow 提前拒绝。
+
+7. **evaluator-only 信息隔离验证**：
+   - production manifest 明确报告 typed truth 缺口，不再把 legacy portal grid 当作 C1–C5 typed truth；
+   - 公共 `Observation` 仍只有 9 个字段，evaluator-only 字段全部缺席；
+   - C5 driver 源文件 AST + `ast.Attribute` + `ast.Subscript` 扫描确认不引用任何 evaluator-only token；
+   - legacy portal truth 仍与 public Observation 隔离；typed casting truth 未接通前不启动 episode。
+
+8. **driver 与 evaluator 隔离**：
+   - driver 不知道 selected_item、target block truth、fluid truth、frame identity、transition evidence 的存在；
+   - evaluator 不依赖 driver 的 completed / failed 状态认定 success；
+   - 任何 evaluator-only 数据不能进入 driver event / driver log / driver `as_dict()` snapshot。
+
+9. **未验证限制**：
+   - 真实 MineRL / Minecraft 浇筑、门框建造、点火、Nether entry 仍未验证；
+   - 真实 MineRL 中 task-origin marker 与 evaluator truth-grid origin 的世界坐标锚定仍**未**在真实 Minecraft 中验证（`(-3,-1,0)–(3,5,6)` grid 数值范围已经覆盖固定 4×5 full-ring 方案）；
+   - 真实 MineRL 桥接的 `selected_item` observable 需要在 MineRL 0.x 端 `HumanSurvival` 的 `Inventory.name_in_slot` 上验证；
+   - 当前所有 wiring 仍只通过 stub `env_factory` + 注入式 raw observations 在离线环境下证明；
+   - C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`，没有启动真实 MineRL、Gradle 或模型 API；
+   - Ruined / Adaptive / Multi-Agent / R7 模型阶段仍未实现。
+
+10. **当前任务仍未完成**：只有 typed target-block / fluid truth 接通并通过独立离线测试后，才能把 capability 改为 `True`。
 
 
 ## R6-C5-DETERMINISTIC-DRIVER 已完成（FakeBackend 离线证明）
@@ -670,8 +789,8 @@ Task catalog、严格解析器、active entry 约束、calibration 分类与 C1/
 
 Task catalog 解析/路径/分类正反例、R5 evaluator 与 driver 专项测试、R6-C3 frame evaluator 专项测试、R6-C3 deterministic driver 专项测试、capability、benchmark file、CLI、R3/R4 回归、portal / frame geometry 旧测试必须保持通过。任何合同整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同。
 
-R6-C5-DETERMINISTIC-DRIVER 本轮最终验证：`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过；全量 **1089** 个离线测试（含 R6-C5 driver **142** 个专项测试）全部通过；`git diff --check` 干净。本轮没有修改 `vendor/minerl`，也没有启动真实 MineRL/Minecraft、Gradle 或模型 API。
+R6-C5-LIVE-MINERL-BACKEND-WIRING 当前部分修正最终验证：在 Conda `mc-agent` 环境中，全量 **1155** 个离线测试分批全部通过（338 + 71 + 674 + 65 + 7；分批仅用于规避桌面终端单进程时限），`python -m obsidianlink --check`、`python scripts/check_environment.py` 与 `git diff --check` 均通过。没有修改 `vendor/minerl`，也没有启动真实 MineRL/Minecraft、Gradle 或模型 API。
 
 ## 下一任务
 
-`R6-C5-DETERMINISTIC-DRIVER` 已完成。下一任务：`R6-C5-LIVE-MINERL-BACKEND-WIRING`；真实 backend、Gradle 与 MineRL/Minecraft 运行仍需用户单独授权。
+`R6-C5-DETERMINISTIC-DRIVER` 已完成。下一任务：`R6-C5-LIVE-MINERL-BACKEND-WIRING`，当前只剩 typed target-block / fluid truth 子项；完成前 production capability gate 保持关闭。真实 MineRL、Gradle 与 MineRL/Minecraft 运行仍需用户逐次单独授权。

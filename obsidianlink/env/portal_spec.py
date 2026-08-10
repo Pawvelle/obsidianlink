@@ -13,12 +13,32 @@ PORTAL_ENV_NAME = "ObsidianLinkPortalA0-v0"
 PORTAL_GRID_NAME = "portal_build_region"
 PORTAL_GRID_ORIGIN_NAME = f"{PORTAL_GRID_NAME}_origin"
 PORTAL_TRANSITION_NAME = "portal_transition"
-# The MineRL 1.0.2 bridge does not reliably apply absolute AgentStart
-# placement. The fixed world seed still gives a repeatable world spawn, and
-# the evaluator grid is anchored to that spawn instead of hardcoded world
-# coordinates.
+#: Stable, closed set of items the bridge may report as the
+#: currently selected hotbar slot. The bridge may also report
+#: ``"empty"`` when the hotbar slot is empty; the backend turns
+#: that into ``None`` on the public :class:`Observation`. The set
+#: is the union of the legacy A0 items and the R6 C3 / C4 / C5
+#: driver items.
+PORTAL_SELECTABLE_ITEMS: tuple[str, ...] = (
+    "air",
+    "obsidian",
+    "dirt",
+    "water_bucket",
+    "lava_bucket",
+    "cobblestone",
+    "flint_and_steel",
+)
+# ``HumanSurvival`` already installs MineRL's real
+# ``EquippedItemObservation`` handler.  Its translated top-level key is
+# ``equipped_items`` and its main-hand item lives at
+# ``equipped_items.mainhand.type``.
+PORTAL_SELECTED_ITEM_NAME = "equipped_items"
+#: The MineRL 1.0.2 bridge does not reliably apply absolute AgentStart
+#: placement. The fixed world seed still gives a repeatable world spawn, and
+#: the evaluator grid is anchored to that spawn instead of hardcoded world
+#: coordinates.
 PORTAL_GRID_MIN = (-3, -1, 0)
-PORTAL_GRID_MAX = (3, 5, 6)
+PORTAL_GRID_MAX = (4, 5, 6)
 PORTAL_GRID_SHAPE = (
     PORTAL_GRID_MAX[0] - PORTAL_GRID_MIN[0] + 1,
     PORTAL_GRID_MAX[1] - PORTAL_GRID_MIN[1] + 1,
@@ -37,6 +57,10 @@ PORTAL_GRID_BLOCKS = (
     "fire",
     "portal",
     "nether_portal",
+    "water",
+    "flowing_water",
+    "lava",
+    "flowing_lava",
     "other",
     "missing",
 )

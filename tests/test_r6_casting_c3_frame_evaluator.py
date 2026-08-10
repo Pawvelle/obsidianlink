@@ -1574,6 +1574,7 @@ class ObservationLeakageTests(unittest.TestCase):
                         "timestamp",
                         "frame",
                         "visible_inventory",
+                        "selected_item",
                         "messages",
                         "workflow_stage",
                     },
@@ -1700,7 +1701,7 @@ class OriginAnchorTests(unittest.TestCase):
     def test_convert_all_propagates_errors(self) -> None:
         anchor = default_c3_anchor()
         with self.assertRaisesRegex(ValueError, "offsets\\[0\\]"):
-            anchor.convert_all(((4, 0, 0),))
+            anchor.convert_all(((5, 0, 0),))
         with self.assertRaisesRegex(TypeError, "non-None sequence"):
             anchor.convert_all(None)  # type: ignore[arg-type]
 

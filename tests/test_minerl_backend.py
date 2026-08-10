@@ -12,6 +12,7 @@ from obsidianlink.core.types import MacroAction
 from obsidianlink.env.minerl_backend import MineRLEnvironmentBackend
 from obsidianlink.env.portal_spec import (
     PORTAL_GRID_BLOCKS,
+    PORTAL_GRID_SHAPE,
     PORTAL_GRID_SIZE,
     PortalA0EnvSpec,
 )
@@ -47,7 +48,7 @@ def _frame_offsets() -> list[tuple[int, int, int]]:
 
 def _offset_to_flat_index(
     offset: tuple[int, int, int],
-    shape: tuple[int, int, int] = (7, 7, 7),
+    shape: tuple[int, int, int] = PORTAL_GRID_SHAPE,
 ) -> int:
     return (
         offset[1] * shape[0] * shape[2]
@@ -116,6 +117,11 @@ class _ControlledMineRLEnv:
         self._dimension = "minecraft:overworld"
         self._portal_transition: dict[str, Any] | None = None
         self._position_override: dict[str, float] | None = None
+        # The scripted-driver tests request hundreds of observations.  Reuse
+        # an immutable blank frame so the fixture tests backend behaviour
+        # without allocating hundreds of megabytes of identical POV arrays.
+        self._pov = np.zeros((360, 640, 3), dtype=np.uint8)
+        self._pov.flags.writeable = False
         self.grid = np.zeros(PORTAL_GRID_SIZE, dtype=np.int32)
         if pre_existing_frame or pre_existing_activated:
             _apply_obsidian(self.grid, _frame_offsets())
@@ -195,7 +201,7 @@ class _ControlledMineRLEnv:
         else:
             position = {"xpos": 0.5, "ypos": 64.0, "zpos": 0.5}
         observation = {
-            "pov": np.zeros((360, 640, 3), dtype=np.uint8),
+            "pov": self._pov,
             "inventory": {
                 "obsidian": np.asarray(10, dtype=np.int64),
                 "flint_and_steel": np.asarray(1, dtype=np.int64),

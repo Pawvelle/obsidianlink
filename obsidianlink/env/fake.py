@@ -90,6 +90,7 @@ class FakeEnvironmentBackend:
         # surface.  Although it embeds C4 truth, only the C5 workflow may
         # inject or retrieve this sixth evaluator-only slot.
         self._nether_entry_evaluation_state: FrozenNetherEntryEvaluationState | None = None
+        self._selected_items: dict[str, str | None] = {}
 
     @classmethod
     def with_capabilities(
@@ -147,6 +148,12 @@ class FakeEnvironmentBackend:
         self._ignition_evaluation_state = None
         # R6 C5 Nether-entry truth follows the same rule.
         self._nether_entry_evaluation_state = None
+        self._selected_items = {
+            agent_id: self._default_selected_item(
+                task.initial_inventories[agent_id]
+            )
+            for agent_id in task.agent_ids
+        }
         return self._observations()
 
     def step(self, actions: Mapping[str, MacroAction]) -> BackendStep:
@@ -155,6 +162,10 @@ class FakeEnvironmentBackend:
             raise ValueError("actions must contain every task agent exactly once")
         if any(not isinstance(action, MacroAction) for action in actions.values()):
             raise ValueError("actions must contain MacroAction values")
+        for agent_id, action in actions.items():
+            if action.action_type in {"equip_item", "use_item", "place_block"}:
+                if action.target in task.initial_inventories[agent_id]:
+                    self._selected_items[agent_id] = action.target
         self._step_id += 1
         if self._evaluation_state is not None:
             state = self._evaluation_state
@@ -180,6 +191,7 @@ class FakeEnvironmentBackend:
         self._ignition_evaluation_state = None
         # R6 C5 Nether-entry truth follows the same rule.
         self._nether_entry_evaluation_state = None
+        self._selected_items = {}
         return BackendStep(
             episode_id=task.task_id,
             step_id=self._step_id,
@@ -485,7 +497,24 @@ class FakeEnvironmentBackend:
                 timestamp=timestamp,
                 frame={"backend": "fake", "step_id": self._step_id},
                 visible_inventory=task.initial_inventories[agent_id],
+                selected_item=self._selected_items.get(agent_id),
                 workflow_stage=task.workflow,
             )
             for agent_id in task.agent_ids
         }
+
+    @staticmethod
+    def _default_selected_item(
+        inventory: Mapping[str, int],
+    ) -> str | None:
+        """Return the first item with positive quantity, or ``None``.
+
+        The fake backend never runs a real hotbar; the default
+        selected item is the deterministic first non-empty entry of
+        the agent's initial inventory. The value is read from the
+        task spec, not from the agent's request stream.
+        """
+        for item, quantity in inventory.items():
+            if isinstance(quantity, int) and not isinstance(quantity, bool) and quantity > 0:
+                return str(item)
+        return None

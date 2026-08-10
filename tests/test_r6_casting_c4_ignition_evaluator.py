@@ -2377,6 +2377,7 @@ class ObservationLeakageTests(unittest.TestCase):
                         "timestamp",
                         "frame",
                         "visible_inventory",
+                        "selected_item",
                         "messages",
                         "workflow_stage",
                     },

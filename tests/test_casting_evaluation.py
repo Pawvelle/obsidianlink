@@ -1092,9 +1092,18 @@ class FakeBackendCastingStateTests(unittest.TestCase):
 
 
 class CurrentMineRLStateTests(unittest.TestCase):
-    """The real MineRL backend must still fail closed for casting-c1."""
+    """The production backend exposes the typed truth surface that
+    R6-C5-LIVE-MINERL-BACKEND-WIRING wired through the
+    MineRL bridge.
+    """
 
-    def test_minerl_casting_c1_capabilities_still_gap(self) -> None:
+    def test_minerl_casting_c1_capabilities_are_honest(self) -> None:
+        # The production backend now exposes typed
+        # target-block / fluid truth on the evaluator-only
+        # surface. The pre-episode gate must therefore accept
+        # the casting C1 task on the production manifest. The
+        # fail-closed contract is exercised on a per-instance
+        # downgraded manifest in a separate test.
         caps = MineRLEnvironmentBackend.casting_c1_capabilities()
         self.assertIsInstance(caps, BackendCapabilities)
         for field in (
@@ -1102,29 +1111,22 @@ class CurrentMineRLStateTests(unittest.TestCase):
             "can_select_lava_bucket",
             "can_use_water_bucket",
             "can_use_lava_bucket",
+            "exposes_public_inventory",
             "exposes_selected_item",
             "exposes_target_block_truth",
             "exposes_fluid_truth",
         ):
-            self.assertFalse(
+            self.assertTrue(
                 getattr(caps, field),
-                f"MineRL {field} must stay False until wired in",
+                f"MineRL {field} must be wired",
             )
-        # The full gate must therefore still raise.
-        with self.assertRaises(CapabilityMismatchError) as ctx:
+        self.assertIsNone(
             assert_casting_c1_capabilities(caps, task_id=EPISODE_ID)
-        for expected in (
-            "select_water_bucket",
-            "select_lava_bucket",
-            "use_water_bucket",
-            "use_lava_bucket",
-            "selected_item",
-            "target_block_truth",
-            "fluid_truth",
-        ):
-            self.assertIn(expected, ctx.exception.missing)
+        )
 
-    def test_minerl_casting_reset_still_rejected_before_env_creation(self) -> None:
+    def test_minerl_incomplete_manifest_rejects_casting_c1_before_env_creation(
+        self,
+    ) -> None:
         factory_calls: list[str] = []
 
         def tracking_factory(task: object) -> object:
@@ -1137,12 +1139,24 @@ class CurrentMineRLStateTests(unittest.TestCase):
             env_factory=tracking_factory,  # type: ignore[arg-type]
             reset_warmup_steps=0,
         )
+        # Override the per-instance capabilities to report an
+        # incomplete manifest. The static helper stays honest; the
+        # gate respects the per-instance override.
+        incomplete_caps = dataclasses.replace(
+            BackendCapabilities.full(),
+            can_use_water_bucket=False,
+            exposes_fluid_truth=False,
+        )
+        backend.capabilities = lambda: incomplete_caps  # type: ignore[method-assign]
         backend.open()
         try:
-            with self.assertRaises(CapabilityMismatchError):
+            with self.assertRaises(CapabilityMismatchError) as ctx:
                 backend.reset(casting_c1_task())
             self.assertEqual(factory_calls, [])
             self.assertIsNone(backend._env)
+            self.assertEqual(
+                ctx.exception.missing, ("use_water_bucket", "fluid_truth")
+            )
         finally:
             backend.close()
 

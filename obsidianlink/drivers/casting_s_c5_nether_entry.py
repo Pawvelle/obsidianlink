@@ -2378,9 +2378,20 @@ class _ResetProxy:
     driver never inspects it directly; it just hands it to
     ``backend.reset`` and uses the returned
     :class:`Observation`.
+
+    The R6-C5-LIVE-MINERL-BACKEND-WIRING milestone also drives
+    :class:`~obsidianlink.env.minerl_backend.MineRLEnvironmentBackend`
+    which reads ``task.route`` and ``task.difficulty`` in its
+    reset body. The C5 context is always for a ``lava_casting``
+    casting task; the proxy exposes the canonical values for
+    that family. ``world_seed`` is exposed so the MineRL
+    backend can call ``env.seed``.
     """
 
     context: PublicC5NetherEntryDriverContext
+    world_seed: int = 0
+    route: str = "lava_casting"
+    difficulty: int = 4
 
     @property
     def task_id(self) -> str:

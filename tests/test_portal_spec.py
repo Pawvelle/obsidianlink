@@ -56,6 +56,7 @@ class PortalA0EnvSpecTests(unittest.TestCase):
         self.assertIn('type="obsidian"', xml)
         self.assertIn('type="flint_and_steel"', xml)
         self.assertIn(f'name="{PORTAL_GRID_NAME}"', xml)
+        self.assertNotIn("ObservationFromFluidGrid", xml)
         self.assertIn('atSpawn="true"', xml)
         self.assertIn(
             '<Placement x="0.5" y="4.0" z="0.5" yaw="0.0" pitch="0.0"/>',
@@ -69,12 +70,16 @@ class PortalA0EnvSpecTests(unittest.TestCase):
         blocks = ["minecraft:air"] * PORTAL_GRID_SIZE
         blocks[0] = "minecraft:obsidian"
         blocks[1] = "minecraft:unexpected_block"
+        blocks[2] = "minecraft:water"
+        blocks[3] = "minecraft:lava"
         result = PortalGridObservation().from_hero({PORTAL_GRID_NAME: blocks})
         self.assertEqual(result.shape, (PORTAL_GRID_SIZE,))
         self.assertEqual(
             int(result[0]), PORTAL_GRID_BLOCKS.index("obsidian")
         )
         self.assertEqual(int(result[1]), PORTAL_GRID_UNKNOWN_ID)
+        self.assertEqual(int(result[2]), PORTAL_GRID_BLOCKS.index("water"))
+        self.assertEqual(int(result[3]), PORTAL_GRID_BLOCKS.index("lava"))
         self.assertEqual(result.dtype, np.int32)
 
     def test_grid_origin_observation_preserves_world_anchor(self) -> None:

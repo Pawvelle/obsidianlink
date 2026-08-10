@@ -24,9 +24,9 @@ Single-Agent 与 Multi-Agent 是和任务族正交的 Agent Modes：
 
 ## Current Implementation
 
-当前阶段：`R6-C5-DETERMINISTIC-DRIVER` 已完成离线实现（C5 evaluator + 347-step C5 deterministic driver（14-cell × 24 step C3 cast sub-plan + 4 step C4 ignition sub-plan + 7 step 有限移动/settle 的 C5 portal approach / entry sub-plan）+ 严格 public context 与固定库存边界 + capability gate；142 个 C5 driver 专项测试与全量 1089 个离线测试通过；C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；没有真实 MineRL Nether entry 证据、没有正式 benchmark episode；下一任务冻结为 `R6-C5-LIVE-MINERL-BACKEND-WIRING`，真实环境操作仍需单独授权）
+当前阶段：`R6-C5-LIVE-MINERL-BACKEND-WIRING` 完成（offline）。MineRL 动作翻译已接通任务库存顺序对应的动态 hotbar、有限 `duration_ticks`、严格拒绝动作和 MineRL 自带的 `equipped_items.mainhand.type` selected-item 观察；MineRL backend 通过 5 个 typed truth 入口将 Malmo 支持的单一 `ObservationFromGrid` 数据（raw `portal_grid`，同时包含方块与流体）及 evaluator-only `portal_transition` 投影到 C1–C5 evaluator state。离线生产路径测试已覆盖 C1–C5 success 与 fail-closed 归因；`casting_c1_capabilities()` 因此在 offline manifest 中报告 target-block/fluid truth 能力。C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；真实 MineRL/Minecraft 和 `portal_transition` bridge 尚未验证。
 
-当前 active implementation 是 `casting_c3_fixed`：三个有序 target cell 的固定连续浇筑任务，正式分类为 Casting-S-C2 / fixed，兼容名称为 `casting_s_c2_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 taxonomy 的 C3（完整门框）。`casting_c1_fixed` 继续作为 Casting-S-C1 回归合同保留。R6-C3/C4/C5 已在 FakeBackend 上完成离线证明（evaluator + deterministic driver），**没有**实现真实 MineRL、Ruined/Adaptive/Multi-Agent、Gradle 或模型 API；C5 仍保持 `implementation_status="contract_only"`，不冒充正式 live implementation。
+当前 active implementation 仍是 Casting-S-C2 / fixed 的 `casting_c3_fixed`。R6-C3/C4/C5 evaluator + deterministic driver 已在 FakeBackend 上完成离线证明；MineRL backend 已接通 typed casting evaluator truth（offline-only），不冒充 live implementation。
 
 [`benchmark/catalog/tasks.json`](benchmark/catalog/tasks.json) 是任务身份、taxonomy、兼容路径和发布可见性的统一索引。早期 `route_a_a0` 实例被明确标为 calibration/regression，不计入正式 Benchmark task matrix；详细兼容规则见 [TASK_REGISTRY.md](docs/architecture/TASK_REGISTRY.md)。
 

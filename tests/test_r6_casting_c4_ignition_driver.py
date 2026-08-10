@@ -2410,7 +2410,7 @@ class ObservationSchemaTests(unittest.TestCase):
                     ),
                 )
 
-    def test_observation_schema_is_locked_to_eight_public_fields(self) -> None:
+    def test_observation_schema_is_locked_to_nine_public_fields(self) -> None:
         backend = FakeEnvironmentBackend()
         backend.open()
         observations = backend.reset(
@@ -2427,6 +2427,7 @@ class ObservationSchemaTests(unittest.TestCase):
                 "timestamp",
                 "frame",
                 "visible_inventory",
+                "selected_item",
                 "messages",
                 "workflow_stage",
             },
@@ -3389,7 +3390,7 @@ class RegressionTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn('"status": "ok"', result.stdout)
-        self.assertIn('"phase": "r6_c5_deterministic_driver"', result.stdout)
+        self.assertIn('"phase": "r6_c5_live_minerl_backend_wiring_done"', result.stdout)
         self.assertNotIn("C4 / C5 runtime components", result.stdout)
 
     def test_check_environment_script(self) -> None:
@@ -3404,7 +3405,7 @@ class RegressionTests(unittest.TestCase):
             timeout=120,
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn('"phase": "r6_c5_deterministic_driver"', result.stdout)
+        self.assertIn('"phase": "r6_c5_live_minerl_backend_wiring_done"', result.stdout)
 
 
 # ----------------------------------------------------------------------
