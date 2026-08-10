@@ -162,7 +162,13 @@ class ContractInstanceTests(unittest.TestCase):
                 self.assertEqual(config["status"], "contract_only")
                 self.assertEqual(config["backend"], "not_implemented")
                 self.assertEqual(config["planner"], "not_implemented")
-                self.assertEqual(config["evaluator"], "not_implemented")
+                expected_evaluator = (
+                    "obsidianlink.evaluation.casting_nether_entry_evaluator."
+                    "FrozenNetherEntryEvaluator"
+                    if level == "C5"
+                    else "not_implemented"
+                )
+                self.assertEqual(config["evaluator"], expected_evaluator)
                 self.assertFalse(config["allow_live_run"])
                 self.assertTrue(config["requires_gradle_approval"])
                 self.assertTrue(config["requires_minerl_run_approval"])

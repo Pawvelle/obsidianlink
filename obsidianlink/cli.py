@@ -324,7 +324,7 @@ def _offline_contract_check() -> dict[str, object]:
     taxonomy["compatibility_task_name"] = active_entry.canonical_name
     return {
         "status": "ok",
-        "phase": "r6_c3_deterministic_driver",
+        "phase": "r6_c5_deterministic_driver",
         "active_task": active_entry.compatibility_id,
         "task_taxonomy": taxonomy,
         "task_catalog_version": catalog.catalog_version,
@@ -340,11 +340,15 @@ def _offline_contract_check() -> dict[str, object]:
             "execution against Minecraft, and no model API call were made. "
             "The casting evaluators are type-strict, fail-closed, and do not "
             "simulate Minecraft fluid physics. "
-            "The R6 Casting-S-C3 frozen-frame evaluator and deterministic "
-            "FakeBackend driver are implemented and covered by the offline test "
-            "suite; this compact check does not execute that 336-step driver. "
-            "C4 / C5 runtime components and live MineRL remain unimplemented, "
-            "and no MineRL / Gradle / model API call was performed in this check."
+            "The R6 Casting-S-C3 frozen-frame evaluator/driver, R6 Casting-S-C4 "
+            "ignition evaluator/driver, and R6 Casting-S-C5 Nether-entry "
+            "evaluator/driver are implemented and covered by the offline "
+            "test suite; this compact check does not execute the 336-step C3, "
+            "340-step C4, or 347-step C5 driver. The C5 driver and the C5 "
+            "FakeBackend truth-slot path are limited to offline FakeBackend "
+            "proof; live MineRL, Gradle, and model API calls remain "
+            "unimplemented, and no MineRL / Gradle / model API call was "
+            "performed in this check."
         ),
     }
 

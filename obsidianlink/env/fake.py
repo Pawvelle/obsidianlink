@@ -15,6 +15,9 @@ from obsidianlink.evaluation.casting_frame_evaluator import (
 from obsidianlink.evaluation.casting_ignition_evaluator import (
     FrozenIgnitionEvaluationState,
 )
+from obsidianlink.evaluation.casting_nether_entry_evaluator import (
+    FrozenNetherEntryEvaluationState,
+)
 from obsidianlink.evaluation.continuous_casting import (
     ContinuousCastingEvaluationState,
 )
@@ -83,6 +86,10 @@ class FakeEnvironmentBackend:
         # This slot is the evaluator-only truth path required by
         # R6-C4-IGNITION-EVALUATOR.
         self._ignition_evaluation_state: FrozenIgnitionEvaluationState | None = None
+        # R6 Casting-S-C5 entry truth is isolated from every lower-level
+        # surface.  Although it embeds C4 truth, only the C5 workflow may
+        # inject or retrieve this sixth evaluator-only slot.
+        self._nether_entry_evaluation_state: FrozenNetherEntryEvaluationState | None = None
 
     @classmethod
     def with_capabilities(
@@ -138,6 +145,8 @@ class FakeEnvironmentBackend:
         self._frame_evaluation_state = None
         # R6 C4 ignition truth follows the same rule.
         self._ignition_evaluation_state = None
+        # R6 C5 Nether-entry truth follows the same rule.
+        self._nether_entry_evaluation_state = None
         return self._observations()
 
     def step(self, actions: Mapping[str, MacroAction]) -> BackendStep:
@@ -169,6 +178,8 @@ class FakeEnvironmentBackend:
         self._frame_evaluation_state = None
         # R6 C4 ignition truth follows the same rule.
         self._ignition_evaluation_state = None
+        # R6 C5 Nether-entry truth follows the same rule.
+        self._nether_entry_evaluation_state = None
         return BackendStep(
             episode_id=task.task_id,
             step_id=self._step_id,
@@ -399,6 +410,49 @@ class FakeEnvironmentBackend:
         """
         self._ignition_evaluation_state = None
 
+    def set_nether_entry_evaluation_state(
+        self, state: FrozenNetherEntryEvaluationState
+    ) -> None:
+        """Inject identity-guarded evaluator-only C5 transition truth."""
+        task = self._require_task()
+        if not isinstance(state, FrozenNetherEntryEvaluationState):
+            raise TypeError(
+                "nether entry evaluation state must be a "
+                "FrozenNetherEntryEvaluationState, "
+                f"got {type(state).__name__}"
+            )
+        if task.workflow != "casting_s_c5_fixed":
+            raise ValueError(
+                "nether entry evaluation state requires casting_s_c5_fixed "
+                "workflow"
+            )
+        if state.episode_id != task.task_id:
+            raise ValueError(
+                "nether entry evaluation state episode_id must match current task"
+            )
+        if state.step_id != self._step_id:
+            raise ValueError(
+                "nether entry evaluation state step_id must match current backend step"
+            )
+        if state.agent_id not in task.agent_ids:
+            raise ValueError(
+                "nether entry evaluation state agent_id must be in task.agent_ids"
+            )
+        self._nether_entry_evaluation_state = state
+
+    def get_nether_entry_evaluation_state(
+        self,
+    ) -> FrozenNetherEntryEvaluationState:
+        """Return injected C5 truth, or fail closed when unavailable."""
+        self._require_task()
+        if self._nether_entry_evaluation_state is None:
+            raise RuntimeError("nether entry evaluation state is unavailable")
+        return self._nether_entry_evaluation_state
+
+    def clear_nether_entry_evaluation_state(self) -> None:
+        """Drop the C5 evaluator-only truth slot."""
+        self._nether_entry_evaluation_state = None
+
     def close(self) -> None:
         self._opened = False
         self._task = None
@@ -408,6 +462,7 @@ class FakeEnvironmentBackend:
         self._continuous_casting_evaluation_state = None
         self._frame_evaluation_state = None
         self._ignition_evaluation_state = None
+        self._nether_entry_evaluation_state = None
 
     def _require_open(self) -> None:
         if not self._opened:

@@ -296,7 +296,13 @@ def assert_casting_c1_capabilities(
 # inventory, target-block-truth, and fluid-truth capabilities. Keep
 # unrelated workflows (e.g. ``route_a_a0``) outside this gate.
 _GATED_WORKFLOWS: frozenset[str] = frozenset(
-    {"casting_c1_fixed", "casting_c3_fixed", "casting_s_c3_fixed"}
+    {
+        "casting_c1_fixed",
+        "casting_c3_fixed",
+        "casting_s_c3_fixed",
+        "casting_s_c4_fixed",
+        "casting_s_c5_fixed",
+    }
 )
 
 

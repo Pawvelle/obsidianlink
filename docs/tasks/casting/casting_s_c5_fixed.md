@@ -1,6 +1,6 @@
 # `casting_s_c5_fixed` 浇筑、点火与进入 Nether 任务（C5 合同冻结）
 
-`casting_s_c5_fixed` 是 **Casting-S-C5 / fixed** 端到端任务合同。它继承 C3 的水/熔岩 full-ring 浇筑和 C4 的固定点火规则，再要求指定 Agent 通过同一个本 episode 门框进入 Nether。本阶段不实现 evaluator、driver 或真实 MineRL 接入。
+`casting_s_c5_fixed` 是 **Casting-S-C5 / fixed** 端到端任务合同。它继承 C3 的水/熔岩 full-ring 浇筑和 C4 的固定点火规则，再要求指定 Agent 通过同一个本 episode 门框进入 Nether。C5 evaluator + 347-step C5 deterministic driver 均已在 FakeBackend 上离线实现；真实 MineRL 接入、真实维度切换证据采集、正式 benchmark episode 与 live runs 仍未实现。
 
 ## 固定合同
 
@@ -52,6 +52,6 @@ Agent 自身正常 observation 中的公开 dimension 状态可以保留，但 e
 
 ## 当前实现状态
 
-已冻结 C5 合同、catalog、配置、文档和离线一致性测试。未实现 Nether-entry evaluator、deterministic driver、真实 MineRL 或模型接入。
+已冻结 C5 合同、catalog、配置和文档，并实现 `FrozenNetherEntryEvaluator`、typed `NetherEntryEvidence`、C4 success 复验、transition/agent/dimension/portal/frame-identity 归因、FakeBackend 独立 evaluator-only truth 槽、347-step C5 deterministic driver（14-cell × 24 step C3 cast sub-plan + 4 step C4 ignition sub-plan + 7 step C5 portal approach / entry sub-plan：4 次接近移动、1 次对齐移动、1 次穿门移动、1 次 settle）和离线测试。
 
-下一子任务：`R6-C5-NETHER-ENTRY-EVALUATOR`，但必须依次完成 C3、C4 evaluator 后进行。
+C5 driver 仅是 FakeBackend 离线证明，**没有**真实 MineRL/Minecraft Nether entry 证据，没有正式 benchmark episode；Agent 初始朝向、portal 平面与固定前进轨迹在真实环境中的对齐也尚未验证。下一阶段工程任务只能基于实际完成范围谨慎填写。

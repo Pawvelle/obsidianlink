@@ -1,24 +1,162 @@
 # 当前状态
 
-更新时间：2026-08-09
+更新时间：2026-08-10
 
 ## 当前唯一目标
 
-任务：`R6-C4-IGNITION-EVALUATOR`（C4 ignition evaluator；C4 evaluator 已离线实现，C4 driver、C5 evaluator、真实 MineRL 仍未实现）
+任务：`R6-C5-DETERMINISTIC-DRIVER`（C5 evaluator 与 Nether-entry driver 已在 FakeBackend 上完成离线证明；真实 MineRL 仍未实现）
 
-下一任务：`R6-C4-DETERMINISTIC-DRIVER`（C4 deterministic driver；必须等 C4 ignition evaluator 离线完成后才能启动）
+下一任务：`R6-C5-LIVE-MINERL-BACKEND-WIRING`（仅冻结任务名；真实 backend、Gradle 或 MineRL/Minecraft 运行均需用户单独授权）
 
 当前 active implementation 仍是 Casting-S-C2 / fixed 的 `casting_c3_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 B0 taxonomy 的 C3；文档级兼容名称为 `casting_s_c2_fixed`。`casting_c1_fixed` 保留为 Casting-S-C1 回归合同。
 
-R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、live_run_allowed=false）。R6-C3-FRAME-EVALUATOR 与 R6-C3-DETERMINISTIC-DRIVER 子阶段在 FakeBackend 上完成了 C3 frame evaluator、task-origin / truth-grid 坐标锚定、C3 deterministic driver 与严格 public context 边界。**R6-C4-IGNITION-EVALUATOR 子阶段（本轮）**在 FakeBackend 上完成了 C4 ignition evaluator + 精确目标 / 动作归因 / 4-step 因果窗口 / `latched_frame_identity` 绑定 / 严格 evaluator-only truth 隔离的离线证明；C4 ignition driver、C5 Nether-entry evaluator/driver、真实 MineRL 接入、Gradle、模型 API 仍然不在本阶段范围。
+R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、live_run_allowed=false）。R6-C3 与 R6-C4 已在 FakeBackend 上完成 evaluator + deterministic driver 离线证明。R6-C5 已完成 Nether-entry evaluator + 347-step deterministic driver 离线证明。C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；C5 不冒充正式 live implementation。
 
-## R6-C4-IGNITION-EVALUATOR 已完成（FakeBackend 离线证明）
 
-本轮设计上有意分两层：evidence 构造器只做结构/类型校验，evaluator
-做语义判定。语义错误必须能通过公开构造 API 进入 evaluator 并被
-分类成稳定的 fail-closed outcome；frozen dataclass 的不可写性只在
-专门的 immutability 测试里用 `object.__setattr__` 验证
-`FrozenInstanceError`，**不**用于制造业务负例。
+## R6-C5-DETERMINISTIC-DRIVER 已完成（FakeBackend 离线证明）
+
+1. **新增 C5 公开 Nether-entry 上下文边界** [`obsidianlink/core/casting_s_c5_nether_entry_context.py`](obsidianlink/core/casting_s_c5_nether_entry_context.py)：
+   - `build_public_c5_nether_entry_driver_context_from_task(task)` 是整个 R6 C5 driver 家族中**唯一**允许读取 task `scenario_parameters` 的函数；它只读取 `public_task_spec.frame_plan.fixed_offsets`、 `public_task_spec.ignition_plan`（action=`use_item`、item=`flint_and_steel`、target_offset=`[1, 1, 1]`、target_policy=`exact`）和 `public_task_spec.nether_entry_goal`（designated_agent_ids=`["agent_1"]`、source_dimension=`minecraft:overworld`、target_dimension=`minecraft:the_nether`），以及 task limits / initial inventories，**忽略** `evaluator_contract` 与任何 evaluator-only 字段；
+   - 返回严格冻结的 [`PublicC5NetherEntryDriverContext`](obsidianlink/drivers/casting_s_c5_nether_entry.py)：workflow / family / mode / level / layout / agent_id / 14 个有序 target offsets / 公开 ignition plan / 公开 nether_entry goal / 不可变 initial_inventory（MappingProxyType）/ task_step_limit / task_time_limit；任何未知 family / mode / level / layout、越界或重排 target offsets、bool 充当 int、缺失或重复 cell、ignition 字段与公开值不一致、designated agent / 源 / 目标维度不匹配、库存缺失或 bool 都 fail closed，context builder 不再用 `bool(...)` 掩盖原始类型错误。
+
+2. **新增 C5 deterministic driver** [`obsidianlink/drivers/casting_s_c5_nether_entry.py`](obsidianlink/drivers/casting_s_c5_nether_entry.py)：
+   - 显式接受 immutable `PublicC5NetherEntryDriverContext` 作为唯一 TaskInstance-shaped 输入；`run_casting_s_c5_nether_entry_driver` 不读取 scenario_parameters / evaluator_contract / `FrozenFrameIdentity` / `IgnitionActionEvidence` / `PortalActivationEvidence` / `FrozenIgnitionEvaluationState` / `FrozenNetherEntryEvaluationState` / `NetherEntryEvidence` / `FrozenNetherEntryEvaluator` 或任何 evaluator-only 字段；
+   - 默认 plan：14 cell × 24 step = 336 step 的 C3 浇筑子计划 + 4 step 的 C4 ignition 子计划 + 7 step 的 C5 Nether-entry 子计划（4 approach moves + 1 alignment move + 1 portal-traversal move + 1 settle wait）= **347 step** default plan，落在 800 step 任务预算内；每 cell 2 个 `use_item(water|lava)` 视为 evaluator 的 relevant action，2 个 `place_block(cobblestone)` 支撑方块是 plan 内的机械动作但不进入 per-cell evidence；1 个 `use_item(flint_and_steel)` 是 ignition relevant action；portal-traversal `move` 是 nether-entry relevant action；
+   - 运行入口对 caller-supplied plan 做整体等值校验：只能接受由公开 context 与恢复设置生成的完整确定性计划；仅 ignition、仅 entry、截断、重排或重复 entry traversal 的计划在 reset 前 fail closed，不能以 `completed` 绕过 14-cell 浇筑；
+   - 动作白名单严格闭合：`equip_item` / `use_item` / `place_block` / `move` / `wait`；物品白名单 `water_bucket` / `lava_bucket` / `cobblestone` / `flint_and_steel`；`move` 参数固定为有限前进、无横移/冲刺/跳跃；永不放 `obsidian`、driver 不直接修改 dimension 或 portal truth；duration_ticks 1..40；
+   - 预算硬上限：environment step 800、game time 720 秒、plan wait 320、plan length 700、per-action recovery 2、total recovery 32；
+   - 恢复只响应 typed `RecoverableBackendError`，受 per-action 与 total 双重预算；其他异常 fail closed；
+   - driver status 闭集 `completed` / `blocked` / `failed`；永不返回 `success` / `passed`（这些 verdict 仍由 `FrozenNetherEntryEvaluator` 独立判定）；
+   - 结构化事件必须带 `episode_id` / `step_id` / `agent_id` / `cell_index` / `target_offset` / `label` / `phase` / `action_type` / `target` / `relevant_action` / `role` / `attempt`；结果对象 `CastingC5NetherEntryDriverResult` 不可变、类型严格、可序列化、暴露 `as_dict()`；
+   - 新增 `nether_entry_step` / `nether_entry_target_offset` / `nether_entry_approach_step` 让 orchestrator 完全不读 evaluator truth 即可识别 C5 entry 步；`per_cell_relevant_action_records` 复用 C3 表面给 `FrozenFrameEvaluator`；`ignition_*` 字段复用 C4 表面给 `FrozenIgnitionEvaluator`；
+   - 4 个新 PHASE 常量与 4 个新 ROLE 常量（`entry_approach` / `entry_align` / `entry_teleport` / `entry_settle`）严格分离 C3 浇筑、C4 ignition 与 C5 Nether-entry 子计划；
+   - 模块 AST 检查确认：未 import `casting_nether_entry_evaluator` / `casting_ignition_evaluator` / `casting_frame_evaluator` / `agents` / `workflows` / `model` / `planner` 等；未通过 `ast.Attribute` / `ast.Subscript` 访问 `scenario_parameters` / `evaluator_contract` / `_nether_entry_evaluation_state` / `set_nether_entry_evaluation_state` / `get_nether_entry_evaluation_state` / `clear_nether_entry_evaluation_state` / `FrozenFrameIdentity` / `IgnitionActionEvidence` / `PortalActivationEvidence` / `FrozenIgnitionEvaluationState` / `FrozenNetherEntryEvaluationState` / `NetherEntryEvidence` / `FrozenNetherEntryEvaluator` / `agents_in_nether` / `entered_via_episode_portal` / `matched_frame_identity` / `latched_frame_identity` / `pre_transition_position` 等。
+
+3. **不重命名旧 driver**：旧 `obsidianlink/drivers/casting_c3.py` 仍是 R5 / Casting-S-C2 的三 cell 连续浇筑 driver；`obsidianlink/drivers/casting_s_c3_frame.py` 仍是 R6-C3 14-cell driver；`obsidianlink/drivers/casting_s_c4_ignition.py` 仍是 R6-C4 14-cell + 4-step ignition driver；新模块明确命名为 `casting_s_c5_nether_entry.py`，反映 B0 taxonomy 的 C5（Nether entry）合同。四个 driver 互不共享类型。
+
+4. **capability gate** [`obsidianlink/env/capabilities.py`](obsidianlink/env/capabilities.py) 的 `_GATED_WORKFLOWS` 已经包含 `casting_s_c5_fixed`（在 R6-C5-NETHER-ENTRY-EVALUATOR 阶段已加入）；C5 driver 使用同一份 gate，缺桶/选物品/selected_item/target_block_truth/fluid_truth 任一能力时 fail closed。
+
+5. **新增 142 个专项离线测试** [`tests/test_r6_casting_c5_nether_entry_driver.py`](tests/test_r6_casting_c5_nether_entry_driver.py)，覆盖：
+   - 公开上下文严格解析与不可变性（含 family / mode / level / layout / agent / 14 cell / grid 边界 / 重复 / 重排 / bool 充当 int / 库存缺失 / 库存 bool / 库存未知 item / step 预算下限 / ignition 字段与公开值不一致 / designated agent / source / target dimension）；
+   - `build_casting_s_c5_nether_entry_action_plan` 固定 14-cell × 24 + 4 + 7 = 347 步、241 wait、28 cast relevant + 1 ignition relevant + 1 entry relevant、闭集 action / 参数 / 物品 / 阶段 / role；
+   - Plan step validation（cast role 需要 cell_index、ignition / entry role 需要 cell_index=None、target/parameters validation、entry traversal step 验证等）；
+   - 公开 ignition plan 验证（wrong action / wrong item / wrong target / wrong target_policy / ignition_required=False / required 缺失）；
+   - 公开 nether_entry goal 验证（designated agent / source / target dimension drift / required=False / required 缺失）；
+   - Driver result contract（frozen、status 闭集、nether_entry 字段必填、as_dict() detached、JSON 序列化、events 闭集）；
+   - Driver 完整执行（status=completed、347 step、per_cell 2 records、nether_entry traversal 346 step、首个 approach move 341 step、ignition records 339 step、ignition equip 337 step、events 不携带任何 evaluator token）；
+   - 800 step / 720 秒 / 320 wait / 700 plan / 32 total recovery / 2 per-step recovery 预算失败的 fail-closed 行为；
+   - 重复 `RecoverableBackendError` 有限重试、per-step 与 total budget 各自独立耗尽、metadata 透传；
+   - 非 `RecoverableBackendError` 异常（RuntimeError / OSError / TypeError）立即 fail closed；
+   - backend 提前 terminated / truncated 的 blocked 行为；
+   - 每个事件的 episode / step / agent / cell / target_offset / relevant_action / role 身份；
+   - 相同输入的 action 序列、events 与 `as_dict()` 快照完全一致（确定性 replay）；
+   - 闭集 status（`completed` / `blocked` / `failed`），驱动从不返回 `success` / `passed`；
+   - capability gate 缺失能力时 reset 前 fail closed；
+   - driver 拒绝错误 backend（无 reset/step）、错误 plan 类型、仅 entry 计划、仅 ignition 计划、仅 cast 计划、plan 超长、max_environment_steps 越界、max_game_time_seconds 越界、max_wait_steps 越界、total_recovery_budget 越界、重复 entry traversal 等；
+   - AST + 源码双门锁：driver 源文件**不** import C5 / C4 / C3 / 任何 evaluator 表面、**不**调用 `set_nether_entry_evaluation_state` / `get_nether_entry_evaluation_state` / `clear_nether_entry_evaluation_state` / `_nether_entry_evaluation_state`、**不**以代码形式访问 `scenario_parameters` / `evaluator_contract` / `agents_in_nether` / `entered_via_episode_portal` / `matched_frame_identity` / `latched_frame_identity` / `pre_transition_position` 等；
+   - Observation 8 字段 schema 锁住，事件 / final_observation 不携带 nether_entry_evaluation / latched_frame_identity / nether_portal / matched_frame_identity / agents_in_nether / pre_transition_position / entered_via_episode_portal / source_dimension / target_dimension / FrozenNetherEntry / NetherEntryEvidence 等 token；
+   - 端到端 orchestrator（driver + `set_nether_entry_evaluation_state` + `FrozenNetherEntryEvaluator`）返回 `success` / `nether_entry_portal_unknown` / `nether_entry_not_via_episode_portal` / `wrong_entry_agent` / `wrong_source_dimension` / `wrong_target_dimension` / `transition_step_missing` / `pre_transition_position_missing` / `transition_before_activation` / `frame_identity_mismatch` / `step_budget_exceeded` / `ignition_not_completed` 等 outcome；4-step 因果窗口 delta = 4 内 success，5+ 步 activation_outside_window 闭合到 ignition_not_completed；
+   - FakeBackend C1 / C2 / C3 / C4 / C5 槽位独立与互不污染（同一 backend 注入 C1 / C2 后 C3 / C4 / C5 仍空；close 清空所有 5 个槽位；`casting_s_c5_fixed` workflow 校验缺位 fail closed）；
+   - C1 / C2 / C3 / C4 ignition / C5 Nether-entry evaluator 回归不受影响；
+   - 离线 `--check` 与 `check_environment.py` 输出 `phase="r6_c5_deterministic_driver"`。
+
+6. **C1 / C2 / C3 / C4 / C5 回归不受影响**：修复后 C5 driver 专项测试 **142 个**全过；完整测试集、离线检查与 diff 检查结果见本节最终验证记录。
+
+7. **evaluator-only 信息隔离验证**：
+   - 整个 driver 源文件（`obsidianlink/drivers/casting_s_c5_nether_entry.py`）的 AST 检查 + `ast.Attribute` / `ast.Subscript` 扫描确认：`set_nether_entry_evaluation_state` / `get_nether_entry_evaluation_state` / `clear_nether_entry_evaluation_state` / `_nether_entry_evaluation_state` / `_ignition_evaluation_state` / `_frame_evaluation_state` / `_continuous_casting_evaluation_state` / `_casting_evaluation_state` / `FrozenFrameIdentity` / `IgnitionActionEvidence` / `PortalActivationEvidence` / `FrozenIgnitionEvaluationState` / `FrozenIgnitionEvaluationResult` / `FrozenIgnitionEvaluator` / `FrozenNetherEntryEvaluationState` / `FrozenNetherEntryEvaluationResult` / `FrozenNetherEntryEvaluator` / `NetherEntryEvidence` / `build_c4_c3_frame_identity` / `evaluator_contract` / `agents_in_nether` / `entered_via_episode_portal` / `matched_frame_identity` / `latched_frame_identity` / `pre_transition_position` / `scenario_parameters` 全部 0 命中；driver 表面无访问 C5 / C4 / C3 / 任何 evaluator truth 接口的能力；
+   - `Observation` 公开字段集（8 个字段）保持不变；C5 Nether-entry truth 通过 FakeBackend 显式 set/get 注入，不进入 `Observation`；test 验证 15 个 C5 关键字 token 全部缺席于 `Observation` 任意字符串字段与列表元素；
+   - test orchestrator 在 `tests/test_r6_casting_c5_nether_entry_driver.py` 内**独立**通过 `set_nether_entry_evaluation_state` 注入 truth；driver 表面无访问 C5 truth 接口的能力。
+
+8. **未验证限制**：
+   - 真实 MineRL / Minecraft 浇筑、门框建造、点火、Nether entry 仍未验证；
+   - 真实 backend 仍未完整接通 use_item 动作、公开 selected item、目标方块 truth、流体 truth、nether_portal 出现、pre-transition 位置、维度切换 truth；
+   - 真实 task-origin marker 与 evaluator truth-grid origin 的世界坐标锚定、Ruined / Adaptive / Multi-Agent 仍**未**实现；
+   - 当前仅在 FakeBackend 上完成离线证明；C5 driver 与真实 backend 的接线下游仍需后续阶段验证；
+   - 真实 MineRL 中 Agent 初始朝向、portal 平面与固定前进轨迹的对齐尚未验证；当前有限 `move` 序列只完成 FakeBackend 协议证明；
+   - 4 个新增 PHASE 常量与 4 个新 ROLE 常量（`entry_approach` / `entry_align` / `entry_teleport` / `entry_settle`）保留在 `PHASE_VALUES` / `ROLE_VALUES` 闭集内。
+
+9. **下一任务只能根据本次真实完成范围谨慎填写**：本轮 R6-C5-DETERMINISTIC-DRIVER 已完成 C5 deterministic driver + 严格 public context 边界 + 完整计划 fail-closed 校验 + capability gate + 142 个专项测试，**没有**提前实现真实 MineRL、Gradle 或模型 API；下一任务已冻结为 `R6-C5-LIVE-MINERL-BACKEND-WIRING`，真实 backend 接入需用户单独授权。
+
+## R6-C5-NETHER-ENTRY-EVALUATOR 已完成（FakeBackend 离线证明）
+
+1. 新增 [`obsidianlink/evaluation/casting_nether_entry_evaluator.py`](obsidianlink/evaluation/casting_nether_entry_evaluator.py)：
+   - `NetherEntryEvidence`、`FrozenNetherEntryEvaluationState`、`FrozenNetherEntryEvaluationResult` 均为 frozen、严格类型、可 JSON 序列化类型；unknown attribution 使用 `None` 与明确 `False` 分离；
+   - `FrozenNetherEntryEvaluator` 是纯确定性 evaluator，内部复用 `FrozenIgnitionEvaluator` 重新验证 C4 success，不读取 observation、task scenario、driver、planner、Agent 或 workflow；
+   - 指定 `agent_1` 必须从 `minecraft:overworld` 进入 `minecraft:the_nether`，transition 不得早于 activation，并要求切换前位置、`entered_via_episode_portal=True` 和与 C4 latched identity 完全一致的 typed `FrozenFrameIdentity`；
+   - 合同指定的 `nether_entry_portal_unknown` / `nether_entry_not_via_episode_portal` 已实现；错误 Agent/维度、缺 transition step/position、transition 早于 activation、identity 缺失/不匹配、预算与异常终止均 fail closed。
+
+2. FakeBackend 新增独立 `_nether_entry_evaluation_state` 及 set/get/clear API：只接受 `casting_s_c5_fixed`，严格校验 episode/step/agent，reset/step/close 自动清空；C5 truth 不进入 Observation，并与 C1–C4 truth 槽隔离。
+
+3. `casting_s_c5_fixed` 加入 reset 前 capability gate；C5 experiment config 指向离线 evaluator，但继续保持 `status=contract_only`、`allow_live_run=false`、`backend=not_implemented`、`planner=not_implemented`。
+
+4. 新增 9 个专项离线测试，覆盖 success、确定性 replay、JSON 快照、闭集 outcome、全部冻结归因失败路径、C4 failure 不可被进入声明覆盖、严格类型/不可变性、FakeBackend C5 truth 槽生命周期/身份门锁与 evaluator AST 信息隔离；全量 947 个离线测试通过。
+
+5. 未实现/未验证：真实 MineRL/Minecraft 维度切换证据采集、正式 runner 接线、真实 task-origin/world-coordinate anchor、Ruined/Adaptive/Multi-Agent、Gradle 和模型 API。
+
+6. 下一唯一任务是真实 backend 接入或下一阶段工程任务；不得提前接真实 MineRL 或模型。
+
+## R6-C4-DETERMINISTIC-DRIVER 已完成（FakeBackend 离线证明）
+
+1. **新增 C4 公开 19-cell 上下文边界** [`obsidianlink/core/casting_s_c4_ignition_context.py`](obsidianlink/core/casting_s_c4_ignition_context.py)：
+   - `build_public_c4_ignition_driver_context_from_task(task)` 是整个 R6 C4 driver 家族中**唯一**允许读取 task `scenario_parameters` 的函数；它只读取 `public_task_spec.frame_plan.fixed_offsets` 与 `public_task_spec.ignition_plan`（action=`use_item`、item=`flint_and_steel`、target_offset=`[1, 1, 1]`、target_policy=`exact`），以及 task limits / initial inventories，**忽略** `evaluator_contract` 与任何 evaluator-only 字段；
+   - 返回严格冻结的 [`PublicC4IgnitionDriverContext`](obsidianlink/drivers/casting_s_c4_ignition.py)：workflow / family / mode / level / layout / agent_id / 14 个有序 target offsets / 公开 ignition plan / 不可变 initial_inventory（MappingProxyType）/ task_step_limit / task_time_limit；任何未知 family / mode / level / layout、越界或重排 target offsets、bool 充当 int、缺失或重复 cell、ignition 字段与公开值不一致、`ignition_plan.required` 缺失或非 bool、库存缺失或 bool 都 fail closed，context builder 不再用 `bool(...)` 掩盖原始类型错误。
+
+2. **新增 C4 deterministic driver** [`obsidianlink/drivers/casting_s_c4_ignition.py`](obsidianlink/drivers/casting_s_c4_ignition.py)：
+   - 显式接受 immutable `PublicC4IgnitionDriverContext` 作为唯一 TaskInstance-shaped 输入；`run_casting_s_c4_ignition_driver` 不读取 scenario_parameters / evaluator_contract / `FrozenFrameIdentity` / `IgnitionActionEvidence` / `PortalActivationEvidence` / `FrozenIgnitionEvaluationState` 或任何 evaluator-only 字段；
+   - 默认 plan：14 cell × 24 step = 336 step 的 C3 浇筑子计划 + 4 step 的 C4 ignition 子计划（equip + release + use + portal settle）= **340 step**，落在 700 step 任务预算内；每 cell 2 个 `use_item(water|lava)` 视为 evaluator 的 relevant action，2 个 `place_block(cobblestone)` 支撑方块是 plan 内的机械动作但不进入 per-cell evidence；1 个 `use_item(flint_and_steel)` 是 ignition relevant action；
+   - 运行入口对 caller-supplied plan 做整体等值校验：只能接受由公开 context 与恢复设置生成的完整确定性计划；仅点火、截断、重排或重复点火计划在 reset 前 fail closed，不能以 `completed` 绕过 14-cell 浇筑；
+   - 动作白名单严格闭合：`equip_item` / `use_item` / `place_block` / `wait`；目标白名单严格闭合：`water_bucket` / `lava_bucket` / `cobblestone` / `flint_and_steel`；永不放置 `obsidian`、永不下 Nether；ignition target 必须与公开 `[1, 1, 1]` 一致；
+   - 预算硬上限：environment step 700、game time 640 秒、plan wait 320、plan length 700、per-action recovery 2、total recovery 32、per-step `duration_ticks` 1..40；
+   - 恢复只响应 typed `RecoverableBackendError`，受 per-action 与 total 双重预算；其他异常 fail closed；
+   - driver status 闭集 `completed` / `blocked` / `failed`；永不返回 `success` / `passed`（这些 verdict 仍由 `FrozenIgnitionEvaluator` 独立判定）；
+   - 结构化事件必须带 `episode_id` / `step_id` / `agent_id` / `cell_index` / `target_offset` / `label` / `phase` / `action_type` / `target` / `relevant_action` / `role` / `attempt`；结果对象 `CastingC4IgnitionDriverResult` 不可变、类型严格、可序列化、暴露 `as_dict()`；
+   - 新增 `ignition_relevant_action_step` / `ignition_target_offset` / `ignition_equip_step` 让 orchestrator 完全不读 evaluator truth 即可独立构造 `IgnitionActionEvidence`；新增 `per_cell_relevant_action_records` 复用 C3 表面给 C3 frame evaluator；
+   - 5 个新 PHASE 常量（ignition_equip / ignition_use / ignition_portal_settle 等）与 4 个 ROLE 常量（cast / ignition_equip / ignition_use / ignition_settle）严格分离 C3 浇筑与 C4 点火子计划；
+   - 模块 AST 检查确认：未 import `casting_ignition_evaluator` / `casting_frame_evaluator` / `agents` / `workflows` / `model` / `planner` 等；未通过 `ast.Attribute` 访问 `scenario_parameters` / `evaluator_contract` / `_ignition_evaluation_state` / `set_ignition_evaluation_state` / `FrozenFrameIdentity` 等；未调用 `set_ignition_evaluation_state` / `get_ignition_evaluation_state` / `clear_ignition_evaluation_state`。
+
+3. **不重命名旧 driver**：旧 `obsidianlink/drivers/casting_c3.py` 仍是 R5 / Casting-S-C2 的三 cell 连续浇筑 driver；`obsidianlink/drivers/casting_s_c3_frame.py` 仍是 R6-C3 14-cell driver；新模块明确命名为 `casting_s_c4_ignition.py`，反映 B0 taxonomy 的 C4（点火）合同。三个 driver 互不共享类型。
+
+4. **capability gate 升级** [`obsidianlink/env/capabilities.py`](obsidianlink/env/capabilities.py)：`_GATED_WORKFLOWS` 新增 `casting_s_c4_fixed`，确保 reset 前的 capability 检查覆盖 C4 合同；缺桶/选物品/selected_item/target_block_truth/fluid_truth 任一能力时 fail closed。
+
+5. **新增 159 个专项离线测试** [`tests/test_r6_casting_c4_ignition_driver.py`](tests/test_r6_casting_c4_ignition_driver.py)，覆盖：
+   - 公开上下文严格解析与不可变性（含 family / mode / level / layout / agent / 14 cell / grid 边界 / 重复 / 重排 / bool 充当 int / 库存缺失 / bool 数量 / 库存未知 item / step 预算下限 / ignition 字段与公开值不一致）；
+   - `build_casting_s_c4_ignition_action_plan` 固定 14-cell × 24 + 4 = 340 步、240 wait、28 cast relevant + 1 ignition relevant、14 × 17 + 2 = 240 wait、闭集 action / 物品 / 阶段 / role；
+   - Plan step validation（cast role 需要 cell_index、ignition role 需要 cell_index=None、target validation、ignition_use step 验证等）；
+   - 公开 ignition plan 验证（wrong action / wrong item / wrong target / wrong target_policy / ignition_required=False / required 缺失 / 字符串或整数 required 被严格拒绝）；
+   - Driver result contract（frozen、status 闭集、ignition 字段必填、as_dict() detached、JSON 序列化、events 闭集）；
+   - Driver 完整执行（status=completed、340 step、per_cell 2 records、ignition records 339 step、ignition equip 337 step、events 不携带任何 evaluator token）；
+   - 640 step / 640 秒 / 320 wait / 700 plan / 32 total recovery / 2 per-step recovery 预算失败的 fail-closed 行为；
+   - 重复 `RecoverableBackendError` 有限重试、per-step 与 total budget 各自独立耗尽、metadata 透传；
+   - 非 `RecoverableBackendError` 异常（RuntimeError / OSError / TypeError）立即 fail closed；
+   - backend 提前 terminated / truncated 的 blocked 行为；
+   - 每个事件的 episode / step / agent / cell / target_offset / relevant_action / role 身份；
+   - 相同输入的 action 序列、events 与 `as_dict()` 快照完全一致（确定性 replay）；
+   - 闭集 status（`completed` / `blocked` / `failed`），驱动从不返回 `success` / `passed`；
+   - 闭集 PHASE_VALUES（9 个）与 ROLE_VALUES（4 个）锁住；
+   - capability gate 缺失能力时 reset 前 fail closed；
+   - driver 拒绝错误 backend（无 reset/step）、错误 plan 类型、仅点火计划、重复点火计划、plan 超长、max_environment_steps 越界、max_game_time_seconds 越界、max_wait_steps 越界、total_recovery_budget 越界等；
+   - AST + 源码双门锁：driver 源文件**不** import ignition evaluator、**不**调用 `set_ignition_evaluation_state` / `get_ignition_evaluation_state` / `clear_ignition_evaluation_state` / `_ignition_evaluation_state`、**不**以代码形式访问 `scenario_parameters` / `evaluator_contract` / `FrozenFrameIdentity` / `IgnitionActionEvidence` / `PortalActivationEvidence` 等；
+   - Observation 8 字段 schema 锁住，事件 / final_observation 不携带 ignition / latched_frame_identity / nether_portal 等 token；
+   - 端到端 orchestrator：driver + `set_ignition_evaluation_state` + `FrozenIgnitionEvaluator` 返回 `success` / `activation_outside_window` / `activation_before_ignition` / `external_activation` / `wrong_ignition_agent` / `frame_not_built` / `truth_missing` / `step_budget_exceeded` / `ignition_action_missing` / `portal_activation_missing` / `wrong_ignition_action` / `wrong_ignition_item` / `wrong_ignition_target` 各 outcome；4-step 因果窗口 delta = 0/1/4 都 success、5/6 步 activation_outside_window、delta < 0 activation_before_ignition；
+   - FakeBackend C1 / C2 / C3 / C4 truth 槽位独立与互不污染（同一 backend 注入 C1 与 C2 状态后 C3 / C4 仍空；close 清空所有 4 个槽位；`casting_s_c4_fixed` workflow 校验缺位 fail closed）；
+   - C1 / C2 / C3 / C4 ignition evaluator 回归不受影响；
+   - 离线 `--check` 与 `check_environment.py` 仍输出 `status: "ok"`。
+
+6. **C1 / C2 / C3 / portal / 既有 R6 C3 frame evaluator / 既有 R6 C4 ignition evaluator 回归不受影响**：完整测试集 **938 个**全过（779 个旧测试 + 159 个新测试，`python -m unittest discover -s tests -p 'test_*.py'` → `Ran 938 tests in 55.746s` → `OK`），`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过且报告 `phase="r6_c4_deterministic_driver"`；`git diff --check` 干净。
+
+7. **evaluator-only 信息隔离验证**：
+   - 整个 driver 源文件（`obsidianlink/drivers/casting_s_c4_ignition.py`）的 AST 检查 + `ast.Attribute` / `ast.Subscript` 扫描确认：`set_ignition_evaluation_state` / `get_ignition_evaluation_state` / `clear_ignition_evaluation_state` / `_ignition_evaluation_state` / `_frame_evaluation_state` / `_continuous_casting_evaluation_state` / `_casting_evaluation_state` / `FrozenFrameIdentity` / `IgnitionActionEvidence` / `PortalActivationEvidence` / `FrozenIgnitionEvaluationState` / `FrozenIgnitionEvaluationResult` / `FrozenIgnitionEvaluator` / `build_c4_c3_frame_identity` / `evaluator_contract` / `scenario_parameters` 全部 0 命中；driver 表面无访问 ignition / frame truth 接口的能力；
+   - `Observation` 公开字段集（8 个字段）保持不变；C4 ignition truth 通过 FakeBackend 显式 set/get 注入，不进入 `Observation`；test 验证 ignition / latched_frame_identity / nether_portal / wrong_ignition / frame_not_built / public_ignition_target / frame_interior / FrozenFrameIdentity / FrozenIgnition / IgnitionActionEvidence / PortalActivationEvidence 等 12 个关键字 token 全部缺席于 `Observation` 任意字符串字段与列表元素；
+   - test orchestrator 在 `tests/test_r6_casting_c4_ignition_driver.py` 内**独立**通过 `set_ignition_evaluation_state` 注入 truth；driver 表面无访问 frame truth 接口的能力。
+
+8. **未验证限制**：
+   - 真实 MineRL / Minecraft 浇筑、门框建造与点火仍未验证；
+   - 真实 backend 仍未完整接通 use_item 动作、公开 selected item、目标方块 truth、流体 truth、维度切换 truth；
+   - C5 Nether-entry evaluator/driver、真实 task-origin marker 与 truth-grid origin 的世界坐标锚定、Ruined / Adaptive / Multi-Agent 仍**未**实现；
+   - 当前仅在 FakeBackend 上完成离线证明；C4 driver 与真实 backend 的接线下游仍需后续阶段验证；
+   - 9 个新增 PHASE 常量与 4 个 ROLE 常量在闭集内（`PHASE_VALUES` / `ROLE_VALUES`），但 PHASE_RECOVERY 仍保留为 driver 内部事件专用，不进入 plan。
+
+9. **下一任务只能根据本次真实完成范围谨慎填写**：本轮 R6-C4-DETERMINISTIC-DRIVER 已完成 C4 deterministic driver + 严格 public context 边界 + 完整计划 fail-closed 校验 + capability gate + 159 个专项测试通过 + 全量 938 个测试通过，**没有**提前实现 C5 Nether-entry evaluator/driver、真实 MineRL、Gradle 或模型 API；下一任务严格限定为 `R6-C5-NETHER-ENTRY-EVALUATOR`。
 
 1. **新增 C4 ignition evaluator** [`obsidianlink/evaluation/casting_ignition_evaluator.py`](obsidianlink/evaluation/casting_ignition_evaluator.py)：
    - 不可变、类型严格、可序列化的 evaluator-only 表面：
@@ -440,7 +578,7 @@ R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、ta
 
 ## 下一任务
 
-`R6-C4-IGNITION-EVALUATOR` 已完成（C4 ignition evaluator + typed `FrozenFrameIdentity` + 分层构造合同 + 4-step 因果窗口 + 严格 evaluator-only truth 隔离 + 144 个专项测试通过、全量 779 个测试通过）。下一阶段唯一任务是 `R6-C4-DETERMINISTIC-DRIVER`：在 FakeBackend 上接 14-cell 浇筑 + 1 次合法 `use_item(flint_and_steel)` + 4-step 因果窗口 + frame identity 绑定的确定性 driver，仍不得提前实现 C5、R7 或真实 MineRL。C5 继续保持 `implementation_status="contract_only"`。
+`R6-C5-DETERMINISTIC-DRIVER` 已完成：FakeBackend 上 C5 evaluator + 347-step C5 deterministic driver + 严格 public context/固定库存边界 + 完整计划 fail-closed 校验 + capability gate + 142 个专项测试通过；C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`，不冒充正式 live implementation。下一任务冻结为 `R6-C5-LIVE-MINERL-BACKEND-WIRING`；真实 backend、MineRL、Gradle 或模型 API 工作需用户另行授权。
 
 ## R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE 已完成（保留历史）
 
@@ -522,7 +660,7 @@ Task catalog、严格解析器、active entry 约束、calibration 分类与 C1/
 - R5 / R6 / R6-C3 driver 都只在 FakeBackend 验证；真实 MineRL 浇筑与门框建造均未验证；
 - 真实 backend 仍未完整接通桶动作、公开 selected item、目标方块 truth 和流体 truth；
 - `casting_c3_fixed` 是 C2 连续浇筑切片，C2 success 不等于进入 Nether；
-- R6 Casting-S-C3 frame evaluator + task-origin/truth-grid 数值锚定 + C3 deterministic driver 已在 FakeBackend 离线实现，但 C4/C5 evaluator/driver 与真实 backend 接线仍均未完成；
+- R6 Casting-S-C3/C4/C5 evaluator 与 deterministic driver 均已在 FakeBackend 离线实现，但真实 backend 接线仍未完成；
 - Ruined、Adaptive、Multi-Agent、真实 MineRL episode 集和 Benchmark 公开指标发布均未实现；
 - 当前没有正式真实 Benchmark 数据；
 - 禁止真实 MineRL、Gradle 和模型调用，除非用户针对每次操作单独授权；
@@ -532,8 +670,8 @@ Task catalog、严格解析器、active entry 约束、calibration 分类与 C1/
 
 Task catalog 解析/路径/分类正反例、R5 evaluator 与 driver 专项测试、R6-C3 frame evaluator 专项测试、R6-C3 deterministic driver 专项测试、capability、benchmark file、CLI、R3/R4 回归、portal / frame geometry 旧测试必须保持通过。任何合同整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同。
 
-R6-C3-DETERMINISTIC-DRIVER 本轮验证：`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过；全量 635 个离线测试（含 R6-C3 driver 95 个专项测试 + 既有 R6-C3 frame evaluator 103 个专项测试）全部通过；`git diff --check` 干净。本轮没有修改 `vendor/minerl`；该独立仓库中已有的其他工作区改动不属于本任务，保持原状。
+R6-C5-DETERMINISTIC-DRIVER 本轮最终验证：`python -m obsidianlink --check` 与 `python scripts/check_environment.py` 均通过；全量 **1089** 个离线测试（含 R6-C5 driver **142** 个专项测试）全部通过；`git diff --check` 干净。本轮没有修改 `vendor/minerl`，也没有启动真实 MineRL/Minecraft、Gradle 或模型 API。
 
 ## 下一任务
 
-`R6-C4-IGNITION-EVALUATOR` 已完成。下一子任务：`R6-C4-DETERMINISTIC-DRIVER`；本轮不提前实现 C5 或 R7。
+`R6-C5-DETERMINISTIC-DRIVER` 已完成。下一任务：`R6-C5-LIVE-MINERL-BACKEND-WIRING`；真实 backend、Gradle 与 MineRL/Minecraft 运行仍需用户单独授权。
