@@ -3420,7 +3420,10 @@ class OfflineCheckTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn('"status": "ok"', result.stdout)
-        self.assertIn('"phase": "r6_c5_live_minerl_backend_wiring_done"', result.stdout)
+        self.assertIn(
+            '"phase": "r6_c1_live_minerl_smoke_runner_wiring_done"',
+            result.stdout,
+        )
 
     def test_check_environment_script(self) -> None:
         result = subprocess.run(
@@ -3432,7 +3435,10 @@ class OfflineCheckTests(unittest.TestCase):
             timeout=120,
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn('"phase": "r6_c5_live_minerl_backend_wiring_done"', result.stdout)
+        self.assertIn(
+            '"phase": "r6_c1_live_minerl_smoke_runner_wiring_done"',
+            result.stdout,
+        )
 
 
 class PackageImportTests(unittest.TestCase):

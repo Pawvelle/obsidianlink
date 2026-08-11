@@ -75,4 +75,4 @@ Evaluator 不得修改世界。Minecraft 命令不得用于制造结果。
 - R4 的确定性、有限动作、有限等待和有限恢复 driver；
 - observation 与 evaluator truth 隔离、结构化身份字段和离线测试。
 
-当前没有正式真实 episode 数据。真实 MineRL 浇筑尚未验证；真实 backend 仍未完整接通水桶/熔岩桶选择与使用、公开选中物品、目标方块 truth 和流体 truth 等所需能力。任何真实 MineRL/Minecraft 运行及 Gradle 构建都必须另行获得用户批准。
+MineRL backend 的 typed target-block / fluid truth 入口已在 stub raw observations 上离线接通；C1 smoke runner wiring 已在 offline stub 上完成。这不等于真实环境已验证。当前没有正式真实 episode 数据。真实 MineRL 中的水、熔岩、黑曜石变化仍未验证。C1 live smoke 合同与 runner 见 [C1_LIVE_MINERL_SMOKE.md](../../runbooks/C1_LIVE_MINERL_SMOKE.md)。任何真实 MineRL/Minecraft 运行及 Gradle 构建都必须另行获得用户批准；不得把 `live_run_allowed` 改为 `true`。

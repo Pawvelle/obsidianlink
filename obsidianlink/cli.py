@@ -324,7 +324,7 @@ def _offline_contract_check() -> dict[str, object]:
     taxonomy["compatibility_task_name"] = active_entry.canonical_name
     return {
         "status": "ok",
-        "phase": "r6_c5_live_minerl_backend_wiring_done",
+        "phase": "r6_c1_live_minerl_smoke_runner_wiring_done",
         "active_task": active_entry.compatibility_id,
         "task_taxonomy": taxonomy,
         "task_catalog_version": catalog.catalog_version,
@@ -345,14 +345,13 @@ def _offline_contract_check() -> dict[str, object]:
             "evaluator/driver are implemented and covered by the offline "
             "test suite; this compact check does not execute the 336-step C3, "
             "340-step C4, or 347-step C5 driver. The R6-C5-LIVE-MINERL-BACKEND-WIRING "
-            "milestone now wires typed target-block / fluid truth through the "
-            "production MineRL backend (capabilities "
-            "exposes_target_block_truth / exposes_fluid_truth flipped to True "
-            "only after the typed truth surface, the per-step cast credit "
-            "history, and the reset / step / close cleanup passed the offline "
-            "test suite); live MineRL, Gradle, and model API calls remain "
-            "unimplemented, and no MineRL / Gradle / model API call was "
-            "performed in this check."
+            "milestone already wired typed target-block / fluid truth through the "
+            "production MineRL backend offline. "
+            "R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING adds an offline-only C1 smoke "
+            "runner (driver + stub env_factory + CastingEvaluator + evidence "
+            "bundle) under execution_mode=offline_stub; live MineRL remains "
+            "unauthorized (live_run_allowed=false). "
+            "No MineRL / Gradle / model API call was performed in this check."
         ),
     }
 

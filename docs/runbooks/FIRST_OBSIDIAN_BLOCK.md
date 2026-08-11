@@ -25,7 +25,7 @@
 
 Driver 只能用 Agent 可见信息做决定，并且所有移动、use、等待、重试和总 step 都有上限。先在 FakeBackend 上通过，再申请真实运行。
 
-以上 R2–R4 只在 FakeBackend 离线验证。R5 已在同一隔离原则下完成三个有序 cell 的连续浇筑，详见 [`casting_c3_fixed`](../tasks/casting/casting_c3_fixed.md)。下一工程任务是 `R6-COMPLETE-PORTAL-FRAME`；本 runbook 不代表真实 MineRL 已通过。
+以上 R2–R4 只在 FakeBackend 离线验证。R5 已在同一隔离原则下完成三个有序 cell 的连续浇筑，详见 [`casting_c3_fixed`](../tasks/casting/casting_c3_fixed.md)。`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 已完成 offline；下一步须用户单独授权一次 C1 真实 MineRL smoke run。操作说明见 [C1_LIVE_MINERL_SMOKE.md](C1_LIVE_MINERL_SMOKE.md)。本 runbook 不代表真实 MineRL 已通过。
 
 ## 真实运行前
 

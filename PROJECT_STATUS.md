@@ -1,16 +1,91 @@
 # 当前状态
 
-更新时间：2026-08-10
+更新时间：2026-08-12
 
 ## 当前唯一目标
 
-任务：`R6-C5-LIVE-MINERL-BACKEND-WIRING`（在不启动真实 MineRL/Minecraft 的前提下，通过 stub/fake raw observations 和注入式 env_factory，为 MineRL backend 完成最小、严格、可离线测试的 C5 wiring；真实 backend 接入或 MineRL/Minecraft 运行仍需用户单独授权）
+任务：`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING`（已完成，offline）
 
-当前未完成子项：无；R6-C5-LIVE-MINERL-BACKEND-WIRING 已通过严格离线测试完成。
+本轮在不启动真实 MineRL/Minecraft 的前提下，完成 C1 smoke runner wiring：冻结 TaskInstance + C1 deterministic driver + production `MineRLEnvironmentBackend`(注入式 stub `env_factory`) + 独立 `CastingEvaluator` + episode finalization + 完整 evidence bundle。`live_run_allowed` 保持 `false`；不得把 offline stub success 写成 live 验证。
 
-当前 active implementation 仍是 Casting-S-C2 / fixed 的 `casting_c3_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 B0 taxonomy 的 C3；文档级兼容名称为 `casting_s_c2_fixed`。`casting_c1_fixed` 保留为 Casting-S-C1 回归合同。
+`R6-C5-LIVE-MINERL-BACKEND-WIRING` 与 `R6-C1-LIVE-MINERL-SMOKE-VALIDATION-CONTRACT-FREEZE` 均已完成。下一步必须是用户单独授权的一次 **C1** 真实 MineRL smoke run；不得直接跳到 C5 或 R7。若真实运行需要 Gradle，须另行单独批准。
 
-R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、live_run_allowed=false）。R6-C3 与 R6-C4 已在 FakeBackend 上完成 evaluator + deterministic driver 离线证明。R6-C5 已完成 Nether-entry evaluator + 347-step deterministic driver 离线证明。C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；C5 不冒充正式 live implementation。
+当前 active implementation 仍是 Casting-S-C2 / fixed 的兼容 ID `casting_c3_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 B0 taxonomy 的 C3；文档级兼容名称为 `casting_s_c2_fixed`。`casting_c1_fixed` 保留为 Casting-S-C1 回归合同，并作为 C1 live smoke 的兼容任务身份。
+
+R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、`live_run_allowed=false`）。R6-C3 / C4 / C5 evaluator + deterministic driver 已在 FakeBackend 上完成离线证明；MineRL backend typed truth wiring 已在 stub raw observations 上完成离线证明。`casting_s_c5_fixed` 仍必须保持 `implementation_status="contract_only"`、`live_run_allowed=false`；C5 不冒充正式 live implementation。
+
+## R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING 完成（offline）
+
+1. **入口**：[`obsidianlink/runners/casting_c1_live_smoke.py`](obsidianlink/runners/casting_c1_live_smoke.py) 与 [`scripts/run_c1_live_smoke.py`](scripts/run_c1_live_smoke.py)。
+2. **执行模式**：闭集仅 `offline_stub`；只接受受控类型 `OfflineC1StubEnvFactory`，任意 callable 与外部 `backend=` 注入通道均被拒绝；`request_live` / `allow_live_run_override` / 未选 offline 模式一律 fail closed；CLI 无可用 live 命令。
+3. **冻结身份**：family=`casting`、mode=`single`、level=`C1`、layout=`fixed`、compatibility task=`casting_c1_fixed`、canonical=`casting_s_c1_fixed`、agent=`agent_1`、target=`[2,4,3]`。
+4. **Preflight**：在 env factory 调用前校验完整 TaskInstance 与 canonical `casting_c1_fixed` 精确等值（含 step/time/model-call budgets、精确库存和禁止额外 obsidian）、capability、plan 等值、catalog `live_run_allowed=false`；输出目录必须为绝对、尚不存在且位于正式 `runs/` 外。
+5. **编排**：driver → `mark_terminated` → backend typed `get_casting_evaluation_state` → 独立 `CastingEvaluator`；driver completed 不映射为 success。
+6. **Evidence**：在目标同一父目录 staging，完整 10 文件 bundle 与最终 close 状态写定后用原子 rename 发布；拒绝覆盖已有目录；public events / summary 不含 evaluator-only token；PNG 合法可读；失败只写 fail-closed summary。
+7. **生命周期**：成功/失败/异常路径均有限次 close；close 失败被结构化记录。
+8. **未验证**：真实 MineRL/Minecraft 水/熔岩/黑曜石变化、task-origin/grid 锚定、portal transition 仍未验证。
+
+操作说明见 [`docs/runbooks/C1_LIVE_MINERL_SMOKE.md`](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)。
+
+## R6-C1-LIVE-MINERL-SMOKE-VALIDATION-CONTRACT-FREEZE（合同冻结）
+
+### 冻结身份
+
+后续 C1 live smoke validation 的身份冻结为：
+
+| 字段 | 冻结值 |
+|---|---|
+| family | `casting` |
+| mode | `single` |
+| level | `C1` |
+| layout | `fixed` |
+| compatibility task | `casting_c1_fixed` |
+| designated agent | `agent_1` |
+
+### 最小目标（后续真实烟雾测试）
+
+- 只验证一个目标 cell（`casting_c1_fixed` 冻结目标 `[2, 4, 3]`）；
+- 必须使用原版水、熔岩和 Minecraft block update 生成黑曜石；
+- 不允许预置或直接放置 `obsidian`；
+- evaluator 必须独立验证 target block、water/lava observation、transition step 和合法动作因果；
+- driver 完成或文本声称成功不能构成成功；
+- truth 缺失、坐标不一致、身份不一致或因果不足时必须 fail closed。
+
+### 授权边界
+
+- 每次真实 MineRL/Minecraft 运行都需用户单独批准；
+- 每次 Gradle 构建都需用户单独批准；
+- 修复后若要再次真实运行，必须重新批准；
+- 本轮合同冻结不能将任何任务的 `live_run_allowed` 改为 `true`；
+- 不得把合同冻结写成真实 MineRL / 水 / 熔岩 / 黑曜石 / portal transition 能力已经验证。
+
+### 证据要求（后续真实运行）
+
+结果必须写入 `runs/`，至少包含：
+
+```text
+task_instance.json
+experiment_config.json
+capability_manifest.json
+code_version.json
+initial.png
+final.png
+events.jsonl
+evaluator_events.jsonl
+summary.json
+manual_review.md
+```
+
+observation、action、evaluation 和 log 必须带 `episode_id`、`step_id`，适用时带 `agent_id`。Agent-visible 与 evaluator-only 数据必须分开；evaluator truth 不得进入 Observation、driver event、prompt 或 memory。
+
+### 本轮交付边界
+
+- 已完成：状态收敛、C1 smoke 合同冻结、离线 phase / catalog 不变量锁定；
+- 后续 runner wiring 已在 `R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 完成（offline stub）；
+- 未执行：真实 MineRL/Minecraft、Gradle、付费模型 API、提交或推送；
+- 仍未验证：真实环境中的水/熔岩/黑曜石变化、task-origin/grid 锚定、portal transition（尚未验证）。
+
+操作说明见 [`docs/runbooks/C1_LIVE_MINERL_SMOKE.md`](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)。
 
 ## R6-C5-LIVE-MINERL-BACKEND-WIRING 完成（offline）
 
@@ -62,8 +137,15 @@ R6-C5-LIVE-MINERL-BACKEND-WIRING 已通过严格离线测试完成 typed target-
    - MineRL / Minecraft / Python / JDK / Gym / NumPy / Qwen / 模型版本：未升级或回退；
    - 没有启动真实 MineRL / Minecraft / Gradle / 付费模型 API / 提交 / 推送 / 创建 PR；
    - C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；后续要进入 live run 仍需用户单独授权。
+   - **状态收敛说明**：本节是最终完成记录。下方「部分完成（离线修正）」是 wiring 中途审查记录，其中 capability=`False` / “当前任务仍未完成”等描述已被本节取代，不得再当作当前状态。
 
-## R6-C5-LIVE-MINERL-BACKEND-WIRING 部分完成（离线修正）
+## R6-C5-LIVE-MINERL-BACKEND-WIRING 部分完成（离线修正）— 历史中途记录（已被上方完成节取代）
+
+> **过期标记（2026-08-12）**：本节保留 wiring 审查过程，但下列结论已过期，以「R6-C5-LIVE-MINERL-BACKEND-WIRING 完成（offline）」为准：
+> - `exposes_target_block_truth` / `exposes_fluid_truth` 现已在 offline production manifest 中为 `True`（仅离线声明，不代表 live 已验证）；
+> - typed C1–C5 truth surface 已接通并通过 stub raw observations 离线测试；
+> - “当前任务仍未完成 / 只剩 typed truth 子项 / capability gate 保持关闭”不再成立；
+> - 当前唯一目标已转为 `R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING`（现已完成 offline）。
 
 本轮修正了早期 wiring 审查发现的虚报和 fail-open 问题：
 
@@ -129,7 +211,7 @@ R6-C5-LIVE-MINERL-BACKEND-WIRING 已通过严格离线测试完成 typed target-
    - C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`，没有启动真实 MineRL、Gradle 或模型 API；
    - Ruined / Adaptive / Multi-Agent / R7 模型阶段仍未实现。
 
-10. **当前任务仍未完成**：只有 typed target-block / fluid truth 接通并通过独立离线测试后，才能把 capability 改为 `True`。
+10. **（过期）当时未完成项**：本节撰写时 typed target-block / fluid truth 尚未接通。该项已在上方「R6-C5-LIVE-MINERL-BACKEND-WIRING 完成（offline）」中关闭；勿再据此判断当前任务。
 
 
 ## R6-C5-DETERMINISTIC-DRIVER 已完成（FakeBackend 离线证明）
@@ -695,9 +777,9 @@ R6-C5-LIVE-MINERL-BACKEND-WIRING 已通过严格离线测试完成 typed target-
    - `evaluator_contract` 仍是 policy-only（baseline_policy / required_mechanism / required_items / causality_window_steps / fail_closed_on_missing_truth），runtime truth 仍由 FakeBackend evaluator-only 状态独立验证；
    - 真实 MineRL 接入、task-origin marker 与 truth-grid origin 的世界坐标锚定仍需在 R6 之后 driver / backend 阶段验证；本轮只能证明 evaluator / FakeBackend 边界，不声称已端到端隔离未来 driver。
 
-## 下一任务
+## 下一任务（历史指针，已被顶部当前唯一目标取代）
 
-`R6-C5-DETERMINISTIC-DRIVER` 已完成：FakeBackend 上 C5 evaluator + 347-step C5 deterministic driver + 严格 public context/固定库存边界 + 完整计划 fail-closed 校验 + capability gate + 142 个专项测试通过；C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`，不冒充正式 live implementation。下一任务冻结为 `R6-C5-LIVE-MINERL-BACKEND-WIRING`；真实 backend、MineRL、Gradle 或模型 API 工作需用户另行授权。
+`R6-C5-DETERMINISTIC-DRIVER`、`R6-C5-LIVE-MINERL-BACKEND-WIRING`、`R6-C1-LIVE-MINERL-SMOKE-VALIDATION-CONTRACT-FREEZE` 与 `R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 均已完成（offline）。当前唯一目标见文首。真实 C1 MineRL smoke、Gradle 或模型 API 工作需用户另行授权；不得直接进入 C5 live 或 R7。
 
 ## R6-COMPLETE-PORTAL-FRAME — CONTRACT FREEZE 已完成（保留历史）
 
@@ -776,21 +858,21 @@ Task catalog、严格解析器、active entry 约束、calibration 分类与 C1/
 
 ## 当前限制
 
-- R5 / R6 / R6-C3 driver 都只在 FakeBackend 验证；真实 MineRL 浇筑与门框建造均未验证；
-- 真实 backend 仍未完整接通桶动作、公开 selected item、目标方块 truth 和流体 truth；
+- R5 / R6 FakeBackend evaluator/driver 与 R6-C5 MineRL backend typed truth wiring 均已离线证明；**真实** MineRL/Minecraft 中的水、熔岩、黑曜石变化、task-origin/grid 锚定和 portal transition **仍未验证**；
+- production MineRL backend 的 typed truth 入口已在 stub raw observations 上接通；这不等于 live 成功；
 - `casting_c3_fixed` 是 C2 连续浇筑切片，C2 success 不等于进入 Nether；
-- R6 Casting-S-C3/C4/C5 evaluator 与 deterministic driver 均已在 FakeBackend 离线实现，但真实 backend 接线仍未完成；
+- `casting_s_c5_fixed` 仍为 `implementation_status="contract_only"`、`live_run_allowed=false`；不得冒充 live implementation；
 - Ruined、Adaptive、Multi-Agent、真实 MineRL episode 集和 Benchmark 公开指标发布均未实现；
 - 当前没有正式真实 Benchmark 数据；
 - 禁止真实 MineRL、Gradle 和模型调用，除非用户针对每次操作单独授权；
-- `vendor/minerl`、固定依赖和历史兼容 ID 在 R6 阶段均未改动。
+- 本次收尾修改开始时，独立仓库 `vendor/minerl` 已存在 dirty 工作区；外层仓库无法判断这些内容的来源。本次收尾未编辑该嵌套仓库，也未把“当前为 dirty”误写成“仓库整体无修改”；固定依赖和历史兼容 ID 未改动。
 
 ## 测试要求
 
-Task catalog 解析/路径/分类正反例、R5 evaluator 与 driver 专项测试、R6-C3 frame evaluator 专项测试、R6-C3 deterministic driver 专项测试、capability、benchmark file、CLI、R3/R4 回归、portal / frame geometry 旧测试必须保持通过。任何合同整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同。
+Task catalog 解析/路径/分类正反例、R5 evaluator 与 driver 专项测试、R6-C3/C4/C5 evaluator/driver 专项测试、R6-C5 MineRL backend wiring 专项测试、C1 live smoke 合同冻结不变量、capability、benchmark file、CLI、R3/R4 回归、portal / frame geometry 旧测试必须保持通过。任何合同整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同，也不得把 `live_run_allowed` 偷偷改为 `true`。
 
-R6-C5-LIVE-MINERL-BACKEND-WIRING 当前部分修正最终验证：在 Conda `mc-agent` 环境中，全量 **1155** 个离线测试分批全部通过（338 + 71 + 674 + 65 + 7；分批仅用于规避桌面终端单进程时限），`python -m obsidianlink --check`、`python scripts/check_environment.py` 与 `git diff --check` 均通过。没有修改 `vendor/minerl`，也没有启动真实 MineRL/Minecraft、Gradle 或模型 API。
+R6-C5-LIVE-MINERL-BACKEND-WIRING 最终离线验证（历史）：全量 **1175** 个离线测试通过；`phase="r6_c5_live_minerl_backend_wiring_done"`。`R6-C1-LIVE-MINERL-SMOKE-VALIDATION-CONTRACT-FREEZE` 将 phase 更新为 `r6_c1_live_minerl_smoke_validation_contract_freeze`（历史）。本轮 `R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 将 phase 更新为 `r6_c1_live_minerl_smoke_runner_wiring_done`；安全收尾后全量 **1211** 个离线测试通过（`Ran 1211 tests in 181.479s → OK`），仍未启动真实 MineRL/Minecraft、Gradle 或模型 API。
 
 ## 下一任务
 
-`R6-C5-DETERMINISTIC-DRIVER` 已完成。下一任务：`R6-C5-LIVE-MINERL-BACKEND-WIRING`，当前只剩 typed target-block / fluid truth 子项；完成前 production capability gate 保持关闭。真实 MineRL、Gradle 与 MineRL/Minecraft 运行仍需用户逐次单独授权。
+下一任务：用户单独授权的一次 **C1** 真实 MineRL smoke run（`casting_c1_fixed`）。`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 已完成 offline；不得直接进入 C5 live 或 R7。若需要 Gradle，须另行单独批准。`live_run_allowed` 仍为 `false`。

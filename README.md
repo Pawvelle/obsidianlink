@@ -24,9 +24,9 @@ Single-Agent 与 Multi-Agent 是和任务族正交的 Agent Modes：
 
 ## Current Implementation
 
-当前阶段：`R6-C5-LIVE-MINERL-BACKEND-WIRING` 完成（offline）。MineRL 动作翻译已接通任务库存顺序对应的动态 hotbar、有限 `duration_ticks`、严格拒绝动作和 MineRL 自带的 `equipped_items.mainhand.type` selected-item 观察；MineRL backend 通过 5 个 typed truth 入口将 Malmo 支持的单一 `ObservationFromGrid` 数据（raw `portal_grid`，同时包含方块与流体）及 evaluator-only `portal_transition` 投影到 C1–C5 evaluator state。离线生产路径测试已覆盖 C1–C5 success 与 fail-closed 归因；`casting_c1_capabilities()` 因此在 offline manifest 中报告 target-block/fluid truth 能力。C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；真实 MineRL/Minecraft 和 `portal_transition` bridge 尚未验证。
+当前阶段：`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 完成（offline）。已提供 offline-only C1 smoke runner（`execution_mode=offline_stub`），只接受受控 `OfflineC1StubEnvFactory`，拒绝任意 factory/外部 backend/live 请求；完整 TaskInstance、预算、精确库存与 plan 在环境创建前冻结校验。Evidence 使用同父目录 staging + 原子 rename，拒绝覆盖已有输出。CLI：`scripts/run_c1_live_smoke.py --mode offline_stub --output-dir <尚不存在的绝对路径>`。`R6-C5-LIVE-MINERL-BACKEND-WIRING` 已完成 typed truth 离线接通。C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；真实 MineRL/Minecraft 中的水、熔岩、黑曜石变化、task-origin/grid 锚定和 `portal_transition` bridge 尚未验证。
 
-当前 active implementation 仍是 Casting-S-C2 / fixed 的 `casting_c3_fixed`。R6-C3/C4/C5 evaluator + deterministic driver 已在 FakeBackend 上完成离线证明；MineRL backend 已接通 typed casting evaluator truth（offline-only），不冒充 live implementation。
+当前 active implementation 仍是 Casting-S-C2 / fixed 的 `casting_c3_fixed`。R6-C3/C4/C5 evaluator + deterministic driver 已在 FakeBackend 上完成离线证明；MineRL backend 已接通 typed casting evaluator truth（offline-only），不冒充 live implementation。C1 live smoke 身份冻结为 Casting-S-C1 / fixed（兼容 ID `casting_c1_fixed`，指定 `agent_1`）；操作合同见 [C1 Live MineRL Smoke](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)。
 
 [`benchmark/catalog/tasks.json`](benchmark/catalog/tasks.json) 是任务身份、taxonomy、兼容路径和发布可见性的统一索引。早期 `route_a_a0` 实例被明确标为 calibration/regression，不计入正式 Benchmark task matrix；详细兼容规则见 [TASK_REGISTRY.md](docs/architecture/TASK_REGISTRY.md)。
 
@@ -62,12 +62,11 @@ R6 合同冻结阶段已新增 3 个 Casting-S benchmark 任务实例，分类�
 当前未验证或未实现：
 
 - 真实 MineRL/Minecraft 浇筑、门框建造与点火；
-- C5 deterministic driver（已离线实现 347-step plan，但仅在 FakeBackend 上验证）；
-- 真实 MineRL 中 task-origin marker 与 evaluator truth-grid origin 的世界坐标锚定；现有 `(-3,-1,0)–(3,5,6)` grid 数值范围已经覆盖固定 4×5 full-ring 方案；
+- 真实 MineRL 中 task-origin marker 与 evaluator truth-grid origin 的世界坐标锚定；现有 grid 数值范围已经覆盖固定方案，但不等于 live 锚定已验证；
 - Ruined Portal、Adaptive Routing 和 Multi-Agent；
 - 正式 benchmark episode 数据集。
 
-C2 实例位于 [`casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)，C2 离线合同位于 [`casting_c3_contract.json`](configs/experiments/active/casting_c3_contract.json)，详细规则见 [`casting_c3_fixed` 任务页](docs/tasks/casting/casting_c3_fixed.md)。基础回归规则见 [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md)。R6 合同冻结的 C3 / C4 / C5 实例位于 [`benchmark/instances/casting/single/`](benchmark/instances/casting/single/)，离线合同位于 [`configs/experiments/active/casting_s_c3_contract.json`](configs/experiments/active/casting_s_c3_contract.json) 等。下一工程任务只能基于 C5 driver 离线完成范围谨慎填写。
+C2 实例位于 [`casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)，C2 离线合同位于 [`casting_c3_contract.json`](configs/experiments/active/casting_c3_contract.json)，详细规则见 [`casting_c3_fixed` 任务页](docs/tasks/casting/casting_c3_fixed.md)。基础回归与 C1 live smoke 合同见 [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md) 与 [C1 Live MineRL Smoke](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)。R6 合同冻结的 C3 / C4 / C5 实例位于 [`benchmark/instances/casting/single/`](benchmark/instances/casting/single/)。`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 已完成 offline；下一步必须是用户单独授权的一次 C1 真实 MineRL smoke run，而不是直接进入 C5 或 R7。
 
 ## 系统架构
 

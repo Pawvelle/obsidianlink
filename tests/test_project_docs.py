@@ -34,15 +34,19 @@ class ProjectDocumentationTests(unittest.TestCase):
         # The current task line is the one immediately under
         # ``当前唯一目标``. The project must declare exactly one
         # in-flight phase, and the safety reminder must stay
-        # present. The task id is the *current* one (R3 as of
-        # 2026-08-05), but the test is written to be robust when
-        # the project later advances to R4 / R5: it only requires
-        # the safety reminder and the explicit "next task" line.
+        # present. After offline engineering milestones complete,
+        # the next step may be an authorized live smoke run rather
+        # than another ``R*-...`` offline task id.
         self.assertIn("当前唯一目标", text)
         self.assertIn("禁止真实 MineRL、Gradle 和模型调用", text)
-        self.assertRegex(
-            text,
-            r"下一任务：`(R[3-9]-[A-Z0-9-]+)`",
+        self.assertTrue(
+            re.search(r"下一任务：`(R[3-9]-[A-Z0-9-]+)`", text) is not None
+            or (
+                "下一任务：用户单独授权的一次" in text
+                and "C1" in text
+                and "真实 MineRL smoke run" in text
+            ),
+            msg="PROJECT_STATUS must name either an R*-task or an authorized C1 live smoke next step",
         )
 
     def test_current_task_is_the_only_named_work_item(self) -> None:

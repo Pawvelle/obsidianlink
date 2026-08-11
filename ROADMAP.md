@@ -161,15 +161,34 @@ R6-C3-FRAME-EVALUATOR 子阶段本身没有实现 driver；随后的 `R6-C3-DETE
 - 85 个专项离线测试覆盖：翻译器 allowlist / 正路径 / fail-closed / bounded forward `move` / `duration_ticks > 40` / selected item 严格 bridge 读取 / C1–C5 production-backend evaluator success / per-cell 因果归因 / 真值隔离；
 - C1 / C2 / C3 / C4 / C5 / portal / frame geometry / CLI / catalog 回归全部通过；全量 1175 个离线测试通过（`Ran 1175 tests in 170.485s → OK`）；`python -m obsidianlink --check` 输出 `phase: "r6_c5_live_minerl_backend_wiring_done"`；`python scripts/check_environment.py` 通过；`git diff --check` 干净；
 - **没有**启动真实 MineRL、Gradle 或模型 API；没有提交或推送；C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；
-- 真实 MineRL / Minecraft 中的 typed target-block / fluid / nether-transition truth 仍未验证；C1–C5 success 已在 stub raw trajectory 上通过 production backend + evaluator，但 C5 真实端到端仍取决于尚未验证的 `portal_transition` bridge。下一阶段仍需用户单独授权后才能运行真实 MineRL。
+- 真实 MineRL / Minecraft 中的 typed target-block / fluid / nether-transition truth 仍未验证；C1–C5 success 已在 stub raw trajectory 上通过 production backend + evaluator，但 C5 真实端到端仍取决于尚未验证的 `portal_transition` bridge。
+
+#### R6-C1-LIVE-MINERL-SMOKE-VALIDATION-CONTRACT-FREEZE（完成，offline；只冻结合同）
+
+- 冻结后续真实烟雾验证身份：family=`casting`、mode=`single`、level=`C1`、layout=`fixed`、compatibility task=`casting_c1_fixed`、designated agent=`agent_1`；
+- 最小目标：只验证一个目标 cell；必须用水/熔岩与原版 block update 生成黑曜石；禁止预置或直接放置 obsidian；evaluator 独立验证 target/fluid/transition/因果；driver 完成或文本声称不构成成功；truth/坐标/身份/因果不足时 fail closed；
+- 授权边界：每次真实 MineRL/Minecraft 运行与每次 Gradle 构建都需用户单独批准；修复后再次真实运行必须重新批准；合同冻结不得把 `live_run_allowed` 改为 `true`；
+- 证据要求：`runs/` 至少包含 task_instance / experiment_config / capability_manifest / code_version / initial.png / final.png / events.jsonl / evaluator_events.jsonl / summary.json / manual_review.md；身份字段与 Agent-visible / evaluator-only 隔离保持不变；
+- 操作说明：[C1_LIVE_MINERL_SMOKE.md](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)；
+- **没有**启动真实 MineRL、Gradle 或模型 API；合同冻结时尚未接线完整 live 入口。
+
+#### R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING（完成，offline）
+
+- 核心入口：`obsidianlink/runners/casting_c1_live_smoke.py`；CLI：`scripts/run_c1_live_smoke.py --mode offline_stub --output-dir <绝对路径>`；
+- 执行模式闭集仅 `offline_stub`；只接受受控 `OfflineC1StubEnvFactory`，拒绝任意 callable、外部 backend 注入和 live 请求；禁止写入正式 `runs/`；
+- Preflight 在 env factory 前校验完整冻结 TaskInstance（含精确预算、精确库存、禁止额外 obsidian）、capability、plan 等值与 catalog `live_run_allowed=false`；
+- 编排：C1 deterministic driver → `mark_terminated` → production backend typed truth → 独立 `CastingEvaluator` → evidence bundle → close；
+- `driver_status` / `evaluator_success` / `evidence_complete` 分字段；driver completed 不冒充 success；
+- 证据在同父目录 staging，完整 10 文件 bundle 经原子 rename 发布；已有输出目录一律拒绝；public events/summary 不含 evaluator-only token；
+- **没有**启动真实 MineRL、Gradle 或模型 API；下一步必须是用户单独授权的一次 C1 live smoke run，不得直接进入 C5 live 或 R7。
 
 ### R6：完整门框、点火和进入 Nether（按子阶段推进）
 
-R6 将在 R6-C3 / R6-C4 / R6-C5 三阶段合同冻结基础上，由独立 evaluator 验证完整门框、点火和 Nether entry，并依次在 FakeBackend 上接确定性 driver；接真实 MineRL 与模型仍需要单独授权。
+R6 已在 R6-C3 / R6-C4 / R6-C5 合同与 FakeBackend 离线证明、MineRL backend typed truth wiring（offline）以及 C1 smoke runner wiring（offline stub）基础上推进。真实 MineRL 验证从 C1 smoke 开始，每次运行需单独授权；不得因 offline wiring 声称 live 已验证。
 
 ### R7：模型与受控变化
 
-确定性路径稳定后接入受安全约束的模型，并引入有限、可审计的场景变化。
+确定性路径与最小 live smoke 稳定后，才接入受安全约束的模型，并引入有限、可审计的场景变化。
 
 ### 后续 Casting 扩展
 
