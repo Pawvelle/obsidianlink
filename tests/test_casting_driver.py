@@ -117,11 +117,11 @@ class CastingWorldTruth:
     current_target_block: str = "obsidian"
     water_present: bool | None = True
     lava_present: bool | None = True
-    water_step: int | None = 18
-    lava_step: int | None = 12
-    transition_step: int | None = 20
+    water_step: int | None = 22
+    lava_step: int | None = 14
+    transition_step: int | None = 23
     transition_before: str | None = "air"
-    terminated_step: int = 24
+    terminated_step: int = 30
     terminated_reason: str = "driver_done"
 
 
@@ -303,6 +303,8 @@ class DriverContractTests(unittest.TestCase):
                     "use_item",
                     "place_block",
                     "wait",
+                    "look",
+                    "move",
                 }
             ),
         )
@@ -390,15 +392,17 @@ class DriverContractTests(unittest.TestCase):
     def test_plan_is_bounded_and_strictly_uses_allowlist(self) -> None:
         plan = build_casting_action_plan()
         self.assertGreater(len(plan), 0)
-        # 24 default steps: 1 select + 1 wait + 1 place + 1 wait +
-        # 1 place + 1 wait + 1 select + 1 wait + 1 use + 4 waits +
-        # 1 select + 1 wait + 1 use + 4 waits + 4 obsidian waits = 24
-        self.assertEqual(len(plan), 24)
+        # 30 default steps: four relative aim deltas, 2×(equip cobble wait
+        # place settle), lava/water (equip wait look use settle×4), and
+        # obsidian waits×4.
+        self.assertEqual(len(plan), 36)
         seen_phases: set[str] = set()
         relevant_count = 0
         select_count = 0
         use_count = 0
         place_count = 0
+        look_count = 0
+        move_count = 0
         for step in plan:
             self.assertIsInstance(step, CastingPlanStep)
             self.assertIn(step.action.action_type, ALLOWED_R4_ACTION_TYPES)
@@ -422,14 +426,21 @@ class DriverContractTests(unittest.TestCase):
             }:
                 select_count += 1
                 self.assertFalse(step.relevant_action)
+            elif step.action.action_type == "look":
+                look_count += 1
+                self.assertFalse(step.relevant_action)
+            elif step.action.action_type == "move":
+                move_count += 1
+                self.assertFalse(step.relevant_action)
         self.assertEqual(relevant_count, 4)  # 2 supports + 2 fluids
-        self.assertEqual(select_count, 3)  # 2 lava selects + 1 water select
+        self.assertEqual(select_count, 4)  # 2 cobble + lava + water
         self.assertEqual(use_count, 2)  # lava + water
         self.assertEqual(place_count, 2)  # 2 cobblestone supports
+        self.assertEqual(look_count, 4)
+        self.assertEqual(move_count, 0)
         self.assertEqual(
             seen_phases,
             {
-                PHASE_PREPARE,
                 PHASE_PLACE_SUPPORT,
                 PHASE_PLACE_LAVA,
                 PHASE_PLACE_WATER,
@@ -1113,11 +1124,11 @@ class OrchestratorOutcomeTests(unittest.TestCase):
         )
 
     def test_step_budget_exceeded_via_orchestrator(self) -> None:
-        # The driver walks the whole plan (24 steps). The
+        # The driver walks the whole plan (36 steps). The
         # orchestrator then reports a step budget that the
-        # actual step count (24) exceeds. The evaluator's step
+        # actual step count exceeds. The evaluator's step
         # budget outranks every other verdict.
-        world = CastingWorldTruth(terminated_step=24)
+        world = CastingWorldTruth(terminated_step=30)
         driver, evaluator = self._run_with_world(
             world, max_environment_steps=10
         )
@@ -1125,11 +1136,11 @@ class OrchestratorOutcomeTests(unittest.TestCase):
         self.assertIn("step_budget_exceeded", evaluator.blocking_conditions)
 
     def test_time_budget_exceeded_via_orchestrator(self) -> None:
-        # The driver walks the whole plan (24 steps). The
+        # The driver walks the whole plan (36 steps). The
         # orchestrator reports a wall-clock time that exceeds
         # the 120s budget; the evaluator flags the time budget
         # and outranks success / wrong_block.
-        world = CastingWorldTruth(terminated_step=24, transition_step=20)
+        world = CastingWorldTruth(terminated_step=30, transition_step=23)
         driver, evaluator = self._run_with_world(
             world, max_game_time_seconds=120.0
         )
@@ -1147,7 +1158,7 @@ class OrchestratorOutcomeTests(unittest.TestCase):
             )
             state = build_evaluation_state(
                 task=task,
-                step_id=24,
+                step_id=driver_result.steps_executed,
                 world=world,
                 relevant_action_steps=driver_result.relevant_action_steps,
                 current_time_seconds=200.0,
@@ -1559,9 +1570,19 @@ class DriverBackendShapeTests(unittest.TestCase):
         class _Minimal:
             def __init__(self) -> None:
                 self.calls = 0
+                self._inventory = {
+                    "water_bucket": 1,
+                    "lava_bucket": 1,
+                    "cobblestone": 8,
+                }
 
             def reset(self, task):  # type: ignore[no-untyped-def]
                 self.calls = 0
+                self._inventory = {
+                    "water_bucket": 1,
+                    "lava_bucket": 1,
+                    "cobblestone": 8,
+                }
                 return {
                     "agent_1": Observation(
                         episode_id=task.task_id,
@@ -1569,11 +1590,7 @@ class DriverBackendShapeTests(unittest.TestCase):
                         step_id=0,
                         timestamp=0.0,
                         frame={"minimal": True},
-                        visible_inventory={
-                            "water_bucket": 1,
-                            "lava_bucket": 1,
-                            "cobblestone": 8,
-                        },
+                        visible_inventory=dict(self._inventory),
                         workflow_stage="casting_c1_fixed",
                     )
                 }
@@ -1581,6 +1598,10 @@ class DriverBackendShapeTests(unittest.TestCase):
             def step(self, actions):  # type: ignore[no-untyped-def]
                 self.calls += 1
                 action = actions["agent_1"]
+                if action.action_type in {"place_block", "use_item"}:
+                    target = action.target
+                    if target in self._inventory and self._inventory[target] > 0:
+                        self._inventory[target] -= 1
                 step_id = self.calls
                 observation = Observation(
                     episode_id="casting_c1_fixed_seed_0",
@@ -1588,11 +1609,7 @@ class DriverBackendShapeTests(unittest.TestCase):
                     step_id=step_id,
                     timestamp=0.0,
                     frame={"step": step_id},
-                    visible_inventory={
-                        "water_bucket": 1,
-                        "lava_bucket": 1,
-                        "cobblestone": 8,
-                    },
+                    visible_inventory=dict(self._inventory),
                     workflow_stage="casting_c1_fixed",
                 )
                 return BackendStep(

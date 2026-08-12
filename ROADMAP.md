@@ -180,11 +180,24 @@ R6-C3-FRAME-EVALUATOR 子阶段本身没有实现 driver；随后的 `R6-C3-DETE
 - 编排：C1 deterministic driver → `mark_terminated` → production backend typed truth → 独立 `CastingEvaluator` → evidence bundle → close；
 - `driver_status` / `evaluator_success` / `evidence_complete` 分字段；driver completed 不冒充 success；
 - 证据在同父目录 staging，完整 10 文件 bundle 经原子 rename 发布；已有输出目录一律拒绝；public events/summary 不含 evaluator-only token；
-- **没有**启动真实 MineRL、Gradle 或模型 API；下一步必须是用户单独授权的一次 C1 live smoke run，不得直接进入 C5 live 或 R7。
+- **没有**在 wiring 阶段启动真实 MineRL、Gradle 或模型 API；真实授权入口与一次失败尝试见下方 AUTHORIZED-RUN。
+
+#### R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN（已执行一次；失败）
+
+- 独立 live 入口：`obsidianlink/runners/casting_c1_live.py` + `scripts/run_c1_live.py`；
+- 闭集 `authorized_live_c1` + `--authorized-live-run casting_c1_fixed`；`max_reset_attempts=1`；每进程最多一次真实 env；
+- 证据：`runs/casting_c1_fixed/20260812-110318/`；evaluator `truth_missing`；库存未变；未捕获水/熔岩/黑曜石；
+- **未**运行 Gradle；**未**第二次真实运行；catalog `live_run_allowed` 仍为 false；再次 live 须重新授权。
+
+#### R6-C1-LIVE-AIM-AND-PLACE-OFFLINE-FIX（完成，offline）
+
+- C1 deterministic plan 收紧为 36-step：有界相对 `look` delta 分别瞄准冻结实体顶面，圆石独立 equip；每个 relevant action 后只允许固定 4-tick no-op confirmation window，目标物品必须在窗口内恰好减少 1；
+- FakeBackend `CastingPlacementState` 覆盖未瞄准/距离不足/无有效放置面/无世界效果；diagnostics 不进入 Observation；
+- offline stub 同步扣减库存；**未**启动真实 MineRL / Gradle / 模型 API；再次 live 须重新授权。
 
 ### R6：完整门框、点火和进入 Nether（按子阶段推进）
 
-R6 已在 R6-C3 / R6-C4 / R6-C5 合同与 FakeBackend 离线证明、MineRL backend typed truth wiring（offline）以及 C1 smoke runner wiring（offline stub）基础上推进。真实 MineRL 验证从 C1 smoke 开始，每次运行需单独授权；不得因 offline wiring 声称 live 已验证。
+R6 已完成 FakeBackend 离线证明、MineRL backend typed truth wiring（offline）、C1 smoke runner wiring（offline）、一次授权 C1 live smoke（失败：`truth_missing`，证据 `runs/casting_c1_fixed/20260812-110318/`），以及 C1 aim/place 离线修复。再次真实运行须重新授权；不得因窗口打开或 driver completed 声称 live casting 已验证。
 
 ### R7：模型与受控变化
 

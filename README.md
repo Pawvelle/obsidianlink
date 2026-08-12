@@ -24,7 +24,7 @@ Single-Agent 与 Multi-Agent 是和任务族正交的 Agent Modes：
 
 ## Current Implementation
 
-当前阶段：`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 完成（offline）。已提供 offline-only C1 smoke runner（`execution_mode=offline_stub`），只接受受控 `OfflineC1StubEnvFactory`，拒绝任意 factory/外部 backend/live 请求；完整 TaskInstance、预算、精确库存与 plan 在环境创建前冻结校验。Evidence 使用同父目录 staging + 原子 rename，拒绝覆盖已有输出。CLI：`scripts/run_c1_live_smoke.py --mode offline_stub --output-dir <尚不存在的绝对路径>`。`R6-C5-LIVE-MINERL-BACKEND-WIRING` 已完成 typed truth 离线接通。C5 仍保持 `implementation_status="contract_only"`、`live_run_allowed=false`；真实 MineRL/Minecraft 中的水、熔岩、黑曜石变化、task-origin/grid 锚定和 `portal_transition` bridge 尚未验证。
+当前阶段：已完成 `R6-C1-PLAYER-RELATIVE-TRUTH-GRID-ANCHOR-OFFLINE-FIX`（离线）。第八次授权 C1 live 的 36-step driver 已完成，最终画面显示熔岩、流水和支撑块但未生成黑曜石；evaluator 仍为 `truth_missing`。MineRL bridge 在没有绝对 placement 时仍让 `atSpawn=true` grid 锚定共享世界出生点，而玩家可能受默认 `spawnRadius` 偏移；因此 C1 现改用 `atSpawn=false`，让 truth grid 以不移动的实际玩家位置为原点，并把公开目标 `[2,4,3]` 映射为相对 grid `[2,0,3]`。Route A0 与 C2–C5 保持原行为。独立 live 入口：`scripts/run_c1_live.py --mode authorized_live_c1 --authorized-live-run casting_c1_fixed`（不改 catalog `live_run_allowed=false`）。真实水/熔岩/黑曜石 server-side truth **尚未验证**；再次真实运行须重新授权，Gradle 也未获授权。状态见 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
 
 当前 active implementation 仍是 Casting-S-C2 / fixed 的 `casting_c3_fixed`。R6-C3/C4/C5 evaluator + deterministic driver 已在 FakeBackend 上完成离线证明；MineRL backend 已接通 typed casting evaluator truth（offline-only），不冒充 live implementation。C1 live smoke 身份冻结为 Casting-S-C1 / fixed（兼容 ID `casting_c1_fixed`，指定 `agent_1`）；操作合同见 [C1 Live MineRL Smoke](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)。
 
@@ -66,7 +66,7 @@ R6 合同冻结阶段已新增 3 个 Casting-S benchmark 任务实例，分类�
 - Ruined Portal、Adaptive Routing 和 Multi-Agent；
 - 正式 benchmark episode 数据集。
 
-C2 实例位于 [`casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)，C2 离线合同位于 [`casting_c3_contract.json`](configs/experiments/active/casting_c3_contract.json)，详细规则见 [`casting_c3_fixed` 任务页](docs/tasks/casting/casting_c3_fixed.md)。基础回归与 C1 live smoke 合同见 [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md) 与 [C1 Live MineRL Smoke](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)。R6 合同冻结的 C3 / C4 / C5 实例位于 [`benchmark/instances/casting/single/`](benchmark/instances/casting/single/)。`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 已完成 offline；下一步必须是用户单独授权的一次 C1 真实 MineRL smoke run，而不是直接进入 C5 或 R7。
+C2 实例位于 [`casting_c3_fixed.json`](benchmark/instances/active/casting_c3_fixed.json)，C2 离线合同位于 [`casting_c3_contract.json`](configs/experiments/active/casting_c3_contract.json)，详细规则见 [`casting_c3_fixed` 任务页](docs/tasks/casting/casting_c3_fixed.md)。基础回归与 C1 live smoke 合同见 [`casting_c1_fixed` 任务页](docs/tasks/casting/casting_c1_fixed.md) 与 [C1 Live MineRL Smoke](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)。R6 合同冻结的 C3 / C4 / C5 实例位于 [`benchmark/instances/casting/single/`](benchmark/instances/casting/single/)。`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 与固定 4-tick inventory settle window 已完成 offline；下一步必须是用户单独授权的一次 C1 真实 MineRL smoke run，而不是直接进入 C5 或 R7。客户端画面不构成 server-side 放置证明。
 
 ## 系统架构
 

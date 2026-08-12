@@ -17,14 +17,17 @@ PORTAL_TRANSITION_NAME = "portal_transition"
 #: currently selected hotbar slot. The bridge may also report
 #: ``"empty"`` when the hotbar slot is empty; the backend turns
 #: that into ``None`` on the public :class:`Observation`. The set
-#: is the union of the legacy A0 items and the R6 C3 / C4 / C5
-#: driver items.
+#: is the union of the legacy A0 items, the R6 C3 / C4 / C5 driver
+#: items, and ``bucket``. Minecraft replaces a water/lava bucket in
+#: the selected slot with an empty bucket after a successful use; the
+#: empty bucket is observable state, not an action target.
 PORTAL_SELECTABLE_ITEMS: tuple[str, ...] = (
     "air",
     "obsidian",
     "dirt",
     "water_bucket",
     "lava_bucket",
+    "bucket",
     "cobblestone",
     "flint_and_steel",
 )
@@ -76,7 +79,11 @@ PORTAL_INVENTORY = (
 class PortalGridObservation(KeymapTranslationHandler):
     """Evaluator-only fixed block grid around the A0 construction site."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, at_spawn: bool = True) -> None:
+        if type(at_spawn) is not bool:
+            raise ValueError("at_spawn must be a boolean")
+        self.at_spawn = at_spawn
+        self.at_spawn_value = "true" if at_spawn else "false"
         self.last_payload_present = False
         self.last_unknown_blocks: tuple[str, ...] = ()
         self.last_hero_keys: tuple[str, ...] = ()
@@ -98,7 +105,7 @@ class PortalGridObservation(KeymapTranslationHandler):
     def xml_template(self) -> str:
         return """
         <ObservationFromGrid>
-          <Grid name="{{grid_name}}" atSpawn="true">
+          <Grid name="{{grid_name}}" atSpawn="{{at_spawn_value}}">
             <min x="{{x_min}}" y="{{y_min}}" z="{{z_min}}"/>
             <max x="{{x_max}}" y="{{y_max}}" z="{{z_max}}"/>
           </Grid>
@@ -325,6 +332,8 @@ class PortalA0EnvSpec(HumanSurvival):
         max_game_time_seconds: int = 120,
         initial_inventory: tuple[dict[str, Any], ...] = PORTAL_INVENTORY,
         initial_position: tuple[int, int, int] = (0, 4, 0),
+        include_agent_start_placement: bool = True,
+        grid_at_spawn: bool = True,
     ) -> None:
         if type(max_episode_steps) is not int or max_episode_steps < 1:
             raise ValueError("max_episode_steps must be a positive integer")
@@ -352,6 +361,12 @@ class PortalA0EnvSpec(HumanSurvival):
             raise ValueError("initial_position must be an integer (x, y, z) tuple")
         self.initial_inventory = tuple(normalized_inventory)
         self.initial_position = initial_position
+        if type(include_agent_start_placement) is not bool:
+            raise ValueError("include_agent_start_placement must be a boolean")
+        self.include_agent_start_placement = include_agent_start_placement
+        if type(grid_at_spawn) is not bool:
+            raise ValueError("grid_at_spawn must be a boolean")
+        self.grid_at_spawn = grid_at_spawn
         super().__init__(
             name=PORTAL_ENV_NAME,
             max_episode_steps=max_episode_steps,
@@ -364,7 +379,7 @@ class PortalA0EnvSpec(HumanSurvival):
 
     def create_observables(self):
         return super().create_observables() + [
-            PortalGridObservation(),
+            PortalGridObservation(at_spawn=self.grid_at_spawn),
             PortalDimensionObservation(),
             PortalGridOriginObservation(),
             PortalTransitionObservation(),
@@ -378,16 +393,18 @@ class PortalA0EnvSpec(HumanSurvival):
 
     def create_agent_start(self):
         x, y, z = self.initial_position
-        return super().create_agent_start() + [
+        result = super().create_agent_start() + [
             handlers.SimpleInventoryAgentStart(list(self.initial_inventory)),
-            handlers.AgentStartPlacement(
+        ]
+        if self.include_agent_start_placement:
+            result.append(handlers.AgentStartPlacement(
                 x=x + 0.5,
                 y=float(y),
                 z=z + 0.5,
                 yaw=0.0,
                 pitch=0.0,
-            ),
-        ]
+            ))
+        return result
 
     def create_server_world_generators(self):
         return [handlers.FlatWorldGenerator(force_reset=True, generatorString="")]

@@ -367,10 +367,14 @@ class C1LiveSmokeHelperTests(unittest.TestCase):
         env.step({"hotbar.1": 1, "use": 1})
         raw, _, _, _ = env.step({"forward": 0, "back": 0})
         grid = np.asarray(raw["portal_grid"], dtype=np.int32)
+        spawn = task.spawn_positions["agent_1"]
+        grid_target = tuple(
+            FROZEN_TARGET_CELL[axis] - spawn[axis] for axis in range(3)
+        )
         index = (
-            (FROZEN_TARGET_CELL[1] - (-1)) * 8 * 7
-            + (FROZEN_TARGET_CELL[2] - 0) * 8
-            + (FROZEN_TARGET_CELL[0] - (-3))
+            (grid_target[1] - (-1)) * 8 * 7
+            + (grid_target[2] - 0) * 8
+            + (grid_target[0] - (-3))
         )
         self.assertEqual(int(grid.reshape(-1)[index]), 5)  # obsidian id
 

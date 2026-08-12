@@ -104,7 +104,7 @@ def main() -> int:
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "project_files": files,
-        "phase": "r6_c1_live_minerl_smoke_runner_wiring_done",
+        "phase": "r6_c1_player_relative_truth_grid_anchor_offline_fix_complete",
         "active_task": active_entry.compatibility_id,
         "task_taxonomy": taxonomy,
         "task_catalog_version": catalog.catalog_version,

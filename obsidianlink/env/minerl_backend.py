@@ -133,6 +133,15 @@ def _default_env_factory(task: TaskInstance) -> Any:
         max_game_time_seconds=task.limits["max_game_time_seconds"],
         initial_inventory=initial_inventory,
         initial_position=task.spawn_positions["agent_1"],
+        # MineRL 1.0.2 ignores absolute AgentStart placement on this bridge.
+        # Omitting it for casting makes both the player and atSpawn truth grid
+        # use the real generated world spawn. Legacy Route A0 retains its
+        # historical XML contract.
+        include_agent_start_placement=task.workflow == "route_a_a0",
+        # C1 does not move. A player-relative grid avoids Minecraft's
+        # spawnRadius offset separating the player from the shared-spawn
+        # truth anchor when absolute AgentStart placement is unavailable.
+        grid_at_spawn=task.workflow != "casting_c1_fixed",
     )
     return specification.make()
 
@@ -621,7 +630,7 @@ class MineRLEnvironmentBackend:
         raw = self._require_raw()
         block_grid = self._grid_from_raw(raw)
         baseline_block = self._baseline_grid
-        cell_index = self._cell_index_in_grid(target_cell)
+        cell_index = self._workflow_cell_index(target_cell)
         if cell_index is None:
             raise ValueError(
                 f"target cell {target_cell!r} is outside the portal grid"
@@ -1100,8 +1109,25 @@ class MineRLEnvironmentBackend:
             return None
         return (x, y, z)
 
-    @staticmethod
+    def _workflow_cell_index(
+        self,
+        cell: tuple[int, int, int],
+    ) -> tuple[int, int, int] | None:
+        """Map a public task cell to the atSpawn grid coordinate system."""
+        task = self._task
+        if task is not None and task.workflow == "casting_c1_fixed":
+            spawn = task.spawn_positions.get("agent_1")
+            if (
+                not isinstance(spawn, tuple)
+                or len(spawn) != 3
+                or any(type(value) is not int for value in spawn)
+            ):
+                return None
+            cell = tuple(cell[index] - spawn[index] for index in range(3))
+        return self._cell_index_in_grid(cell)
+
     def _block_name_at(
+        self,
         grid: np.ndarray | None,
         cell: tuple[int, int, int],
         *,
@@ -1110,7 +1136,7 @@ class MineRLEnvironmentBackend:
         """Return the typed block name at ``cell`` in ``grid``."""
         if grid is None:
             return default
-        index = MineRLEnvironmentBackend._cell_index_in_grid(cell)
+        index = self._workflow_cell_index(cell)
         if index is None:
             return default
         block_id = int(grid[index])
@@ -1210,7 +1236,7 @@ class MineRLEnvironmentBackend:
         tuple[int, ...],
     ]:
         """Build one cell's truth from observed, cell-bound evidence."""
-        idx = self._cell_index_in_grid(cell)
+        idx = self._workflow_cell_index(cell)
         if idx is None:
             raise ValueError(f"target cell {cell!r} is outside the portal grid")
         current_block = self._block_name_at(
@@ -1742,7 +1768,7 @@ class MineRLEnvironmentBackend:
             )
             changed_cells: list[tuple[int, int, int]] = []
             for offset in tracked_offsets:
-                idx = self._cell_index_in_grid(offset)
+                idx = self._workflow_cell_index(offset)
                 if idx is None:
                     continue
                 current_id = int(current_truth[idx])
@@ -1770,7 +1796,7 @@ class MineRLEnvironmentBackend:
 
         if previous_truth is not None:
             for offset in tracked_offsets:
-                idx = self._cell_index_in_grid(offset)
+                idx = self._workflow_cell_index(offset)
                 if idx is None:
                     continue
                 if (
@@ -1787,7 +1813,7 @@ class MineRLEnvironmentBackend:
         if (
             self._latched["typed_frame_complete_step"] is None
             and all(
-                (idx := self._cell_index_in_grid(offset)) is not None
+                (idx := self._workflow_cell_index(offset)) is not None
                 and int(current_truth[idx]) == OBSIDIAN_ID
                 and offset in self._latched["first_water_step_by_offset"]
                 and offset in self._latched["first_lava_step_by_offset"]
@@ -1797,7 +1823,7 @@ class MineRLEnvironmentBackend:
         ):
             self._latched["typed_frame_complete_step"] = self._step_id
         ignition_target = (1, 1, 1)
-        ignition_idx = self._cell_index_in_grid(ignition_target)
+        ignition_idx = self._workflow_cell_index(ignition_target)
         if (
             current_credit_kind == "flint_and_steel"
             and previous_truth is not None

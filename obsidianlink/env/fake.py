@@ -8,6 +8,11 @@ from obsidianlink.env.capabilities import (
     BackendCapabilities,
     assert_backend_can_start_task,
 )
+from obsidianlink.env.fake_casting_placement import (
+    CASTING_C1_WORKFLOW,
+    PLACEMENT_FAILURE_MODES,
+    CastingPlacementState,
+)
 from obsidianlink.evaluation.casting import CastingEvaluationState
 from obsidianlink.evaluation.casting_frame_evaluator import (
     FrozenFrameEvaluationState,
@@ -36,12 +41,11 @@ class FakeEnvironmentBackend:
     :meth:`with_capabilities` (or pass a custom manifest to the
     constructor).
 
-    The manifest is purely a declaration. It does not change the
-    backend's :meth:`step` behaviour: the fake backend still ignores
-    every action and never simulates water, lava, or obsidian
-    transitions. Tests use the manifest together with
-    :func:`assert_casting_c1_capabilities` to assert that the
-    pre-episode gate fails closed when the manifest is incomplete.
+    For ``casting_c1_fixed``, the backend applies evaluator-only aim /
+    distance / valid-face / world-effect semantics via
+    :class:`~obsidianlink.env.fake_casting_placement.CastingPlacementState`.
+    Placement diagnostics never enter :class:`Observation`. Non-casting
+    workflows still ignore action world effects.
     """
 
     def __init__(
@@ -91,6 +95,8 @@ class FakeEnvironmentBackend:
         # inject or retrieve this sixth evaluator-only slot.
         self._nether_entry_evaluation_state: FrozenNetherEntryEvaluationState | None = None
         self._selected_items: dict[str, str | None] = {}
+        self._casting_placement: CastingPlacementState | None = None
+        self._casting_placement_failure_mode: str | None = None
 
     @classmethod
     def with_capabilities(
@@ -148,12 +154,32 @@ class FakeEnvironmentBackend:
         self._ignition_evaluation_state = None
         # R6 C5 Nether-entry truth follows the same rule.
         self._nether_entry_evaluation_state = None
-        self._selected_items = {
-            agent_id: self._default_selected_item(
-                task.initial_inventories[agent_id]
+        self._casting_placement = None
+        if task.workflow == CASTING_C1_WORKFLOW:
+            self._casting_placement = CastingPlacementState(
+                task.initial_inventories["agent_1"]
             )
-            for agent_id in task.agent_ids
-        }
+            if self._casting_placement_failure_mode is not None:
+                self._casting_placement.set_failure_mode(
+                    self._casting_placement_failure_mode
+                )
+            self._selected_items = {
+                agent_id: self._default_selected_item(
+                    task.initial_inventories[agent_id]
+                )
+                for agent_id in task.agent_ids
+            }
+            if self._casting_placement is not None:
+                self._casting_placement.selected_item = self._selected_items.get(
+                    "agent_1"
+                )
+        else:
+            self._selected_items = {
+                agent_id: self._default_selected_item(
+                    task.initial_inventories[agent_id]
+                )
+                for agent_id in task.agent_ids
+            }
         return self._observations()
 
     def step(self, actions: Mapping[str, MacroAction]) -> BackendStep:
@@ -162,11 +188,27 @@ class FakeEnvironmentBackend:
             raise ValueError("actions must contain every task agent exactly once")
         if any(not isinstance(action, MacroAction) for action in actions.values()):
             raise ValueError("actions must contain MacroAction values")
-        for agent_id, action in actions.items():
-            if action.action_type in {"equip_item", "use_item", "place_block"}:
-                if action.target in task.initial_inventories[agent_id]:
-                    self._selected_items[agent_id] = action.target
         self._step_id += 1
+        if task.workflow == CASTING_C1_WORKFLOW and self._casting_placement is not None:
+            for agent_id, action in actions.items():
+                if agent_id != "agent_1":
+                    continue
+                self._casting_placement.apply(action, step_id=self._step_id)
+                if action.action_type == "equip_item" and action.target is not None:
+                    self._selected_items[agent_id] = (
+                        self._casting_placement.selected_item
+                    )
+                elif self._casting_placement.selected_item is not None:
+                    self._selected_items[agent_id] = (
+                        self._casting_placement.selected_item
+                    )
+        else:
+            for agent_id, action in actions.items():
+                if action.action_type in {"equip_item", "use_item", "place_block"}:
+                    if action.target in task.initial_inventories[agent_id]:
+                        self._selected_items[agent_id] = action.target
+            # Legacy non-casting behaviour: selected item is not sticky.
+            self._selected_items = {}
         if self._evaluation_state is not None:
             state = self._evaluation_state
             self._evaluation_state = EvaluationState(
@@ -191,7 +233,6 @@ class FakeEnvironmentBackend:
         self._ignition_evaluation_state = None
         # R6 C5 Nether-entry truth follows the same rule.
         self._nether_entry_evaluation_state = None
-        self._selected_items = {}
         return BackendStep(
             episode_id=task.task_id,
             step_id=self._step_id,
@@ -475,6 +516,53 @@ class FakeEnvironmentBackend:
         self._frame_evaluation_state = None
         self._ignition_evaluation_state = None
         self._nether_entry_evaluation_state = None
+        self._casting_placement = None
+        self._casting_placement_failure_mode = None
+        self._selected_items = {}
+
+    def set_casting_placement_failure_mode(self, mode: str | None) -> None:
+        """Inject an evaluator-only placement failure mode for C1 tests.
+
+        The mode survives ``reset`` so ``run_casting_c1_driver`` can apply it
+        after the driver-owned reset. Diagnostics remain evaluator-only.
+        """
+        if mode is not None and mode not in PLACEMENT_FAILURE_MODES:
+            raise ValueError(f"unknown casting placement failure mode: {mode!r}")
+        self._casting_placement_failure_mode = mode
+        if self._casting_placement is not None:
+            self._casting_placement.set_failure_mode(mode)
+
+    def get_casting_placement_diagnostics(self) -> tuple[Mapping[str, object], ...]:
+        """Return evaluator-only placement diagnostics (never in Observation)."""
+        if self._casting_placement is None:
+            return ()
+        return tuple(dict(item) for item in self._casting_placement.diagnostics)
+
+    def get_casting_placement_grid_revision(self) -> int:
+        """Return evaluator-only grid revision counter for C1 placement."""
+        if self._casting_placement is None:
+            return 0
+        return int(self._casting_placement.grid_revision)
+
+    def get_simulated_casting_evaluation_state(
+        self, *, terminated: bool = True
+    ) -> CastingEvaluationState:
+        """Return independent offline truth from placement simulation.
+
+        This explicit test-only surface remains separate from the injected
+        production-shaped ``get_casting_evaluation_state`` slot, and none of
+        its values enter Agent-visible observations.
+        """
+        task = self._require_task()
+        if self._casting_placement is None:
+            raise RuntimeError("casting placement state is unavailable")
+        return self._casting_placement.build_evaluation_state(
+            episode_id=task.task_id,
+            step_id=self._step_id,
+            max_environment_steps=int(task.limits["max_environment_steps"]),
+            max_game_time_seconds=float(task.limits["max_game_time_seconds"]),
+            terminated=terminated,
+        )
 
     def _require_open(self) -> None:
         if not self._opened:
@@ -489,19 +577,29 @@ class FakeEnvironmentBackend:
     def _observations(self) -> Mapping[str, Observation]:
         task = self._require_task()
         timestamp = time.time()
-        return {
-            agent_id: Observation(
+        observations: dict[str, Observation] = {}
+        for agent_id in task.agent_ids:
+            if (
+                task.workflow == CASTING_C1_WORKFLOW
+                and self._casting_placement is not None
+                and agent_id == "agent_1"
+            ):
+                inventory = dict(self._casting_placement.inventory)
+                selected = self._casting_placement.selected_item
+            else:
+                inventory = task.initial_inventories[agent_id]
+                selected = self._selected_items.get(agent_id)
+            observations[agent_id] = Observation(
                 episode_id=task.task_id,
                 agent_id=agent_id,
                 step_id=self._step_id,
                 timestamp=timestamp,
                 frame={"backend": "fake", "step_id": self._step_id},
-                visible_inventory=task.initial_inventories[agent_id],
-                selected_item=self._selected_items.get(agent_id),
+                visible_inventory=inventory,
+                selected_item=selected,
                 workflow_stage=task.workflow,
             )
-            for agent_id in task.agent_ids
-        }
+        return observations
 
     @staticmethod
     def _default_selected_item(

@@ -4,26 +4,128 @@
 
 ## 当前唯一目标
 
-任务：`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING`（已完成，offline）
+任务：`R6-C1-PLAYER-RELATIVE-TRUTH-GRID-ANCHOR-OFFLINE-FIX`（**离线完成；不得自动 live**）
 
-本轮在不启动真实 MineRL/Minecraft 的前提下，完成 C1 smoke runner wiring：冻结 TaskInstance + C1 deterministic driver + production `MineRLEnvironmentBackend`(注入式 stub `env_factory`) + 独立 `CastingEvaluator` + episode finalization + 完整 evidence bundle。`live_run_allowed` 保持 `false`；不得把 offline stub success 写成 live 验证。
+第八次授权 live 再次正常完成 36-step driver；最终画面明确显示熔岩、流水和两块圆石，但目标仍未生成黑曜石，evaluator 为 `truth_missing`。对照 MineRL bridge 源码确认上一轮修复仍漏掉 Minecraft 默认 `spawnRadius`：省略绝对 placement 后，玩家可能随机落在共享世界出生点周围，而 `atSpawn=true` grid 仍固定在共享出生点。现已离线修复为仅 C1 使用 `atSpawn=false`，使 evaluator grid 以未移动的真实玩家位置为稳定原点；公开目标继续严格映射为 `[2,0,3]`。Route A0 与 C2–C5 的 grid XML 行为保持不变；不修改 `vendor/minerl` 或版本。
 
-`R6-C5-LIVE-MINERL-BACKEND-WIRING` 与 `R6-C1-LIVE-MINERL-SMOKE-VALIDATION-CONTRACT-FREEZE` 均已完成。下一步必须是用户单独授权的一次 **C1** 真实 MineRL smoke run；不得直接跳到 C5 或 R7。若真实运行需要 Gradle，须另行单独批准。
+上一轮授权 live（`R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN`）仍失败，证据：
 
-当前 active implementation 仍是 Casting-S-C2 / fixed 的兼容 ID `casting_c3_fixed`。旧 ID 中的 `c3` 表示三个 cell，不表示 B0 taxonomy 的 C3；文档级兼容名称为 `casting_s_c2_fixed`。`casting_c1_fixed` 保留为 Casting-S-C1 回归合同，并作为 C1 live smoke 的兼容任务身份。
+`runs/casting_c1_fixed/20260812-110318/`
 
-R6 的 Casting-S-C3 / C4 / C5 任务合同**已经冻结**（catalog 可见、taxonomy 正确、scenario_parameters 显式、`live_run_allowed=false`）。R6-C3 / C4 / C5 evaluator + deterministic driver 已在 FakeBackend 上完成离线证明；MineRL backend typed truth wiring 已在 stub raw observations 上完成离线证明。`casting_s_c5_fixed` 仍必须保持 `implementation_status="contract_only"`、`live_run_allowed=false`；C5 不冒充正式 live implementation。
+- driver：`completed`（旧 24-step plan）；evaluator：`truth_missing`
+- 库存未变；水/熔岩/黑曜石未捕获
+- catalog `live_run_allowed` 仍为 `false`
+
+第二次授权 live 已执行且失败，证据：
+
+`runs/casting_c1_fixed/20260812-153108/`
+
+- 第一块圆石生效（库存 8→7），证明相对相机和精确库存确认路径已生效；
+- 第二块圆石在 step 9 无效，driver 按 `expected_inventory_effect_missing` 提前 blocked；
+- final frame 显示准星被第一块支撑结构的近侧面截获，未命中独立第二草地顶面；
+- 水/熔岩动作未执行，evaluator `truth_missing` / success=false；
+- 环境仅启动一次并正常关闭；未跑 Gradle、模型 API 或 C2–C5 live。
+
+第三次授权 live 已执行且失败，证据：
+
+`runs/casting_c1_fixed/20260812-154111/`
+
+- final frame 显示两格高圆石柱，证明第二支撑块实际放置成功；
+- step 9 当拍 inventory 仍为 7，driver 因 observation 延迟误判 blocked；
+- 水/熔岩动作未执行，evaluator `truth_missing` / success=false；
+- 环境一次、episode 一次、正常 close；无 Gradle/模型 API/C2–C5 live。
+
+第四次授权 live 已执行且失败，证据：
+
+`runs/casting_c1_fixed/20260812-162216/`
+
+- final frame 再次显示两格高圆石柱，但客户端画面不能证明服务端已接受第二块；
+- step 9 与唯一 settle step 10 均报告圆石 7，driver 以 `expected_inventory_effect_missing` blocked；
+- 水/熔岩动作未执行，evaluator `truth_missing` / success=false；
+- 环境一次、episode 一次、正常 close；无 Gradle/模型 API/C2–C5 live。
+
+有界多拍 inventory settle window 已离线完成。之后的真实 C1 smoke 仍须再次单独授权；不得自动运行。
+
+第五次授权 live 已执行且失败，证据：
+
+`runs/casting_c1_fixed/20260812-163842/`
+
+- 4-tick 窗口未成为阻塞点，执行到桶动作后 MineRL 返回 selected item `bucket`；
+- 后端旧白名单抛出 `ValueError`，evaluator 未运行，证据包按 fail-closed 标记 incomplete；
+- 环境 factory 一次并正常 close；无 Gradle/模型 API/C2–C5 live；
+- 离线修复仅把 `bucket` 加入 observation 白名单，不加入 translator 动作白名单。
+
+第六次授权 live 已执行且失败，证据：
+
+`runs/casting_c1_fixed/20260812-164731/`
+
+- MineRL mission 已送达客户端，但 JVM sound-engine 在 `STBVorbis` 原生解码中 `SIGSEGV`；
+- Python `_send_mission` 因连接消失收到 `None`，reset fail closed，episode 未开始；
+- JVM 崩溃证据：`vendor/minerl/minerl/MCP-Reborn/hs_err_pid18454.log`；
+- 离线修复采用临时、同 JAR、全静音 runtime copy，未修改独立 vendor 仓库。
+
+第七次授权 live 已执行且失败，证据：
+
+`runs/casting_c1_fixed/20260812-165809/`
+
+- 临时静音 runtime 生效，环境一次、episode 一次、正常 close；driver 完成全部 36 步；
+- 熔岩桶与水桶动作均被客户端接受，最终库存为 `bucket=2`、`cobblestone=6`；
+- evaluator 为 `truth_missing`，自动 water/lava/obsidian truth 均为 false；客户端画面中的水和深色方块只能用于诊断，不能替代 server-side truth；
+- Minecraft 日志中的玩家位置约为 `(-893.5,63,-501.5)`，而 mission XML placement 是 `[0.5,4.0,0.5]`，确认 `atSpawn` grid 锚点与真实玩家区域分离；
+- 运行结束后才实施 spawn-relative truth-grid 离线修复；未二次启动 MineRL、未跑 Gradle、未调用模型 API。
+
+第八次授权 live 已执行且失败，证据：
+
+`runs/casting_c1_fixed/20260812-171620/`
+
+- 沙箱内预启动先在 `runs/casting_c1_fixed/20260812-171556/` 因 `[Errno 1] Operation not permitted` 在 reset 前失败；随后按同一授权在沙箱外启动；
+- 环境一次、episode 一次、正常 close；driver 完成 36 步，最终库存 `bucket=2`、`cobblestone=6`；
+- final frame 明确显示熔岩源、流水和两块圆石，但没有黑曜石；evaluator 为 `truth_missing`；
+- bridge 源码证明 `atSpawn=true` 在没有 placement 时使用共享世界出生点，而玩家受默认 `spawnRadius` 影响可能偏移；上一轮“省略 placement 即可对齐”的假设不完整；
+- 运行结束后才实施 C1-only `atSpawn=false` player-relative grid 离线修复；未再次启动 MineRL、未跑 Gradle、未调用模型 API。
+
+当前 active implementation 仍是 Casting-S-C2 / fixed 的兼容 ID `casting_c3_fixed`。`casting_s_c5_fixed` 仍为 `contract_only` / `live_run_allowed=false`。
+
+## R6-C1-LIVE-AIM-AND-PLACE-OFFLINE-FIX（完成，offline）
+
+1. **Plan**：`build_casting_action_plan()` 现为 36-step：按 MineRL 语义累加有界相对 `look` delta，依次瞄准两个支撑顶面、熔岩目标顶面和相邻水源顶面；每次 relevant action 后提供最多 4 个固定 no-op tick。目标物品必须在窗口内恰好减少 1，否则 `expected_inventory_effect_missing` fail closed。
+2. **FakeBackend**：`CastingPlacementState` 几何 oracle 不 import driver 常量，独立按相对相机累加、射线角度、可达距离和冻结实体顶面验证 `not_aimed` / `too_far` / `no_valid_face` / `no_world_effect`；正路径必须由独立 `CastingEvaluator` 返回 success。Diagnostics / grid revision / typed casting truth 仅 evaluator-only，不进入 Observation/prompt/memory。
+3. **Offline stub**：`C1ReactiveStubEnv` 同步扣减库存，保证 offline smoke 正路径与新生效确认兼容。
+4. **边界**：不改 `vendor/minerl`；不跑 Gradle；不启动真实 MineRL；不调用模型 API；不提交/推送。实体面与水流相互作用仍需下一次授权 live 验证。
+
+## R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN（一次真实运行，失败）
+
+1. **Live 入口**：[`obsidianlink/runners/casting_c1_live.py`](obsidianlink/runners/casting_c1_live.py) + [`scripts/run_c1_live.py`](scripts/run_c1_live.py)；闭集 `authorized_live_c1` + `--authorized-live-run casting_c1_fixed`；不接受任意 factory/backend；不改 catalog。
+2. **实际命令**：
+   `/opt/anaconda3/envs/mc-agent/bin/python scripts/run_c1_live.py --mode authorized_live_c1 --authorized-live-run casting_c1_fixed --wall-clock-seconds 900`
+3. **Gradle**：不需要且未运行（已有 `mcprec-6.13.jar` + `launchClient.sh` 的 `java -jar` 路径）。
+4. **Verdict**：失败（见上方摘要与 run 内 `manual_review.md`）。
+
+## R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN-2（第二次真实运行，失败）
+
+1. **证据**：`runs/casting_c1_fixed/20260812-153108/`。
+2. **Driver**：在 step 9 blocked；第一块圆石生效，第二块圆石无效后 fail closed。
+3. **Evaluator**：`truth_missing` / success=false；未进入水/熔岩步骤。
+4. **Lifecycle**：一个环境、一个 episode、正常 close；无 Gradle/模型 API/C2–C5 live。
+
+## R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN-3（第三次真实运行，失败）
+
+1. **证据**：`runs/casting_c1_fixed/20260812-154111/`。
+2. **Driver**：在 step 9 blocked；当拍 inventory 未刷新，但 final frame 证明两块圆石均已放置。
+3. **Evaluator**：`truth_missing` / success=false；未进入水/熔岩步骤。
+4. **Lifecycle**：一个环境、一个 episode、正常 close；无 Gradle/模型 API/C2–C5 live。
+5. **离线后续**：一拍 inventory settle 确认已实现；相关 101 项与全量 1239 项离线测试通过。
 
 ## R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING 完成（offline）
 
 1. **入口**：[`obsidianlink/runners/casting_c1_live_smoke.py`](obsidianlink/runners/casting_c1_live_smoke.py) 与 [`scripts/run_c1_live_smoke.py`](scripts/run_c1_live_smoke.py)。
-2. **执行模式**：闭集仅 `offline_stub`；只接受受控类型 `OfflineC1StubEnvFactory`，任意 callable 与外部 `backend=` 注入通道均被拒绝；`request_live` / `allow_live_run_override` / 未选 offline 模式一律 fail closed；CLI 无可用 live 命令。
+2. **执行模式**：闭集仅 `offline_stub`；只接受受控类型 `OfflineC1StubEnvFactory`，任意 callable 与外部 `backend=` 注入通道均被拒绝；`request_live` / `allow_live_run_override` / 未选 offline 模式一律 fail closed。
 3. **冻结身份**：family=`casting`、mode=`single`、level=`C1`、layout=`fixed`、compatibility task=`casting_c1_fixed`、canonical=`casting_s_c1_fixed`、agent=`agent_1`、target=`[2,4,3]`。
 4. **Preflight**：在 env factory 调用前校验完整 TaskInstance 与 canonical `casting_c1_fixed` 精确等值（含 step/time/model-call budgets、精确库存和禁止额外 obsidian）、capability、plan 等值、catalog `live_run_allowed=false`；输出目录必须为绝对、尚不存在且位于正式 `runs/` 外。
 5. **编排**：driver → `mark_terminated` → backend typed `get_casting_evaluation_state` → 独立 `CastingEvaluator`；driver completed 不映射为 success。
 6. **Evidence**：在目标同一父目录 staging，完整 10 文件 bundle 与最终 close 状态写定后用原子 rename 发布；拒绝覆盖已有目录；public events / summary 不含 evaluator-only token；PNG 合法可读；失败只写 fail-closed summary。
 7. **生命周期**：成功/失败/异常路径均有限次 close；close 失败被结构化记录。
-8. **未验证**：真实 MineRL/Minecraft 水/熔岩/黑曜石变化、task-origin/grid 锚定、portal transition 仍未验证。
+8. 真实授权入口见上方 `R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN`；offline stub success 仍不等于 live 验证。
 
 操作说明见 [`docs/runbooks/C1_LIVE_MINERL_SMOKE.md`](docs/runbooks/C1_LIVE_MINERL_SMOKE.md)。
 
@@ -871,8 +973,8 @@ Task catalog、严格解析器、active entry 约束、calibration 分类与 C1/
 
 Task catalog 解析/路径/分类正反例、R5 evaluator 与 driver 专项测试、R6-C3/C4/C5 evaluator/driver 专项测试、R6-C5 MineRL backend wiring 专项测试、C1 live smoke 合同冻结不变量、capability、benchmark file、CLI、R3/R4 回归、portal / frame geometry 旧测试必须保持通过。任何合同整理不得削弱严格解析、预算、因果、兼容性或信息隔离合同，也不得把 `live_run_allowed` 偷偷改为 `true`。
 
-R6-C5-LIVE-MINERL-BACKEND-WIRING 最终离线验证（历史）：全量 **1175** 个离线测试通过；`phase="r6_c5_live_minerl_backend_wiring_done"`。`R6-C1-LIVE-MINERL-SMOKE-VALIDATION-CONTRACT-FREEZE` 将 phase 更新为 `r6_c1_live_minerl_smoke_validation_contract_freeze`（历史）。本轮 `R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 将 phase 更新为 `r6_c1_live_minerl_smoke_runner_wiring_done`；安全收尾后全量 **1211** 个离线测试通过（`Ran 1211 tests in 181.479s → OK`），仍未启动真实 MineRL/Minecraft、Gradle 或模型 API。
+R6-C5-LIVE-MINERL-BACKEND-WIRING 最终离线验证（历史）：全量 **1175** 个离线测试通过；`phase="r6_c5_live_minerl_backend_wiring_done"`。`R6-C1-LIVE-MINERL-SMOKE-VALIDATION-CONTRACT-FREEZE` 将 phase 更新为 `r6_c1_live_minerl_smoke_validation_contract_freeze`（历史）。`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 将 phase 更新为 `r6_c1_live_minerl_smoke_runner_wiring_done`。历史 `R6-C1-LIVE-AIM-AND-PLACE-OFFLINE-FIX` phase 为 `r6_c1_live_aim_and_place_offline_fix_complete`；历史音频隔离 phase 为 `r6_c1_native_audio_crash_isolation_offline_fix_complete`；历史 spawn-relative phase 为 `r6_c1_spawn_relative_truth_grid_anchor_offline_fix_complete`。当前 `R6-C1-PLAYER-RELATIVE-TRUTH-GRID-ANCHOR-OFFLINE-FIX` phase 为 `r6_c1_player_relative_truth_grid_anchor_offline_fix_complete`，全量 **1247** 个离线测试通过（`Ran 1247 tests in 189.823s → OK`）。第八次授权 live 关闭后才进行该离线修复；修复阶段未再次启动 MineRL/Minecraft、Gradle 或模型 API。
 
 ## 下一任务
 
-下一任务：用户单独授权的一次 **C1** 真实 MineRL smoke run（`casting_c1_fixed`）。`R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING` 已完成 offline；不得直接进入 C5 live 或 R7。若需要 Gradle，须另行单独批准。`live_run_allowed` 仍为 `false`。
+下一任务：用户单独授权的一次 C1 真实 MineRL smoke run，用于验证 C1 player-relative truth-grid 锚定并取得水/熔岩/黑曜石 server-side truth；客户端画面不构成 server-side 成功证明。`live_run_allowed` 仍为 `false`；不得自动运行，不得直接进入 C5 live 或 R7。

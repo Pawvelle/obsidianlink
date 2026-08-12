@@ -1655,6 +1655,21 @@ class PortalSelectedItemObservableTests(unittest.TestCase):
             "cobblestone",
         )
 
+    def test_empty_bucket_is_valid_observed_selected_item(self) -> None:
+        raw = _default_raw_observation(selected_item="bucket")
+        self.assertIn("bucket", PORTAL_SELECTABLE_ITEMS)
+        self.assertEqual(
+            MineRLEnvironmentBackend._selected_item_from_raw(raw),
+            "bucket",
+        )
+
+    def test_empty_bucket_does_not_become_an_action_target(self) -> None:
+        from obsidianlink.actions.minerl_translator import (
+            TRANSLATOR_EQUIPPABLE_ITEMS,
+        )
+
+        self.assertNotIn("bucket", TRANSLATOR_EQUIPPABLE_ITEMS)
+
 
 # ----------------------------------------------------------------------
 # Source / capability gate integration
@@ -2285,6 +2300,7 @@ class TypedTruthCastingC1Tests(unittest.TestCase):
         self,
     ) -> None:
         target_cell = (2, 4, 3)
+        grid_cell = (2, 0, 3)
         # The reset baseline must show ``air`` at the target
         # cell. The trajectory must show water then lava then
         # obsidian so the backend can latch the first water
@@ -2294,12 +2310,12 @@ class TypedTruthCastingC1Tests(unittest.TestCase):
         # state.
         baseline_raw = _build_raw_with_obsidian(obsidian_offsets=())
         water_raw = _build_raw_with_obsidian(
-            obsidian_offsets=(), water_offsets=(target_cell,)
+            obsidian_offsets=(), water_offsets=(grid_cell,)
         )
         lava_raw = _build_raw_with_obsidian(
-            obsidian_offsets=(), lava_offsets=(target_cell,)
+            obsidian_offsets=(), lava_offsets=(grid_cell,)
         )
-        final_raw = _build_raw_with_obsidian(obsidian_offsets=(target_cell,))
+        final_raw = _build_raw_with_obsidian(obsidian_offsets=(grid_cell,))
         backend = MineRLEnvironmentBackend(
             env_factory=lambda task: _StubMineRLBridgeEnv(
                 raw_observation=baseline_raw,
@@ -2357,7 +2373,7 @@ class TypedTruthCastingC1Tests(unittest.TestCase):
         # Baseline already has obsidian at the cell. The
         # backend must not produce transition evidence
         # because the episode did not produce the obsidian.
-        raw = _build_raw_with_obsidian(obsidian_offsets=(target_cell,))
+        raw = _build_raw_with_obsidian(obsidian_offsets=((2, 0, 3),))
         backend = _open_backend_with(raw, _c1_task())
         try:
             state = backend.get_casting_evaluation_state(target_cell)
@@ -2375,7 +2391,7 @@ class TypedTruthCastingC1Tests(unittest.TestCase):
     def test_c1_water_observation_does_not_create_lava_truth(self) -> None:
         target_cell = (2, 4, 3)
         baseline = _build_raw_with_obsidian()
-        water = _build_raw_with_obsidian(water_offsets=(target_cell,))
+        water = _build_raw_with_obsidian(water_offsets=((2, 0, 3),))
         backend = MineRLEnvironmentBackend(
             env_factory=lambda task: _StubMineRLBridgeEnv(
                 raw_observation=baseline,
@@ -2411,7 +2427,7 @@ class TypedTruthCastingC1Tests(unittest.TestCase):
         # credit.
         raw = _build_raw_with_obsidian(
             obsidian_offsets=(),
-            water_offsets=(target_cell,),
+            water_offsets=((2, 0, 3),),
         )
         backend = _open_backend_with(raw, _c1_task())
         try:

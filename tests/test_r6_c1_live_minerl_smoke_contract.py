@@ -26,8 +26,10 @@ SMOKE_RUNBOOK = ROOT / "docs/runbooks/C1_LIVE_MINERL_SMOKE.md"
 PROJECT_STATUS = ROOT / "PROJECT_STATUS.md"
 README = ROOT / "README.md"
 
-EXPECTED_PHASE = "r6_c1_live_minerl_smoke_runner_wiring_done"
-CURRENT_TASK = "R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING"
+EXPECTED_PHASE = "r6_c1_player_relative_truth_grid_anchor_offline_fix_complete"
+CURRENT_TASK = "R6-C1-PLAYER-RELATIVE-TRUTH-GRID-ANCHOR-OFFLINE-FIX"
+AUTHORIZED_RUN_TASK = "R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN"
+OFFLINE_WIRING_TASK = "R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING"
 FORBIDDEN_LIVE_CLAIMS = (
     "真实 MineRL 已验证",
     "真实 MineRL/Minecraft 已验证",
@@ -46,9 +48,11 @@ class C1LiveSmokeContractFreezeTests(unittest.TestCase):
         )
         self.assertFalse(payload["live_run_allowed"])
         note = str(payload["note"])
+        self.assertIn(OFFLINE_WIRING_TASK, note)
         self.assertIn(CURRENT_TASK, note)
+        self.assertIn(AUTHORIZED_RUN_TASK, note)
         self.assertIn("offline_stub", note)
-        self.assertIn("no real MineRL", note)
+        self.assertIn("No MineRL", note)
 
     def test_check_environment_phase_matches(self) -> None:
         text = (ROOT / "scripts/check_environment.py").read_text(encoding="utf-8")
@@ -98,19 +102,20 @@ class C1LiveSmokeContractFreezeTests(unittest.TestCase):
         self.assertIn("不允许预置或直接放置 `obsidian`", runbook)
         self.assertIn("live_run_allowed", runbook)
         self.assertIn(CURRENT_TASK, runbook)
+        self.assertIn(AUTHORIZED_RUN_TASK, runbook)
+        self.assertIn(OFFLINE_WIRING_TASK, runbook)
         self.assertIn("offline_stub", runbook)
-        self.assertIn(
-            "下一步必须是用户单独授权的一次 C1 真实 MineRL smoke run",
-            runbook,
-        )
+        self.assertIn("再次真实运行必须重新授权", runbook)
 
         status = PROJECT_STATUS.read_text(encoding="utf-8")
         self.assertIn(CURRENT_TASK, status)
+        self.assertIn(AUTHORIZED_RUN_TASK, status)
         self.assertIn("compatibility task | `casting_c1_fixed`", status)
         self.assertIn("designated agent | `agent_1`", status)
 
         readme = README.read_text(encoding="utf-8")
-        self.assertIn(CURRENT_TASK, readme)
+        self.assertIn("casting_c1_fixed", readme)
+        self.assertIn("authorized_live_c1", readme)
 
     def test_docs_do_not_claim_live_minerl_verified(self) -> None:
         for path in (README, PROJECT_STATUS, SMOKE_RUNBOOK):

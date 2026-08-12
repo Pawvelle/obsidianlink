@@ -324,7 +324,7 @@ def _offline_contract_check() -> dict[str, object]:
     taxonomy["compatibility_task_name"] = active_entry.canonical_name
     return {
         "status": "ok",
-        "phase": "r6_c1_live_minerl_smoke_runner_wiring_done",
+        "phase": "r6_c1_player_relative_truth_grid_anchor_offline_fix_complete",
         "active_task": active_entry.compatibility_id,
         "task_taxonomy": taxonomy,
         "task_catalog_version": catalog.catalog_version,
@@ -349,8 +349,28 @@ def _offline_contract_check() -> dict[str, object]:
             "production MineRL backend offline. "
             "R6-C1-LIVE-MINERL-SMOKE-RUNNER-WIRING adds an offline-only C1 smoke "
             "runner (driver + stub env_factory + CastingEvaluator + evidence "
-            "bundle) under execution_mode=offline_stub; live MineRL remains "
-            "unauthorized (live_run_allowed=false). "
+            "bundle) under execution_mode=offline_stub. "
+            "R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN executed one authorized live "
+            "C1 smoke that failed (evaluator truth_missing; live casting still "
+            "unverified; live_run_allowed=false). "
+            "R6-C1-LIVE-AIM-AND-PLACE-OFFLINE-FIX uses bounded relative camera "
+            "deltas, independent frozen-face geometry, cobblestone equip+wait, "
+            "and exact per-item inventory-effect checks (offline only). "
+            "R6-C1-INVENTORY-SETTLE-CONFIRMATION-OFFLINE-FIX permits exactly "
+            "one existing settle wait tick to confirm a delayed exact inventory "
+            "decrement, then fails closed if the effect is still absent. "
+            "R6-C1-BOUNDED-INVENTORY-SETTLE-WINDOW-OFFLINE-FIX provides a "
+            "fixed four-tick no-op confirmation window and remains fail-closed. "
+            "R6-C1-EMPTY-BUCKET-SELECTED-ITEM-OFFLINE-FIX accepts Minecraft's "
+            "post-use empty bucket as observation only, never as an action target. "
+            "R6-C1-NATIVE-AUDIO-CRASH-ISOLATION-OFFLINE-FIX runs the exact "
+            "vendored jar from an ephemeral sound-muted runtime directory. "
+            "R6-C1-SPAWN-RELATIVE-TRUTH-GRID-ANCHOR-OFFLINE-FIX omits the "
+            "ignored absolute AgentStart placement for Casting and maps the "
+            "C1 public target into the atSpawn-relative evaluator grid. "
+            "R6-C1-PLAYER-RELATIVE-TRUTH-GRID-ANCHOR-OFFLINE-FIX additionally "
+            "uses atSpawn=false for C1 so spawnRadius cannot separate the "
+            "stationary player from the evaluator grid. "
             "No MineRL / Gradle / model API call was performed in this check."
         ),
     }

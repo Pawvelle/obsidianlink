@@ -25,7 +25,8 @@ R4. It obeys the same constraints as the legacy Route A0
   driver surface has no access to those methods.
 * The driver only emits :class:`MacroAction` values from the
   project's public action protocol:
-  ``equip_item`` / ``use_item`` / ``place_block`` / ``wait``. The driver's
+  ``equip_item`` / ``use_item`` / ``place_block`` / ``wait`` /
+  ``look`` / ``move``. The driver's
   :func:`build_casting_action_plan` is the single source of truth
   for the action sequence; no other action sequence is allowed at
   runtime.
@@ -98,13 +99,14 @@ AGENT_ID = "agent_1"
 # exclusively through ``use_item`` with ``water_bucket`` /
 # ``lava_bucket`` as the target.
 ALLOWED_R4_ACTION_TYPES: frozenset[str] = frozenset(
-    {"equip_item", "use_item", "place_block", "wait"}
+    {"equip_item", "use_item", "place_block", "wait", "look", "move"}
 )
 
 
 # Targets the driver is allowed to use. ``place_block`` is allowed
 # only for the cobblestone support block; ``use_item`` is allowed
-# only for the two buckets.
+# only for the two buckets. ``equip_item`` may select either bucket
+# or cobblestone before placement.
 ALLOWED_R4_TARGETS: frozenset[str] = frozenset(
     {
         "water_bucket",
@@ -117,23 +119,46 @@ ALLOWED_R4_TARGETS: frozenset[str] = frozenset(
 # Phase labels used in the structured event log. Phases are not
 # read by the driver; they are emitted for evidence only.
 PHASE_PREPARE = "prepare"
+PHASE_AIM = "aim"
 PHASE_PLACE_SUPPORT = "place_support"
 PHASE_PLACE_LAVA = "place_lava"
 PHASE_PLACE_WATER = "place_water"
 PHASE_WAIT_FOR_OBSIDIAN = "wait_for_obsidian"
 
+# Frozen public interaction geometry for target cell ``[2, 4, 3]`` from
+# spawn ``[0, 4, 0]``.  Camera actions are *relative deltas*, matching
+# MineRL's HumanLevelCommands transport.  The click points are the centres
+# of solid top faces at y=4: two nearby support cells, the lava target, and
+# the adjacent water source whose flow reaches the lava target.
+FROZEN_PLAYER_EYE: tuple[float, float, float] = (0.5, 5.62, 0.5)
+FROZEN_SUPPORT_FACE_POINTS: tuple[tuple[float, float, float], ...] = (
+    (1.5, 4.0, 3.5),
+    # This face exists only after support.block_1 succeeds. Building upward
+    # avoids the real-scene ray interception observed when aiming at a second
+    # grass face behind/beside the first placed block.
+    (1.5, 5.0, 3.5),
+)
+FROZEN_LAVA_FACE_POINT: tuple[float, float, float] = (2.5, 4.0, 3.5)
+FROZEN_WATER_FACE_POINT: tuple[float, float, float] = (2.5, 4.0, 2.5)
+LOOK_PARAMETER_ABS_MAX: float = 30.0
+MOVE_FORWARD_ABS_MAX: float = 1.0
+
 
 # Defaults for the bounded plan. Each value is a *hard* upper
 # bound; smaller values are accepted, larger values are rejected.
 # The default ``max_wait_steps`` is intentionally larger than
-# the plan's total wait count (17) so the default plan fits
-# without a hard cap, but the cap still fires if a caller
-# injects an unbounded loop.
-DEFAULT_MAX_WAIT_STEPS: int = 32
+# the plan's total wait count so the default plan fits without a
+# hard cap, but the cap still fires if a caller injects an
+# unbounded loop.
+DEFAULT_MAX_WAIT_STEPS: int = 40
 MAX_PLAN_WAIT_STEPS: int = DEFAULT_MAX_WAIT_STEPS
-DEFAULT_SUPPORT_BLOCK_WAIT_STEPS: int = 1
+DEFAULT_SUPPORT_BLOCK_WAIT_STEPS: int = 4
 DEFAULT_FLUID_SETTLE_WAIT_STEPS: int = 4
 DEFAULT_OBSIDIAN_WAIT_STEPS: int = 4
+# A relevant action may be acknowledged late by MineRL, but the driver must
+# never wait without a fixed bound.  Only consecutive, already-planned no-op
+# ticks may be used for confirmation; any intervening action fails closed.
+MAX_INVENTORY_CONFIRMATION_WAIT_STEPS: int = 4
 
 
 # Step / time budget defaults match the ``casting_c1_fixed`` task
@@ -205,6 +230,62 @@ def _thaw_value(value: Any) -> Any:
     return value
 
 
+def _require_look_parameters(parameters: Mapping[str, Any], *, context: str) -> None:
+    allowed = {"yaw", "pitch"}
+    unknown = set(parameters) - allowed
+    if unknown:
+        raise ValueError(
+            f"{context}: look parameters may only include yaw/pitch, "
+            f"got {sorted(unknown)}"
+        )
+    if "yaw" not in parameters or "pitch" not in parameters:
+        raise ValueError(f"{context}: look requires yaw and pitch")
+    for name in ("yaw", "pitch"):
+        value = parameters[name]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{context}: look {name} must be a finite number")
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError(f"{context}: look {name} must be finite")
+        if abs(number) > LOOK_PARAMETER_ABS_MAX:
+            raise ValueError(
+                f"{context}: look {name} must be within "
+                f"±{LOOK_PARAMETER_ABS_MAX}"
+            )
+
+
+def _require_move_parameters(parameters: Mapping[str, Any], *, context: str) -> None:
+    allowed = {"forward", "strafe", "sprint", "jump"}
+    unknown = set(parameters) - allowed
+    if unknown:
+        raise ValueError(
+            f"{context}: move parameters may only include "
+            f"forward/strafe/sprint/jump, got {sorted(unknown)}"
+        )
+    if "forward" not in parameters:
+        raise ValueError(f"{context}: move requires forward")
+    forward = parameters["forward"]
+    if isinstance(forward, bool) or not isinstance(forward, (int, float)):
+        raise ValueError(f"{context}: move forward must be a finite number")
+    forward_value = float(forward)
+    if not math.isfinite(forward_value):
+        raise ValueError(f"{context}: move forward must be finite")
+    if forward_value < 0.0 or forward_value > MOVE_FORWARD_ABS_MAX:
+        raise ValueError(
+            f"{context}: move forward must be in "
+            f"[0, {MOVE_FORWARD_ABS_MAX}]"
+        )
+    strafe = parameters.get("strafe", 0.0)
+    if isinstance(strafe, bool) or not isinstance(strafe, (int, float)):
+        raise ValueError(f"{context}: move strafe must be a finite number")
+    if float(strafe) != 0.0:
+        raise ValueError(f"{context}: move strafe must be exactly 0.0")
+    if parameters.get("sprint", False) is not False:
+        raise ValueError(f"{context}: move sprint must be False")
+    if parameters.get("jump", False) is not False:
+        raise ValueError(f"{context}: move jump must be False")
+
+
 def _require_r4_action(action: MacroAction, *, context: str) -> MacroAction:
     """Validate that ``action`` belongs to the closed R4 allowlist.
 
@@ -226,13 +307,16 @@ def _require_r4_action(action: MacroAction, *, context: str) -> MacroAction:
     if action.action_type == "equip_item" and action.target not in {
         "water_bucket",
         "lava_bucket",
+        "cobblestone",
     }:
         raise ValueError(
-            f"{context}: equip_item target must be 'water_bucket' or "
-            f"'lava_bucket', got {action.target!r}"
+            f"{context}: equip_item target must be 'water_bucket', "
+            f"'lava_bucket', or 'cobblestone', got {action.target!r}"
         )
-    if action.action_type == "wait" and action.target is not None:
-        raise ValueError(f"{context}: wait action cannot have a target")
+    if action.action_type in {"wait", "look", "move"} and action.target is not None:
+        raise ValueError(
+            f"{context}: {action.action_type} action cannot have a target"
+        )
     if action.action_type == "place_block" and action.target != "cobblestone":
         # Drivers may only place the cobblestone support block.
         raise ValueError(
@@ -249,8 +333,14 @@ def _require_r4_action(action: MacroAction, *, context: str) -> MacroAction:
         )
     if not 1 <= action.duration_ticks <= 40:
         raise ValueError(f"{context}: duration_ticks must be between 1 and 40")
-    if action.parameters:
-        raise ValueError(f"{context}: R4 actions cannot contain parameters")
+    if action.action_type == "look":
+        _require_look_parameters(action.parameters, context=context)
+    elif action.action_type == "move":
+        _require_move_parameters(action.parameters, context=context)
+    elif action.parameters:
+        raise ValueError(
+            f"{context}: {action.action_type} actions cannot contain parameters"
+        )
     return action
 
 
@@ -276,6 +366,7 @@ class CastingPlanStep:
             raise ValueError("plan step label must be a non-empty string")
         if self.phase not in {
             PHASE_PREPARE,
+            PHASE_AIM,
             PHASE_PLACE_SUPPORT,
             PHASE_PLACE_LAVA,
             PHASE_PLACE_WATER,
@@ -385,6 +476,55 @@ def _select_step(target: str, label: str, phase: str) -> CastingPlanStep:
     )
 
 
+def _aim_angles(
+    target: tuple[float, float, float],
+    *,
+    eye: tuple[float, float, float] = FROZEN_PLAYER_EYE,
+) -> tuple[float, float]:
+    """Return absolute Minecraft yaw/pitch for one public click point."""
+    delta_x = target[0] - eye[0]
+    delta_y = target[1] - eye[1]
+    delta_z = target[2] - eye[2]
+    horizontal = math.hypot(delta_x, delta_z)
+    return (
+        -math.degrees(math.atan2(delta_x, delta_z)),
+        -math.degrees(math.atan2(delta_y, horizontal)),
+    )
+
+
+def _relative_look_steps(
+    *,
+    label: str,
+    phase: str,
+    current: tuple[float, float],
+    target_point: tuple[float, float, float],
+) -> tuple[list[CastingPlanStep], tuple[float, float]]:
+    """Split an absolute aim into bounded MineRL camera deltas."""
+    target_yaw, target_pitch = _aim_angles(target_point)
+    yaw_delta = target_yaw - current[0]
+    pitch_delta = target_pitch - current[1]
+    count = max(
+        1,
+        math.ceil(abs(yaw_delta) / LOOK_PARAMETER_ABS_MAX),
+        math.ceil(abs(pitch_delta) / LOOK_PARAMETER_ABS_MAX),
+    )
+    steps = [
+        CastingPlanStep(
+            label=f"{label}.aim.{index + 1}",
+            phase=phase,
+            action=MacroAction(
+                action_type="look",
+                parameters={
+                    "yaw": yaw_delta / count,
+                    "pitch": pitch_delta / count,
+                },
+            ),
+        )
+        for index in range(count)
+    ]
+    return steps, (target_yaw, target_pitch)
+
+
 def _place_support_step(label: str, phase: str) -> CastingPlanStep:
     return CastingPlanStep(
         label=label,
@@ -413,17 +553,18 @@ def build_casting_action_plan(
 
     The plan is fully deterministic. The fixed sequence is:
 
-    1. Select lava bucket + brief wait (hotbar equip is not
-       instant).
-    2. Place a cobblestone support block + settle wait.
-    3. Place a second cobblestone support block + settle wait.
-    4. Re-select lava bucket + brief wait.
-    5. Use lava bucket on the target cell + settle wait.
-    6. Select water bucket + brief wait.
-    7. Use water bucket against the lava + bounded wait for the
-       fluid update to complete.
-    8. Bounded extra wait so the casting evaluator has a fair
-       chance to observe the obsidian transition.
+    1. Equip cobblestone + brief wait, aim at two distinct solid top
+       faces, and place two support blocks.
+    2. Equip lava bucket + brief wait, aim at the target cell's support
+       face, use lava, and settle.
+    3. Equip water bucket + brief wait, aim at an adjacent support face,
+       use water, and settle.
+    4. Bounded extra wait so the casting evaluator can observe the
+       obsidian transition.
+
+    Look / move parameters are closed and bounded. Place / use steps
+    are relevant actions; the driver fail-closes if they produce no
+    inventory change on a semantics-aware backend.
 
     All wait counts are parameterised but bounded by
     :func:`run_casting_c1_driver` so a caller cannot ask the driver
@@ -438,23 +579,60 @@ def build_casting_action_plan(
     obsidian_waits = _require_non_negative_int(
         obsidian_wait_steps, "obsidian_wait_steps"
     )
-    total_waits = 3 + (2 * support_waits) + (2 * fluid_waits) + obsidian_waits
+    # Equip-release and settle waits only. Camera actions are counted as
+    # environment steps but are not wait-budget steps.
+    total_waits = (
+        2  # cobble equip release waits
+        + (2 * support_waits)
+        + 2  # lava/water equip release waits
+        + (2 * fluid_waits)
+        + obsidian_waits
+    )
     if total_waits > MAX_PLAN_WAIT_STEPS:
         raise ValueError(
             "casting plan wait steps exceed the hard limit: "
             f"{total_waits} > {MAX_PLAN_WAIT_STEPS}"
         )
     plan: list[CastingPlanStep] = [
-        _select_step("lava_bucket", "prepare.select_lava", PHASE_PREPARE),
-        _wait_step("prepare.select_lava.release", PHASE_PREPARE),
-        _place_support_step("support.block_1", PHASE_PLACE_SUPPORT),
+        _select_step(
+            "cobblestone", "support.select_cobble_1", PHASE_PLACE_SUPPORT
+        ),
+        _wait_step("support.select_cobble_1.release", PHASE_PLACE_SUPPORT),
     ]
+    camera = (0.0, 0.0)
+    look, camera = _relative_look_steps(
+        label="support.block_1",
+        phase=PHASE_PLACE_SUPPORT,
+        current=camera,
+        target_point=FROZEN_SUPPORT_FACE_POINTS[0],
+    )
+    plan.extend(look)
+    plan.append(_place_support_step("support.block_1", PHASE_PLACE_SUPPORT))
     plan.extend(
         _wait_step(
             f"support.block_1.settle.{index + 1}", PHASE_PLACE_SUPPORT
         )
         for index in range(support_waits)
     )
+    plan.extend(
+        [
+            _select_step(
+                "cobblestone",
+                "support.select_cobble_2",
+                PHASE_PLACE_SUPPORT,
+            ),
+            _wait_step(
+                "support.select_cobble_2.release", PHASE_PLACE_SUPPORT
+            ),
+        ]
+    )
+    look, camera = _relative_look_steps(
+        label="support.block_2",
+        phase=PHASE_PLACE_SUPPORT,
+        current=camera,
+        target_point=FROZEN_SUPPORT_FACE_POINTS[1],
+    )
+    plan.extend(look)
     plan.append(_place_support_step("support.block_2", PHASE_PLACE_SUPPORT))
     plan.extend(
         _wait_step(
@@ -468,10 +646,17 @@ def build_casting_action_plan(
                 "lava_bucket", "casting.select_lava", PHASE_PLACE_LAVA
             ),
             _wait_step("casting.select_lava.release", PHASE_PLACE_LAVA),
-            _use_bucket_step(
-                "lava_bucket", "casting.use_lava", PHASE_PLACE_LAVA
-            ),
         ]
+    )
+    look, camera = _relative_look_steps(
+        label="casting.use_lava",
+        phase=PHASE_PLACE_LAVA,
+        current=camera,
+        target_point=FROZEN_LAVA_FACE_POINT,
+    )
+    plan.extend(look)
+    plan.append(
+        _use_bucket_step("lava_bucket", "casting.use_lava", PHASE_PLACE_LAVA)
     )
     plan.extend(
         _wait_step(
@@ -485,10 +670,17 @@ def build_casting_action_plan(
                 "water_bucket", "casting.select_water", PHASE_PLACE_WATER
             ),
             _wait_step("casting.select_water.release", PHASE_PLACE_WATER),
-            _use_bucket_step(
-                "water_bucket", "casting.use_water", PHASE_PLACE_WATER
-            ),
         ]
+    )
+    look, camera = _relative_look_steps(
+        label="casting.use_water",
+        phase=PHASE_PLACE_WATER,
+        current=camera,
+        target_point=FROZEN_WATER_FACE_POINT,
+    )
+    plan.extend(look)
+    plan.append(
+        _use_bucket_step("water_bucket", "casting.use_water", PHASE_PLACE_WATER)
     )
     plan.extend(
         _wait_step(
@@ -531,6 +723,19 @@ def _visible_inventory_has(observation: Observation, item: str) -> bool:
             "visible_inventory quantities must be non-negative integers"
         )
     return quantity > 0
+
+
+def _visible_inventory_quantity(observation: Observation, item: str) -> int:
+    """Return one closed-set visible item quantity with strict typing."""
+    if item not in ALLOWED_R4_TARGETS:
+        raise ValueError(f"driver cannot inspect item {item!r}")
+    inventory = observation.visible_inventory or {}
+    quantity = inventory.get(item, 0)
+    if type(quantity) is not int or quantity < 0:
+        raise ValueError(
+            "visible_inventory quantities must be non-negative integers"
+        )
+    return quantity
 
 
 def _assert_workflow_stage(observation: Observation) -> None:
@@ -693,6 +898,8 @@ def run_casting_c1_driver(
     status = DRIVER_STATUS_COMPLETED
     backend_terminated = False
     backend_truncated = False
+    # item, before, expected, source_label, source_step, settle_ticks_seen
+    pending_inventory_effect: tuple[str, int, int, str, int, int] | None = None
 
     def record_event(event: Mapping[str, Any]) -> None:
         identified = {
@@ -733,6 +940,20 @@ def run_casting_c1_driver(
         _require_r4_action(
             plan_step.action, context=f"plan[{plan_index}]={plan_step.label!r}"
         )
+        if (
+            pending_inventory_effect is not None
+            and plan_step.action.action_type != "wait"
+        ):
+            item, before, expected, source_label, source_step, settle_ticks_seen = (
+                pending_inventory_effect
+            )
+            blocked_reason = (
+                "inventory effect verification requires an immediate wait "
+                f"after {source_label}: item={item!r}, "
+                f"expected {before}->{expected}, source_step={source_step}"
+            )
+            status = DRIVER_STATUS_BLOCKED
+            break
         if final_observation.step_id >= max_environment_steps:
             blocked_reason = (
                 f"step budget exhausted before {plan_step.label}: "
@@ -779,6 +1000,14 @@ def run_casting_c1_driver(
                 break
 
         previous_step_id = final_observation.step_id
+        relevant_item_before: int | None = None
+        if plan_step.relevant_action:
+            relevant_item = plan_step.action.target
+            if relevant_item is None:
+                raise ValueError("relevant action requires a target item")
+            relevant_item_before = _visible_inventory_quantity(
+                final_observation, relevant_item
+            )
         try:
             step = backend.step({AGENT_ID: plan_step.action})
         except (RuntimeError, OSError, TypeError) as error:
@@ -868,8 +1097,105 @@ def run_casting_c1_driver(
                 break
         final_observation = next_observation
         action_label_for_step[step.step_id] = plan_step.label
+        verified_pending_effect: tuple[str, int] | None = None
+        waiting_pending_effect: tuple[str, int] | None = None
+        if pending_inventory_effect is not None:
+            item, before, expected, source_label, source_step, settle_ticks_seen = (
+                pending_inventory_effect
+            )
+            observed = _visible_inventory_quantity(final_observation, item)
+            settle_ticks_seen += 1
+            if observed == expected:
+                verified_pending_effect = (source_label, source_step)
+                pending_inventory_effect = None
+            elif observed == before and (
+                settle_ticks_seen < MAX_INVENTORY_CONFIRMATION_WAIT_STEPS
+            ):
+                pending_inventory_effect = (
+                    item,
+                    before,
+                    expected,
+                    source_label,
+                    source_step,
+                    settle_ticks_seen,
+                )
+                waiting_pending_effect = (source_label, source_step)
+            else:
+                reason = (
+                    "expected_inventory_effect_missing"
+                    if observed == before
+                    else "unexpected_inventory_effect"
+                )
+                blocked_reason = (
+                    f"{reason} at "
+                    f"{source_label}: expected {item!r} quantity "
+                    f"{before}->{expected} within "
+                    f"{MAX_INVENTORY_CONFIRMATION_WAIT_STEPS} settle ticks, "
+                    f"observed {observed} after {settle_ticks_seen}"
+                )
+                status = DRIVER_STATUS_BLOCKED
+                record_event(
+                    {
+                        "step_id": step.step_id,
+                        "label": plan_step.label,
+                        "phase": plan_step.phase,
+                        "action_type": plan_step.action.action_type,
+                        "target": plan_step.action.target,
+                        "relevant_action": plan_step.relevant_action,
+                        "visible_inventory": dict(
+                            final_observation.visible_inventory or {}
+                        ),
+                        "inventory_effect_confirmed": False,
+                        "verifies_action_step": source_step,
+                        "blocked_reason": blocked_reason,
+                    }
+                )
+                break
+        relevant_effect_confirmed: bool | None = None
         if plan_step.relevant_action:
             relevant_action_steps.append(step.step_id)
+            inventory_after = dict(final_observation.visible_inventory or {})
+            relevant_item = plan_step.action.target
+            if relevant_item is None or relevant_item_before is None:
+                raise ValueError("relevant action inventory check is unavailable")
+            relevant_item_after = _visible_inventory_quantity(
+                final_observation, relevant_item
+            )
+            expected_item_after = relevant_item_before - 1
+            if relevant_item_after == expected_item_after:
+                relevant_effect_confirmed = True
+            elif relevant_item_after == relevant_item_before:
+                pending_inventory_effect = (
+                    relevant_item,
+                    relevant_item_before,
+                    expected_item_after,
+                    plan_step.label,
+                    step.step_id,
+                    0,
+                )
+                relevant_effect_confirmed = None
+            else:
+                blocked_reason = (
+                    "unexpected_inventory_effect at "
+                    f"{plan_step.label}: expected {relevant_item!r} "
+                    f"quantity {relevant_item_before}->{expected_item_after}, "
+                    f"observed {relevant_item_after}"
+                )
+                status = DRIVER_STATUS_BLOCKED
+                record_event(
+                    {
+                        "step_id": step.step_id,
+                        "label": plan_step.label,
+                        "phase": plan_step.phase,
+                        "action_type": plan_step.action.action_type,
+                        "target": plan_step.action.target,
+                        "relevant_action": plan_step.relevant_action,
+                        "visible_inventory": inventory_after,
+                        "inventory_effect_confirmed": False,
+                        "blocked_reason": blocked_reason,
+                    }
+                )
+                break
         record_event(
             {
                 "step_id": step.step_id,
@@ -880,6 +1206,26 @@ def run_casting_c1_driver(
                 "relevant_action": plan_step.relevant_action,
                 "visible_inventory": dict(
                     final_observation.visible_inventory or {}
+                ),
+                "inventory_effect_confirmed": (
+                    relevant_effect_confirmed
+                    if plan_step.relevant_action
+                    else (True if verified_pending_effect is not None else None)
+                ),
+                "verifies_action_step": (
+                    verified_pending_effect[1]
+                    if verified_pending_effect is not None
+                    else (
+                        waiting_pending_effect[1]
+                        if waiting_pending_effect is not None
+                        else None
+                    )
+                ),
+                "inventory_confirmation_wait_ticks": (
+                    settle_ticks_seen
+                    if waiting_pending_effect is not None
+                    or verified_pending_effect is not None
+                    else None
                 ),
             }
         )
@@ -901,6 +1247,17 @@ def run_casting_c1_driver(
         # a hard budget; this happens when the backend reports
         # termination mid-plan. Surface it explicitly.
         blocked_reason = "plan interrupted by backend termination"
+        status = DRIVER_STATUS_BLOCKED
+
+    if blocked_reason is None and pending_inventory_effect is not None:
+        item, before, expected, source_label, source_step, settle_ticks_seen = (
+            pending_inventory_effect
+        )
+        blocked_reason = (
+            "inventory effect remained unverified at plan end after "
+            f"{source_label}: item={item!r}, expected {before}->{expected}, "
+            f"source_step={source_step}, settle_ticks_seen={settle_ticks_seen}"
+        )
         status = DRIVER_STATUS_BLOCKED
 
     return CastingC1DriverResult(
@@ -929,17 +1286,23 @@ __all__ = [
     "DEFAULT_MAX_GAME_TIME_SECONDS",
     "DEFAULT_MAX_WAIT_STEPS",
     "MAX_PLAN_WAIT_STEPS",
+    "MAX_INVENTORY_CONFIRMATION_WAIT_STEPS",
     "DEFAULT_OBSIDIAN_WAIT_STEPS",
     "DEFAULT_SUPPORT_BLOCK_WAIT_STEPS",
     "DRIVER_STATUS_BLOCKED",
     "DRIVER_STATUS_COMPLETED",
     "DRIVER_STATUS_FAILED",
     "DRIVER_STATUSES",
+    "PHASE_AIM",
     "PHASE_PLACE_LAVA",
     "PHASE_PLACE_SUPPORT",
     "PHASE_PLACE_WATER",
     "PHASE_PREPARE",
     "PHASE_WAIT_FOR_OBSIDIAN",
+    "FROZEN_PLAYER_EYE",
+    "FROZEN_SUPPORT_FACE_POINTS",
+    "FROZEN_LAVA_FACE_POINT",
+    "FROZEN_WATER_FACE_POINT",
     "build_casting_action_plan",
     "run_casting_c1_driver",
 ]

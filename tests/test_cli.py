@@ -18,7 +18,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(
             payload["phase"],
-            "r6_c1_live_minerl_smoke_runner_wiring_done",
+            "r6_c1_player_relative_truth_grid_anchor_offline_fix_complete",
         )
         self.assertEqual(payload["active_task"], "casting_c3_fixed")
         self.assertEqual(

@@ -3391,7 +3391,7 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn('"status": "ok"', result.stdout)
         self.assertIn(
-            '"phase": "r6_c1_live_minerl_smoke_runner_wiring_done"',
+            '"phase": "r6_c1_player_relative_truth_grid_anchor_offline_fix_complete"',
             result.stdout,
         )
         self.assertNotIn("C4 / C5 runtime components", result.stdout)
@@ -3409,7 +3409,7 @@ class RegressionTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn(
-            '"phase": "r6_c1_live_minerl_smoke_runner_wiring_done"',
+            '"phase": "r6_c1_player_relative_truth_grid_anchor_offline_fix_complete"',
             result.stdout,
         )
 

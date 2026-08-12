@@ -150,6 +150,23 @@ class PortalA0EnvSpecTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "integer"):
             PortalA0EnvSpec(initial_position=(0, 4.0, 0))
 
+    def test_casting_can_omit_unreliable_absolute_placement(self) -> None:
+        xml = PortalA0EnvSpec(
+            include_agent_start_placement=False,
+        ).to_xml()
+        self.assertNotIn("<Placement", xml)
+        self.assertIn("<Inventory>", xml)
+
+    def test_invalid_placement_flag_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "boolean"):
+            PortalA0EnvSpec(include_agent_start_placement=1)
+
+    def test_player_relative_grid_xml_is_explicit_and_type_strict(self) -> None:
+        xml = PortalA0EnvSpec(grid_at_spawn=False).to_xml()
+        self.assertIn('atSpawn="false"', xml)
+        with self.assertRaisesRegex(ValueError, "grid_at_spawn"):
+            PortalA0EnvSpec(grid_at_spawn=0)
+
 
 if __name__ == "__main__":
     unittest.main()

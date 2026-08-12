@@ -195,21 +195,31 @@ class C1ReactiveStubEnv:
         self._task = task
         self._produce_obsidian = produce_obsidian
         self._target_cell = target_cell
+        spawn = task.spawn_positions[AGENT_ID]
+        self._grid_target_cell = tuple(
+            target_cell[index] - spawn[index] for index in range(3)
+        )
         self._grid = _grid_from_blocks({})
         self._selected_item = "lava_bucket"
         self._pending_obsidian = False
         self._seed_value: int | None = None
         self.closed = False
         self.step_count = 0
+        self._inventory = {
+            str(item): int(quantity)
+            for item, quantity in dict(
+                task.initial_inventories.get(AGENT_ID, {})
+            ).items()
+            if isinstance(quantity, int) and not isinstance(quantity, bool)
+        }
 
     def seed(self, value: int) -> None:
         self._seed_value = value
 
     def _build_raw(self) -> dict[str, Any]:
-        inventory = dict(self._task.initial_inventories.get(AGENT_ID, {}))
         return {
             "pov": np.zeros((360, 640, 3), dtype=np.uint8),
-            "inventory": _inventory_payload(inventory),
+            "inventory": _inventory_payload(self._inventory),
             "portal_grid": self._grid.copy(),
             "portal_grid_origin": np.asarray((0, 64, 0), dtype=np.int32),
             "portal_dimension": np.asarray("minecraft:overworld"),
@@ -232,6 +242,13 @@ class C1ReactiveStubEnv:
         self._selected_item = "lava_bucket"
         self._pending_obsidian = False
         self.step_count = 0
+        self._inventory = {
+            str(item): int(quantity)
+            for item, quantity in dict(
+                self._task.initial_inventories.get(AGENT_ID, {})
+            ).items()
+            if isinstance(quantity, int) and not isinstance(quantity, bool)
+        }
         return self._build_raw()
 
     @staticmethod
@@ -248,6 +265,13 @@ class C1ReactiveStubEnv:
                 return item
         return None
 
+    def _consume(self, item: str) -> bool:
+        quantity = self._inventory.get(item, 0)
+        if quantity < 1:
+            return False
+        self._inventory[item] = quantity - 1
+        return True
+
     def _apply_reactive_update(self, action: Mapping[str, Any]) -> None:
         slot = self._slot_from_action(action)
         if slot is None:
@@ -258,19 +282,26 @@ class C1ReactiveStubEnv:
         use = int(action.get("use", 0)) == 1
         if not use or item is None:
             return
-        current = _block_at(self._grid, self._target_cell)
-        index = _cell_index_in_flat_grid(self._target_cell)
+        current = _block_at(self._grid, self._grid_target_cell)
+        index = _cell_index_in_flat_grid(self._grid_target_cell)
         if index is None:
             return
+        if item == "cobblestone":
+            # Support placement consumes cobble even though the target cell
+            # itself is reserved for fluid/obsidian truth.
+            self._consume("cobblestone")
+            return
         if item == "lava_bucket" and current == "air":
-            self._grid[index] = PORTAL_GRID_BLOCKS.index("lava")
+            if self._consume("lava_bucket"):
+                self._grid[index] = PORTAL_GRID_BLOCKS.index("lava")
         elif item == "water_bucket" and current == "lava":
-            self._grid[index] = PORTAL_GRID_BLOCKS.index("water")
-            self._pending_obsidian = self._produce_obsidian
+            if self._consume("water_bucket"):
+                self._grid[index] = PORTAL_GRID_BLOCKS.index("water")
+                self._pending_obsidian = self._produce_obsidian
 
     def step(self, action: Mapping[str, Any]):
         if self._pending_obsidian:
-            index = _cell_index_in_flat_grid(self._target_cell)
+            index = _cell_index_in_flat_grid(self._grid_target_cell)
             if index is not None:
                 self._grid[index] = PORTAL_GRID_BLOCKS.index("obsidian")
             self._pending_obsidian = False
