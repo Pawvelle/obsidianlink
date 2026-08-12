@@ -17,7 +17,7 @@
 11. Agent-visible observation 与 evaluator-only truth 必须使用独立类型和通道；truth 不能进入 prompt、memory、消息或共享任务状态。
 12. observation、action、message、evaluation 和 log 都必须带 `episode_id`、`step_id`，适用时带 `agent_id`。
 13. Multi-Agent 的 observation、inventory、memory 默认私有；跨 Agent 信息只能经过显式 message/shared protocol。
-14. 新任务必须声明 family、suite、mode、level 和 layout；保留已有 compatibility ID，除非专门迁移阶段明确处理。
+14. 新任务必须声明 family、suite、mode、level 和 layout；Roadmap phase 使用 P0–P8、validation 使用 E0–E12、Diagnostic level 使用 D1–D6、End-to-End level 使用 L1–L4，不得混用；保留已有 compatibility ID，除非专门迁移阶段明确处理。
 15. 运行证据写入 `runs/`；不得保存密钥、模型权重、隐藏推理或跨 Agent 私有数据。
 16. 所有公开能力声明必须区分 `planned`、`unit_verified`、`integration_verified`、`benchmark_evaluated`。
 17. 修改后运行相关离线测试，报告结果和未验证限制；未经授权不 commit、不 push、不启动真实环境。

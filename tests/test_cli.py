@@ -28,6 +28,7 @@ class CliTests(unittest.TestCase):
         self.assertTrue(payload["p1_validation"]["contract_ready"])
         self.assertFalse(payload["p1_validation"]["real_execution_performed"])
         self.assertFalse(payload["p1_validation"]["integration_verified"])
+        self.assertEqual(payload["v2_taxonomy_example"]["level"], "L1")
         self.assertEqual(
             [case["check_id"] for case in payload["p1_validation"]["cases"]],
             [f"E{index}" for index in range(13)],

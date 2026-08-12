@@ -14,6 +14,8 @@ Legacy 与 calibration 必须 `benchmark_visible=false`、`live_run_allowed=fals
 
 Catalog 顶层 `active_phase` 是 `P1-REAL-MINERL-ENVIRONMENT-VALIDATION`，`active_benchmark_task_id` 为 `null`。P1 environment validation 不是 benchmark task，因此不为它创建空 TaskInstance。
 
+这里的历史 JSON instance 由 `obsidianlink.core.types.TaskInstance` 读取；该类型及其 `route`/`difficulty`/`workflow` taxonomy 是 v1 compatibility surface，显式别名为 `LegacyTaskInstance`。v2 canonical taxonomy 使用 `obsidianlink.benchmark.TaskIdentity`（End-to-End level 为 L1–L4），未来 v2 TaskInstance contract 留待 Roadmap Phase P2。
+
 ## Compatibility strategy
 
 历史 instance/config/import 路径暂不移动：

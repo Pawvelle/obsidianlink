@@ -2,6 +2,8 @@
 
 每个阶段只有在 exit criteria 满足后才能进入下一阶段。每次真实 MineRL/Minecraft、Gradle 和付费 API 操作仍需单独授权。
 
+本文的 P0–P8 只表示工程 Roadmap phase。Environment Validation check 使用 E0–E12，Diagnostic level 使用 D1–D6，End-to-End Portal Construction difficulty 使用 L1–L4。
+
 ## P0 — Legacy Freeze / v2 Scope Freeze（完成）
 
 **Goal**：冻结统一 Portal Construction 研究定位，建立 solver-independent 主线并隔离 v1 复杂度。
@@ -10,7 +12,7 @@
 
 **Exit criteria**：active docs/catalog 一致；旧 C1–C5 不再 benchmark visible；v2 modules 不 import deterministic drivers；离线回归通过。
 
-**Non-goals**：真实 MineRL、Gradle、P1–P4 task implementation、模型 baseline、Multi-Agent gameplay。
+**Non-goals**：真实 MineRL、Gradle、L1–L4 task implementation、模型 baseline、Multi-Agent gameplay。
 
 ## P1 — Real Environment Validation（NEXT）
 
@@ -40,11 +42,11 @@
 
 **Exit criteria**：每个 D-level 有 unit 与真实 integration evidence；diagnostic success 不混入 end-to-end Success Rate。
 
-**Non-goals**：P1–P4 全量长程实验、开放世界 leaderboard。
+**Non-goals**：L1–L4 全量长程实验、开放世界 leaderboard。
 
 ## P4 — End-to-End Portal Construction
 
-**Goal**：实现 P1 Controlled、P2 Resource Interaction、P3 Resource Acquisition、P4 Open-World Construction。
+**Goal**：实现 L1 Controlled、L2 Resource Interaction、L3 Resource Acquisition、L4 Open-World Construction。
 
 **Deliverables**：冻结场景/预算/evaluator/entry attribution；全部 level 最终要求 Nether entry。
 

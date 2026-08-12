@@ -19,14 +19,14 @@
       "enum": ["diagnostic", "end_to_end", "generalization_recovery"]
     },
     "mode": {"enum": ["single", "multi"]},
-    "level": {"pattern": "^(D[1-6]|P[1-4])$"},
+    "level": {"pattern": "^(D[1-6]|L[1-4])$"},
     "layout": {"enum": ["controlled", "randomized", "hidden", "challenge"]}
   },
   "allOf": [
     {
       "if": {"properties": {"suite": {"const": "diagnostic"}}},
       "then": {"properties": {"level": {"pattern": "^D[1-6]$"}}},
-      "else": {"properties": {"level": {"pattern": "^P[1-4]$"}}}
+      "else": {"properties": {"level": {"pattern": "^L[1-4]$"}}}
     }
   ]
 }

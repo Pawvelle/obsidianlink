@@ -1,6 +1,6 @@
 """Stable v2 task identity vocabulary.
 
-This module intentionally defines taxonomy only. Concrete P1--P4 and D1--D6
+This module intentionally defines taxonomy only. Concrete L1--L4 and D1--D6
 task instances are frozen in later roadmap phases.
 """
 
@@ -12,7 +12,7 @@ from enum import Enum
 
 TASK_FAMILY = "nether_portal_construction"
 DIAGNOSTIC_LEVELS = frozenset({f"D{index}" for index in range(1, 7)})
-PORTAL_LEVELS = frozenset({f"P{index}" for index in range(1, 5)})
+PORTAL_LEVELS = frozenset({f"L{index}" for index in range(1, 5)})
 
 
 class BenchmarkSuite(str, Enum):

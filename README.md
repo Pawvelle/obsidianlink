@@ -11,10 +11,12 @@ ObsidianLink 是一个以 Minecraft 原版浇筑法构造下界传送门为统�
 v2 的统一主题是 **Nether Portal Construction**，包含三个评测维度：
 
 - **Diagnostic Suite**：D1 Perception、D2 Grounding、D3 Manipulation、D4 Planning、D5 State Tracking、D6 Recovery；
-- **End-to-End Portal Construction**：P1 Controlled Construction、P2 Resource Interaction、P3 Resource Acquisition、P4 Open-World Construction；
+- **End-to-End Portal Construction**：L1 Controlled Construction、L2 Resource Interaction、L3 Resource Acquisition、L4 Open-World Construction；
 - **Generalization & Recovery**：在 seed、出生点、朝向、资源距离与分布、地形、障碍和执行失败下进行 closed-loop recovery。
 
 Single-Agent 与 Multi-Agent 是正交 execution modes，不是不同任务族。所有 end-to-end level 都以可归因 Nether entry 为成功条件；level 只改变初始条件、资源依赖、距离和环境变化。
+
+命名空间彼此独立：Roadmap phase 使用 P0–P8，Environment Validation 使用 E0–E12，Diagnostic level 使用 D1–D6，End-to-End level 使用 L1–L4。`P1` 因此只表示当前 Real Environment Validation 工程阶段，不能表示 Controlled Construction difficulty。
 
 ## 架构
 
@@ -61,6 +63,8 @@ v2 scope、架构边界和 legacy quarantine 已冻结。旧 C1/C2、taxonomy C3
 ## Legacy compatibility
 
 v1 详细规范与工程 chronology 已归档到 [docs/legacy/v1/](docs/legacy/v1/README.md)。历史文件和 import 暂不批量移动，以保持 regression、重放和 evaluator unit tests 可运行。权威 catalog 将所有旧实例标为不可发布的 legacy/calibration；当前没有 v2 正式 benchmark task instance。
+
+`obsidianlink.core.types.TaskInstance` 的 `route`/`difficulty`/`workflow` 结构同样属于 v1 compatibility surface，并提供显式别名 `LegacyTaskInstance`。新的 v2 taxonomy 使用 `obsidianlink.benchmark.TaskIdentity`；真正的 v2 TaskInstance contract 留待 Roadmap Phase P2 冻结。
 
 `vendor/minerl` 是独立仓库。不得在未经授权的情况下修改它、运行 Gradle、改变固定 Python/JDK/MineRL/Gym/NumPy/Qwen 版本或启动真实环境。
 

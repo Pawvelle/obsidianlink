@@ -61,6 +61,39 @@ class ProjectDocumentationTests(unittest.TestCase):
             self.assertIn("Nether entry", text)
             self.assertIn("FakeBackend success", text)
 
+    def test_active_v2_docs_use_disjoint_phase_and_level_namespaces(self) -> None:
+        active_v2_docs = (
+            ROOT / "README.md",
+            ROOT / "BENCHMARK_SPEC.md",
+            ROOT / "ROADMAP.md",
+            ROOT / "PROJECT_STATUS.md",
+            ROOT / "DATASET_CARD.md",
+            ROOT / "AGENTS.md",
+            ROOT / "docs/benchmark/TASK_TAXONOMY.md",
+            ROOT / "docs/architecture/V2_ARCHITECTURE.md",
+            ROOT / "docs/architecture/TASK_REGISTRY.md",
+        )
+        forbidden_end_to_end_labels = (
+            "P1 Controlled",
+            "P2 Resource Interaction",
+            "P3 Resource Acquisition",
+            "P4 Open-World Construction",
+            "end_to_end_p1",
+        )
+        for path in active_v2_docs:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.relative_to(ROOT)):
+                for label in forbidden_end_to_end_labels:
+                    self.assertNotIn(label, text)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Roadmap phase 使用 P0–P8", readme)
+        self.assertIn("End-to-End level 使用 L1–L4", readme)
+        taxonomy = (ROOT / "docs/benchmark/TASK_TAXONOMY.md").read_text(
+            encoding="utf-8"
+        )
+        for level in ("L1", "L2", "L3", "L4"):
+            self.assertIn(f"| {level} |", taxonomy)
+
     def test_active_developer_docs_freeze_mc_agent_conda_environment(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")

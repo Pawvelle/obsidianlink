@@ -1,4 +1,8 @@
-"""Core compatibility exports with lazy legacy driver-context imports."""
+"""Core compatibility exports with lazy legacy driver-context imports.
+
+``TaskInstance`` is the v1 compatibility type, not a v2 canonical benchmark
+type. Prefer its explicit alias ``LegacyTaskInstance`` in compatibility code.
+"""
 
 from obsidianlink.core.task_catalog import (
     TaskCatalog,
@@ -7,12 +11,19 @@ from obsidianlink.core.task_catalog import (
     load_task_catalog,
     validate_catalog_references,
 )
-from obsidianlink.core.types import BackendStep, MacroAction, Observation, TaskInstance
+from obsidianlink.core.types import (
+    BackendStep,
+    LegacyTaskInstance,
+    MacroAction,
+    Observation,
+    TaskInstance,
+)
 
 
 __all__ = [
     "BackendStep",
     "EnvironmentBackend",
+    "LegacyTaskInstance",
     "MacroAction",
     "Observation",
     "TaskCatalog",

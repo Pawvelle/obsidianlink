@@ -67,6 +67,14 @@ def _freeze_json_value(value: Any) -> Any:
 
 @dataclass(frozen=True)
 class TaskInstance:
+    """Legacy v1 task instance retained for compatibility only.
+
+    Its ``route``/``difficulty``/``workflow`` taxonomy belongs to historical
+    drivers, environments, and regression fixtures. New v2 benchmark code
+    must use :class:`obsidianlink.benchmark.TaskIdentity` and the future v2
+    TaskInstance contract that will be defined during Roadmap Phase P2.
+    """
+
     schema_version: str
     task_id: str
     route: str
@@ -199,6 +207,11 @@ class TaskInstance:
             split=value["split"],
             scenario_parameters=dict(value.get("scenario_parameters", {})),
         )
+
+
+# Prefer this explicit name in compatibility code. ``TaskInstance`` remains
+# importable so historical consumers and regression tests are not broken.
+LegacyTaskInstance = TaskInstance
 
 
 @dataclass(frozen=True)

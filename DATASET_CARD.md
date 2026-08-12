@@ -39,6 +39,8 @@ Agent-visible events 与 evaluator-only events 必须物理或逻辑隔离。缺
 
 核心字段包括 `benchmark_version`、`task_instance_id`、`task_family`、`suite`、`agent_mode`、`task_level`、`layout_type`、`split`、`world_seed`、`variation_profile`、`agent_ids`、`designated_agent_ids`、`success`、`completion_rate`、`environment_steps`、`game_time_seconds`、`model_calls`、`failure_type`、`evaluator_version`、`verification_level`。
 
+`task_level` 的 v2 命名空间为 Diagnostic D1–D6 或 End-to-End L1–L4；Roadmap P0–P8 与 Environment Validation E0–E12 不是 dataset task levels。当前 `obsidianlink.core.types.TaskInstance` 及其 route/workflow 字段属于 v1 compatibility，不是这里规划的 canonical v2 episode contract。
+
 Multi-Agent 追加显式 sender/recipient、accepted message、role condition、communication counts、makespan、idle/duplicate work 和 per-agent contribution；不能保存隐式共享的私有 observation/inventory/memory。
 
 ## Splits and leakage
@@ -59,4 +61,4 @@ FakeBackend success 不得转换或标注为真实 Minecraft success。历史 v1
 
 ## Current status
 
-只有 v2 schema/interface 计划和 legacy evidence。P1 E0–E12 尚未在本次重构中真实运行；没有 E10 `integration_verified` evidence，没有 end-to-end benchmark episodes，没有 Multi-Agent gameplay data，也没有 `benchmark_evaluated` dataset。
+只有 v2 schema/interface 计划和 legacy evidence。P1 E0–E12 尚未在本次重构中真实运行；L1–L4 尚未实现，没有 E10 `integration_verified` evidence，没有 end-to-end benchmark episodes，没有 Multi-Agent gameplay data，也没有 `benchmark_evaluated` dataset。

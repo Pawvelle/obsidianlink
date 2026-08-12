@@ -39,7 +39,7 @@ def _offline_contract_check() -> dict[str, object]:
         task_instance_id="taxonomy_example_not_registered",
         suite=BenchmarkSuite.END_TO_END,
         mode=ExecutionMode.SINGLE,
-        level="P1",
+        level="L1",
         layout=LayoutType.CONTROLLED,
     )
 

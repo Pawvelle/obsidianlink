@@ -37,16 +37,16 @@ v2 只有一个 task family：`nether_portal_construction`。三个评测维度�
 
 | Level | Semantics |
 |---|---|
-| P1 Controlled Construction | 受控场地与资源，仍必须构造、激活并进入 Nether |
-| P2 Resource Interaction | 增加资源运输、选择和交互依赖，最终仍为 Nether entry |
-| P3 Resource Acquisition | 需要取得/加工关键资源，最终仍为 Nether entry |
-| P4 Open-World Construction | 开放世界探索、资源链与环境不确定性，最终仍为 Nether entry |
+| L1 Controlled Construction | 受控场地与资源，仍必须构造、激活并进入 Nether |
+| L2 Resource Interaction | 增加资源运输、选择和交互依赖，最终仍为 Nether entry |
+| L3 Resource Acquisition | 需要取得/加工关键资源，最终仍为 Nether entry |
+| L4 Open-World Construction | 开放世界探索、资源链与环境不确定性，最终仍为 Nether entry |
 
-level 只通过初始条件、资源依赖、距离和环境 variation 增加难度。“1 block / 3 blocks / frame / ignition”不得再作为正式 P-level。
+L-level 只通过 initial conditions、resource dependency、distance 和 environment variation 增加难度。L1–L4 的最终 success 全部仍是当前 episode portal 的 attributed Nether entry；“1 block / 3 blocks / frame / ignition”只能作为 milestone，不得作为正式 End-to-End level。
 
 ### 2.3 Generalization & Recovery
 
-Generalization/Recovery 在 Diagnostic 或 P1–P4 基础上施加 variation，不创建 Casting-vs-Ruined 路线切换 family。
+Generalization/Recovery 在 Diagnostic 或 L1–L4 基础上施加 variation，不创建 Casting-vs-Ruined 路线切换 family。
 
 未来 variation 至少包括：world seed、spawn position、initial yaw、water/lava/iron/resource distance、resource distribution、terrain 和 obstacles。
 
@@ -80,6 +80,8 @@ Agent / Baseline Layer
 ```
 
 Benchmark kernel 不 import 某个 solver。Environment owner 维持 step loop；Planner/model I/O 异步或有界，过期决策丢弃。Scripted policy 只用于 calibration/oracle/regression。
+
+Roadmap phase、validation check 与 task level 使用独立命名空间：工程阶段为 P0–P8，环境检查为 E0–E12，Diagnostic level 为 D1–D6，End-to-End level 为 L1–L4。历史 `obsidianlink.core.types.TaskInstance` 是 v1 compatibility type；v2 taxonomy 使用 `obsidianlink.benchmark.TaskIdentity`，未来 canonical TaskInstance 留待 Roadmap Phase P2。
 
 ## 5. Information boundary
 

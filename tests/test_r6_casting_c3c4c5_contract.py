@@ -479,7 +479,7 @@ class DocumentationLinkTests(unittest.TestCase):
             "README.md": "legacy quarantine",
             "ROADMAP.md": "P1 — Real Environment Validation",
             "PROJECT_STATUS.md": "P1-REAL-MINERL-ENVIRONMENT-VALIDATION",
-            "BENCHMARK_SPEC.md": "P4 Open-World Construction",
+            "BENCHMARK_SPEC.md": "L4 Open-World Construction",
             "DATASET_CARD.md": "unit_verified",
         }
         for relative, needle in expected_doc_substrings.items():
