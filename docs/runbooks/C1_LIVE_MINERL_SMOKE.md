@@ -1,4 +1,8 @@
-# C1 Live MineRL Smoke Validation Contract
+# Legacy v1 — C1 Live MineRL Smoke Validation Contract
+
+> **v2 status:** legacy/calibration only. This runbook is preserved for regression
+> and audit compatibility; it is not the active P1 validation suite and cannot
+> support a v2 benchmark capability claim.
 
 阶段：`R6-C1-PLAYER-RELATIVE-TRUTH-GRID-ANCHOR-OFFLINE-FIX`（离线完成）；八次 `R6-C1-LIVE-MINERL-SMOKE-AUTHORIZED-RUN` 均已结束且**未成功**
 

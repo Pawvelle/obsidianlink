@@ -328,14 +328,15 @@ class CatalogContractTests(unittest.TestCase):
         self.catalog = load_task_catalog(CATALOG_PATH)
         validate_catalog_references(self.catalog, ROOT)
 
-    def test_c3c4c5_entries_are_benchmark_visible_contract_only(self) -> None:
+    def test_c3c4c5_entries_are_quarantined_legacy_regressions(self) -> None:
         for level, canonical in EXPECTED_CANONICAL.items():
             with self.subTest(level=level):
                 entry = self.catalog.entry_for_compatibility_id(canonical)
-                self.assertEqual(entry.kind, "benchmark")
-                self.assertTrue(entry.benchmark_visible)
+                self.assertEqual(entry.kind, "legacy")
+                self.assertFalse(entry.benchmark_visible)
                 self.assertFalse(entry.live_run_allowed)
-                self.assertEqual(entry.implementation_status, "contract_only")
+                self.assertEqual(entry.implementation_status, "legacy_regression")
+                self.assertEqual(entry.verification_level, "unit_verified")
                 self.assertEqual(entry.canonical_name, canonical)
                 self.assertIsNotNone(entry.taxonomy)
                 assert entry.taxonomy is not None
@@ -355,15 +356,12 @@ class CatalogContractTests(unittest.TestCase):
                     ),
                 )
 
-    def test_active_entry_remains_casting_c3_fixed(self) -> None:
+    def test_p1_is_active_without_a_benchmark_task(self) -> None:
         self.assertEqual(
-            self.catalog.active_entry.compatibility_id, "casting_c3_fixed"
+            self.catalog.active_phase, "P1-REAL-MINERL-ENVIRONMENT-VALIDATION"
         )
-        # The catalog must NOT pretend C3/C4/C5 are active
-        # implementation: the active entry must still resolve to C2.
-        self.assertEqual(
-            self.catalog.active_entry.taxonomy.task_level, "C2"  # type: ignore[union-attr]
-        )
+        self.assertIsNone(self.catalog.active_benchmark_task_id)
+        self.assertIsNone(self.catalog.active_entry)
 
     def test_route_a_a0_remains_calibration(self) -> None:
         for compatibility_id in (
@@ -386,24 +384,15 @@ class CatalogContractTests(unittest.TestCase):
                     entry.taxonomy.canonical_name,
                 )
 
-    def test_all_instance_paths_under_canonical_subdirs(self) -> None:
-        # R6 introduces the ``casting/single/`` subdirectory; new
-        # benchmark tasks must follow that layout, while historical
-        # benchmark tasks stay in ``active/`` and calibration stays
-        # in the legacy flat layout.
+    def test_legacy_instance_paths_remain_compatible(self) -> None:
         for entry in self.catalog.entries:
-            if entry.kind != "benchmark":
+            if entry.kind != "legacy":
                 continue
             with self.subTest(instance_path=entry.instance_path):
                 parts = entry.instance_path.split("/")
-                # Benchmark instances must live under
-                # ``benchmark/instances/<...>/<file>.json``.
                 self.assertGreaterEqual(len(parts), 4)
                 self.assertEqual(parts[0], "benchmark")
                 self.assertEqual(parts[1], "instances")
-                # Historical C1/C2 live in ``benchmark/instances/active``;
-                # the new R6 C3/C4/C5 live in
-                # ``benchmark/instances/casting/single``.
                 self.assertIn(parts[2], {"casting", "active"})
 
 
@@ -483,23 +472,22 @@ class InformationIsolationContractTests(unittest.TestCase):
 
 
 class DocumentationLinkTests(unittest.TestCase):
-    """README / PROJECT_STATUS / ROADMAP must reference the new docs
-    and not falsely claim C3/C4/C5 are implemented."""
+    """Active v2 docs must quarantine the historical C3/C4/C5 scope."""
 
-    def test_core_docs_reference_new_task_pages(self) -> None:
+    def test_core_docs_reference_v2_scope_and_legacy_archive(self) -> None:
         expected_doc_substrings = {
-            "README.md": "casting_s_c3_fixed",
-            "ROADMAP.md": "R6-COMPLETE-PORTAL-FRAME",
-            "PROJECT_STATUS.md": "R6-COMPLETE-PORTAL-FRAME",
-            "BENCHMARK_SPEC.md": "Casting-S-C3",
-            "DATASET_CARD.md": "contract_only",
+            "README.md": "legacy quarantine",
+            "ROADMAP.md": "P1 — Real Environment Validation",
+            "PROJECT_STATUS.md": "P1-REAL-MINERL-ENVIRONMENT-VALIDATION",
+            "BENCHMARK_SPEC.md": "P4 Open-World Construction",
+            "DATASET_CARD.md": "unit_verified",
         }
         for relative, needle in expected_doc_substrings.items():
             with self.subTest(doc=relative, needle=needle):
                 text = (ROOT / relative).read_text(encoding="utf-8")
                 self.assertIn(needle, text)
 
-    def test_root_docs_do_not_claim_c3c4c5_implemented(self) -> None:
+    def test_root_docs_do_not_claim_c3c4c5_as_active_v2_tasks(self) -> None:
         for relative in (
             "README.md",
             "PROJECT_STATUS.md",
@@ -509,17 +497,8 @@ class DocumentationLinkTests(unittest.TestCase):
         ):
             with self.subTest(doc=relative):
                 text = (ROOT / relative).read_text(encoding="utf-8")
-                # The phrase "evaluator 与 driver 未实现" is the R6 contract
-                # freeze signal — every root doc that mentions C3/C4/C5 must
-                # also carry this disclaimer (or a clear equivalent).
-                if "casting_s_c3_fixed" in text or "Casting-S-C3" in text:
-                    self.assertTrue(
-                        "未实现" in text
-                        or "contract_only" in text
-                        or "contract-only" in text,
-                        f"{relative} mentions C3/C4/C5 but does not flag it "
-                        "as contract-only / unimplemented",
-                    )
+                self.assertNotIn("Casting-S-C3 / C4 / C5", text)
+                self.assertNotIn("active_compatibility_id", text)
 
 
 if __name__ == "__main__":

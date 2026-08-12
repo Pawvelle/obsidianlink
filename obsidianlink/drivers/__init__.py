@@ -57,6 +57,12 @@ from obsidianlink.drivers.casting_c3 import (
     build_continuous_casting_action_plan,
     run_casting_c3_driver,
 )
+"""Legacy scripted oracle/calibration/regression drivers.
+
+These imports remain eager for backwards compatibility inside this legacy
+namespace. The v2 benchmark kernel never imports this package.
+"""
+
 from obsidianlink.drivers.casting_s_c3_frame import (
     AGENT_ID as C3_FRAME_AGENT_ID,
     ALLOWED_C3_FRAME_ACTION_TYPES,

@@ -3391,10 +3391,10 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn('"status": "ok"', result.stdout)
         self.assertIn(
-            '"phase": "r6_c1_player_relative_truth_grid_anchor_offline_fix_complete"',
+            '"phase": "P1-REAL-MINERL-ENVIRONMENT-VALIDATION"',
             result.stdout,
         )
-        self.assertNotIn("C4 / C5 runtime components", result.stdout)
+        self.assertIn('"benchmark_visible_entries": 0', result.stdout)
 
     def test_check_environment_script(self) -> None:
         # The environment script is a passive probe; it must not
@@ -3409,9 +3409,12 @@ class RegressionTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn(
-            '"phase": "r6_c1_player_relative_truth_grid_anchor_offline_fix_complete"',
+            '"phase": "P1-REAL-MINERL-ENVIRONMENT-VALIDATION"',
             result.stdout,
         )
+        self.assertIn('"p1_real_environment_executed": false', result.stdout)
+        self.assertIn('"expected": "mc-agent"', result.stdout)
+        self.assertIn('"matches_expected": true', result.stdout)
 
 
 # ----------------------------------------------------------------------

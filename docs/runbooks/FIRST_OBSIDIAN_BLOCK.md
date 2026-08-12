@@ -1,4 +1,7 @@
-# 单块黑曜石任务
+# Legacy v1 — 单块黑曜石任务
+
+> v2 status：legacy regression milestone，不是 end-to-end level，也不是
+> active P1 environment validation case。
 
 任务：`casting_c1_fixed`
 

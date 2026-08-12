@@ -1,5 +1,7 @@
 """Offline runners for ObsidianLink smoke and contract wiring."""
 
+"""Legacy C1 runner exports retained for audit and regression compatibility."""
+
 from obsidianlink.runners.casting_c1_live_smoke import (
     C1ReactiveStubEnv,
     C1SmokePreflightError,

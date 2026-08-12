@@ -1,4 +1,6 @@
-# `casting_s_c3_fixed` 完整门框浇筑任务（C3 合同冻结）
+# Legacy v1 — `casting_s_c3_fixed` 完整门框浇筑任务
+
+> 旧 taxonomy frame contract，仅用于 unit/regression；不是 v2 P-level。
 
 `casting_s_c3_fixed` 是 **Casting-S-C3 / fixed** 的正式 Benchmark 合同，实例 ID 为 `casting_s_c3_fixed_seed_0`。R6-C3 已在 FakeBackend 上完成 frame evaluator、task-origin / truth-grid 数值锚定、严格 public context、capability gate 和 deterministic driver；C4 ignition evaluator/driver、C5 Nether-entry evaluator/driver 与真实 MineRL 接入仍未实现。
 

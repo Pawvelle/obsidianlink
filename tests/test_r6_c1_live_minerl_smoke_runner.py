@@ -337,13 +337,19 @@ class C1LiveSmokeCloseTests(unittest.TestCase):
 class C1LiveSmokeCatalogInvariantTests(unittest.TestCase):
     def test_catalog_invariants_remain_frozen(self) -> None:
         catalog = load_task_catalog(CATALOG_PATH)
-        self.assertEqual(catalog.active_compatibility_id, "casting_c3_fixed")
+        self.assertEqual(
+            catalog.active_phase, "P1-REAL-MINERL-ENVIRONMENT-VALIDATION"
+        )
+        self.assertIsNone(catalog.active_benchmark_task_id)
         c5 = next(
             entry
             for entry in catalog.entries
             if entry.compatibility_id == "casting_s_c5_fixed"
         )
-        self.assertEqual(c5.implementation_status, "contract_only")
+        self.assertEqual(c5.kind, "legacy")
+        self.assertEqual(c5.implementation_status, "legacy_regression")
+        self.assertEqual(c5.verification_level, "unit_verified")
+        self.assertFalse(c5.benchmark_visible)
         self.assertFalse(c5.live_run_allowed)
 
 

@@ -1,7 +1,7 @@
-"""Strict, read-only task catalog for benchmark and calibration instances.
+"""Strict v2 compatibility catalog.
 
-The catalog adds canonical taxonomy without moving historical task files.
-It never starts an environment, imports MineRL, or mutates task data.
+The catalog preserves historical paths while quarantining every v1 task from
+the v2 benchmark-visible set. It never imports MineRL or a solver.
 """
 
 from __future__ import annotations
@@ -9,27 +9,22 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from types import MappingProxyType
 from typing import Any, Mapping
 
 
-TASK_FAMILIES = frozenset({"casting", "ruined", "adaptive"})
+ACTIVE_PHASE = "P1-REAL-MINERL-ENVIRONMENT-VALIDATION"
+TASK_FAMILIES = frozenset({"casting"})
 AGENT_MODES = frozenset({"single", "multi"})
 LAYOUT_TYPES = frozenset({"fixed", "randomized", "hidden", "challenge"})
-ENTRY_KINDS = frozenset({"benchmark", "calibration"})
-IMPLEMENTATION_STATUSES = frozenset(
-    {"contract_only", "offline_fake_verified", "legacy_regression"}
+ENTRY_KINDS = frozenset({"legacy", "calibration"})
+IMPLEMENTATION_STATUSES = frozenset({"legacy_regression"})
+VERIFICATION_LEVELS = frozenset(
+    {"unit_verified", "integration_verified", "benchmark_evaluated"}
 )
-LEVELS_BY_FAMILY: Mapping[str, frozenset[str]] = MappingProxyType(
-    {
-        "casting": frozenset({f"C{index}" for index in range(1, 6)}),
-        "ruined": frozenset({f"R{index}" for index in range(1, 6)}),
-        "adaptive": frozenset({f"A{index}" for index in range(1, 6)}),
-    }
-)
-MODE_ABBREVIATIONS: Mapping[str, str] = MappingProxyType(
-    {"single": "s", "multi": "m"}
-)
+LEVELS_BY_FAMILY: Mapping[str, frozenset[str]] = {
+    "casting": frozenset({f"C{index}" for index in range(1, 6)})
+}
+MODE_ABBREVIATIONS: Mapping[str, str] = {"single": "s", "multi": "m"}
 
 
 def _require_string(value: object, field_name: str) -> str:
@@ -53,10 +48,7 @@ def _require_relative_json_path(value: object, field_name: str) -> str:
 
 
 def _strict_fields(
-    value: Mapping[str, Any],
-    *,
-    required: frozenset[str],
-    context: str,
+    value: Mapping[str, Any], *, required: frozenset[str], context: str
 ) -> None:
     unknown = set(value) - required
     missing = required - set(value)
@@ -69,6 +61,8 @@ def _strict_fields(
 
 @dataclass(frozen=True)
 class TaskTaxonomy:
+    """Historical v1 taxonomy retained only for traceability."""
+
     task_family: str
     agent_mode: str
     task_level: str
@@ -76,7 +70,7 @@ class TaskTaxonomy:
 
     def __post_init__(self) -> None:
         if self.task_family not in TASK_FAMILIES:
-            raise ValueError(f"unknown task_family: {self.task_family!r}")
+            raise ValueError(f"unknown legacy task_family: {self.task_family!r}")
         if self.agent_mode not in AGENT_MODES:
             raise ValueError(f"unknown agent_mode: {self.agent_mode!r}")
         if self.task_level not in LEVELS_BY_FAMILY[self.task_family]:
@@ -103,7 +97,7 @@ class TaskTaxonomy:
         required = frozenset(
             {"task_family", "agent_mode", "task_level", "layout_type"}
         )
-        _strict_fields(value, required=required, context="taxonomy")
+        _strict_fields(value, required=required, context="legacy taxonomy")
         return cls(
             task_family=value["task_family"],
             agent_mode=value["agent_mode"],
@@ -131,16 +125,20 @@ class TaskCatalogEntry:
     instance_path: str
     experiment_paths: tuple[str, ...]
     implementation_status: str
+    verification_level: str
     benchmark_visible: bool
     live_run_allowed: bool
 
     def __post_init__(self) -> None:
         if self.kind not in ENTRY_KINDS:
             raise ValueError(f"unknown catalog entry kind: {self.kind!r}")
-        _require_string(self.canonical_name, "canonical_name")
-        _require_string(self.compatibility_id, "compatibility_id")
-        _require_string(self.task_instance_id, "task_instance_id")
-        _require_string(self.workflow, "workflow")
+        for name in (
+            "canonical_name",
+            "compatibility_id",
+            "task_instance_id",
+            "workflow",
+        ):
+            _require_string(getattr(self, name), name)
         _require_relative_json_path(self.instance_path, "instance_path")
         if not isinstance(self.experiment_paths, tuple):
             raise ValueError("experiment_paths must be a tuple")
@@ -152,25 +150,23 @@ class TaskCatalogEntry:
             raise ValueError(
                 f"unknown implementation_status: {self.implementation_status!r}"
             )
+        if self.verification_level not in VERIFICATION_LEVELS:
+            raise ValueError(
+                f"unknown verification_level: {self.verification_level!r}"
+            )
         _require_bool(self.benchmark_visible, "benchmark_visible")
         _require_bool(self.live_run_allowed, "live_run_allowed")
-        if self.taxonomy is not None and not isinstance(self.taxonomy, TaskTaxonomy):
-            raise ValueError("taxonomy must be a TaskTaxonomy or None")
-
-        if self.kind == "benchmark":
-            if self.taxonomy is None:
-                raise ValueError("benchmark entries require taxonomy")
+        if self.benchmark_visible or self.live_run_allowed:
+            raise ValueError("legacy/calibration entries cannot be visible or live")
+        if self.verification_level != "unit_verified":
+            raise ValueError("historical entries are unit_verified only")
+        if self.kind == "legacy":
+            if not isinstance(self.taxonomy, TaskTaxonomy):
+                raise ValueError("legacy entries require historical taxonomy")
             if self.canonical_name != self.taxonomy.canonical_name:
-                raise ValueError(
-                    "canonical_name must match the taxonomy-derived name"
-                )
-            if not self.benchmark_visible:
-                raise ValueError("benchmark entries must be benchmark_visible")
-        else:
-            if self.taxonomy is not None:
-                raise ValueError("calibration entries must not declare taxonomy")
-            if self.benchmark_visible:
-                raise ValueError("calibration entries cannot be benchmark_visible")
+                raise ValueError("canonical_name must match historical taxonomy")
+        elif self.taxonomy is not None:
+            raise ValueError("calibration entries must not declare taxonomy")
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "TaskCatalogEntry":
@@ -185,6 +181,7 @@ class TaskCatalogEntry:
                 "instance_path",
                 "experiment_paths",
                 "implementation_status",
+                "verification_level",
                 "benchmark_visible",
                 "live_run_allowed",
             }
@@ -210,6 +207,7 @@ class TaskCatalogEntry:
             instance_path=value["instance_path"],
             experiment_paths=tuple(experiment_paths),
             implementation_status=value["implementation_status"],
+            verification_level=value["verification_level"],
             benchmark_visible=value["benchmark_visible"],
             live_run_allowed=value["live_run_allowed"],
         )
@@ -225,6 +223,7 @@ class TaskCatalogEntry:
             "instance_path": self.instance_path,
             "experiment_paths": list(self.experiment_paths),
             "implementation_status": self.implementation_status,
+            "verification_level": self.verification_level,
             "benchmark_visible": self.benchmark_visible,
             "live_run_allowed": self.live_run_allowed,
         }
@@ -234,19 +233,20 @@ class TaskCatalogEntry:
 class TaskCatalog:
     schema_version: str
     catalog_version: str
-    active_compatibility_id: str
+    active_phase: str
+    active_benchmark_task_id: str | None
     entries: tuple[TaskCatalogEntry, ...]
 
     def __post_init__(self) -> None:
-        if self.schema_version != "0.1":
-            raise ValueError("task catalog schema_version must be '0.1'")
+        if self.schema_version != "0.2":
+            raise ValueError("task catalog schema_version must be '0.2'")
         _require_string(self.catalog_version, "catalog_version")
-        _require_string(self.active_compatibility_id, "active_compatibility_id")
+        if self.active_phase != ACTIVE_PHASE:
+            raise ValueError(f"active_phase must be {ACTIVE_PHASE!r}")
+        if self.active_benchmark_task_id is not None:
+            raise ValueError("v2 refactor catalog must not activate a benchmark task")
         if not self.entries:
             raise ValueError("catalog entries must be non-empty")
-        for entry in self.entries:
-            if not isinstance(entry, TaskCatalogEntry):
-                raise ValueError("entries must contain TaskCatalogEntry values")
         for field_name in (
             "canonical_name",
             "compatibility_id",
@@ -261,28 +261,32 @@ class TaskCatalog:
         ]
         if len(experiment_paths) != len(set(experiment_paths)):
             raise ValueError("catalog experiment paths must be globally unique")
-        active = self.entry_for_compatibility_id(self.active_compatibility_id)
-        if active.kind != "benchmark" or not active.benchmark_visible:
-            raise ValueError("active catalog entry must be a visible benchmark")
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "TaskCatalog":
         required = frozenset(
-            {"schema_version", "catalog_version", "active_compatibility_id", "entries"}
+            {
+                "schema_version",
+                "catalog_version",
+                "active_phase",
+                "active_benchmark_task_id",
+                "entries",
+            }
         )
         _strict_fields(value, required=required, context="task catalog")
         entries_value = value["entries"]
         if not isinstance(entries_value, list):
             raise ValueError("catalog entries must be an array")
         parsed_entries: list[TaskCatalogEntry] = []
-        for entry in entries_value:
-            if not isinstance(entry, Mapping):
+        for item in entries_value:
+            if not isinstance(item, Mapping):
                 raise ValueError("catalog entry must be a mapping")
-            parsed_entries.append(TaskCatalogEntry.from_dict(entry))
+            parsed_entries.append(TaskCatalogEntry.from_dict(item))
         return cls(
             schema_version=value["schema_version"],
             catalog_version=value["catalog_version"],
-            active_compatibility_id=value["active_compatibility_id"],
+            active_phase=value["active_phase"],
+            active_benchmark_task_id=value["active_benchmark_task_id"],
             entries=tuple(parsed_entries),
         )
 
@@ -293,14 +297,21 @@ class TaskCatalog:
         raise ValueError(f"unknown compatibility_id: {compatibility_id!r}")
 
     @property
-    def active_entry(self) -> TaskCatalogEntry:
-        return self.entry_for_compatibility_id(self.active_compatibility_id)
+    def benchmark_entries(self) -> tuple[TaskCatalogEntry, ...]:
+        return tuple(entry for entry in self.entries if entry.benchmark_visible)
+
+    @property
+    def active_entry(self) -> None:
+        """Compatibility surface: no v2 benchmark task is active during P1."""
+
+        return None
 
     def as_dict(self) -> dict[str, object]:
         return {
             "schema_version": self.schema_version,
             "catalog_version": self.catalog_version,
-            "active_compatibility_id": self.active_compatibility_id,
+            "active_phase": self.active_phase,
+            "active_benchmark_task_id": self.active_benchmark_task_id,
             "entries": [entry.as_dict() for entry in self.entries],
         }
 
@@ -334,13 +345,11 @@ def validate_catalog_references(catalog: TaskCatalog, root: Path) -> None:
             parameters = instance.get("scenario_parameters")
             if not isinstance(parameters, Mapping):
                 raise ValueError(
-                    f"benchmark task requires scenario_parameters: {entry.instance_path}"
+                    f"legacy task requires scenario_parameters: {entry.instance_path}"
                 )
             for key, expected in entry.taxonomy.as_dict().items():
                 if parameters.get(key) != expected:
-                    raise ValueError(
-                        f"taxonomy mismatch for {key}: {entry.instance_path}"
-                    )
+                    raise ValueError(f"taxonomy mismatch for {key}: {entry.instance_path}")
             if parameters.get("compatibility_task_name") != entry.canonical_name:
                 raise ValueError(
                     f"canonical compatibility name mismatch: {entry.instance_path}"
@@ -363,12 +372,14 @@ def validate_catalog_references(catalog: TaskCatalog, root: Path) -> None:
 
 
 __all__ = [
+    "ACTIVE_PHASE",
     "AGENT_MODES",
     "ENTRY_KINDS",
     "IMPLEMENTATION_STATUSES",
     "LAYOUT_TYPES",
     "LEVELS_BY_FAMILY",
     "TASK_FAMILIES",
+    "VERIFICATION_LEVELS",
     "TaskCatalog",
     "TaskCatalogEntry",
     "TaskTaxonomy",

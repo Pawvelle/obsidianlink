@@ -15,11 +15,18 @@ CORE_DOCS = (
     ROOT / "DATASET_CARD.md",
     ROOT / "docs/benchmark/TASK_TAXONOMY.md",
     ROOT / "docs/architecture/TASK_REGISTRY.md",
-    ROOT / "docs/tasks/casting/casting_c1_fixed.md",
-    ROOT / "docs/tasks/casting/casting_c3_fixed.md",
-    ROOT / "docs/runbooks/FIRST_OBSIDIAN_BLOCK.md",
+    ROOT / "docs/architecture/V2_ARCHITECTURE.md",
+    ROOT / "docs/architecture/P1_ENVIRONMENT_VALIDATION.md",
+    ROOT / "docs/legacy/v1/README.md",
 )
 MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+ACTIVE_ROOT_DOCS = (
+    "README.md",
+    "PROJECT_STATUS.md",
+    "ROADMAP.md",
+    "BENCHMARK_SPEC.md",
+    "DATASET_CARD.md",
+)
 
 
 class ProjectDocumentationTests(unittest.TestCase):
@@ -29,48 +36,51 @@ class ProjectDocumentationTests(unittest.TestCase):
                 self.assertTrue(path.is_file())
                 self.assertGreater(len(path.read_text(encoding="utf-8")), 100)
 
-    def test_current_status_names_one_offline_next_task(self) -> None:
+    def test_project_status_has_only_p1_as_active_phase(self) -> None:
         text = (ROOT / "PROJECT_STATUS.md").read_text(encoding="utf-8")
-        # The current task line is the one immediately under
-        # ``当前唯一目标``. The project must declare exactly one
-        # in-flight phase, and the safety reminder must stay
-        # present. After offline engineering milestones complete,
-        # the next step may be an authorized live smoke run rather
-        # than another ``R*-...`` offline task id.
-        self.assertIn("当前唯一目标", text)
-        self.assertIn("禁止真实 MineRL、Gradle 和模型调用", text)
-        self.assertTrue(
-            re.search(r"下一任务：`(R[3-9]-[A-Z0-9-]+)`", text) is not None
-            or (
-                "下一任务：用户单独授权的一次" in text
-                and "C1" in text
-                and "真实 MineRL smoke run" in text
-            ),
-            msg="PROJECT_STATUS must name either an R*-task or an authorized C1 live smoke next step",
-        )
+        self.assertIn("P1-REAL-MINERL-ENVIRONMENT-VALIDATION", text)
+        self.assertIn("当前唯一 active task", text)
+        self.assertIn("P1 real MineRL environment validation", text)
+        self.assertLess(len(text), 10000)
 
-    def test_current_task_is_the_only_named_work_item(self) -> None:
+    def test_active_docs_use_unified_v2_scope(self) -> None:
+        for relative in ACTIVE_ROOT_DOCS:
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            with self.subTest(relative=relative):
+                self.assertIn("Nether Portal", text)
+                self.assertIn("unit_verified", text)
+                self.assertNotIn("## Suite B — Ruined Portal", text)
+                self.assertNotIn("## Suite C — Adaptive Routing", text)
+                self.assertNotIn("Casting-S/M", text)
+
+    def test_docs_do_not_equate_legacy_milestones_with_end_to_end_success(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        spec = (ROOT / "BENCHMARK_SPEC.md").read_text(encoding="utf-8")
+        for text in (readme, spec):
+            self.assertIn("driver `completed`", text)
+            self.assertIn("Nether entry", text)
+            self.assertIn("FakeBackend success", text)
+
+    def test_active_developer_docs_freeze_mc_agent_conda_environment(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         status = (ROOT / "PROJECT_STATUS.md").read_text(encoding="utf-8")
-        # Both R2 (the completed capability-manifest phase) and
-        # the current casting-c1 evaluator phase must remain
-        # referenced so the document doubles as a project history.
-        self.assertIn("R2-CAPABILITY-MANIFEST", status)
-        self.assertIn("BackendCapabilities", status)
-        self.assertIn("CastingEvaluationState", status)
-        self.assertIn("R4-DETERMINISTIC-CASTING-DRIVER", status)
+        for text in (readme, agents, status):
+            self.assertIn("mc-agent", text)
+            self.assertIn("environment.yml", text)
+        self.assertIn("conda run -n mc-agent python", readme)
+        self.assertIn("conda run -n mc-agent python", agents)
+        self.assertIn("不得退回 `/usr/bin/python3`", agents)
 
-    def test_root_docs_use_the_real_casting_mainline(self) -> None:
-        for name in (
-            "README.md",
-            "PROJECT_STATUS.md",
-            "ROADMAP.md",
-            "BENCHMARK_SPEC.md",
-            "DATASET_CARD.md",
+    def test_v1_authoritative_docs_are_archived(self) -> None:
+        for relative in (
+            "PROJECT_STATUS_V1.md",
+            "BENCHMARK_SPEC_V1.md",
+            "ROADMAP_V1.md",
+            "TASK_TAXONOMY_V1.md",
+            "TASK_REGISTRY_V1.md",
         ):
-            with self.subTest(name=name):
-                text = (ROOT / name).read_text(encoding="utf-8")
-                self.assertIn("casting_c1_fixed", text)
-                self.assertIn("casting_c3_fixed", text)
+            self.assertTrue((ROOT / "docs/legacy/v1" / relative).is_file())
 
     def test_local_markdown_links_resolve(self) -> None:
         for path in CORE_DOCS:
@@ -83,10 +93,7 @@ class ProjectDocumentationTests(unittest.TestCase):
                 if not file_part:
                     continue
                 resolved = (path.parent / file_part).resolve()
-                with self.subTest(
-                    document=path.relative_to(ROOT),
-                    target=target,
-                ):
+                with self.subTest(document=path.relative_to(ROOT), target=target):
                     self.assertTrue(resolved.exists(), resolved)
 
 

@@ -231,10 +231,12 @@ def _validate_catalog_policy_unchanged() -> None:
         )
     if entry.canonical_name != FROZEN_CANONICAL_NAME:
         raise C1LivePreflightError("canonical task name mismatch")
-    if catalog.active_compatibility_id != "casting_c3_fixed":
+    if catalog.active_phase != "P1-REAL-MINERL-ENVIRONMENT-VALIDATION":
         raise C1LivePreflightError(
-            "active catalog implementation must remain casting_c3_fixed"
+            "active catalog phase must remain P1 environment validation"
         )
+    if entry.kind != "legacy" or entry.benchmark_visible:
+        raise C1LivePreflightError("C1 compatibility entry must remain quarantined legacy")
 
 
 def collect_runtime_preflight(*, dry_run: bool = True) -> dict[str, Any]:

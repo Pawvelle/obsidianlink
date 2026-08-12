@@ -1,4 +1,6 @@
-# `casting_c3_fixed` 连续浇筑任务
+# Legacy v1 — `casting_c3_fixed` 连续浇筑任务
+
+> 保留兼容 ID 与 regression contract；不属于 v2 active benchmark。
 
 `casting_c3_fixed` 是 R5 的历史兼容任务 ID。名字中的 `c3` 表示“三个 target cell”，不是 B0 taxonomy 的能力层级 C3；其正式分类是 Casting-S-C2 / fixed，文档级兼容名称为 `casting_s_c2_fixed`。任务文件、workflow、driver 和 evaluator API 均保留原 ID，避免破坏重放与回归。
 

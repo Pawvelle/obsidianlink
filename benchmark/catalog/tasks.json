@@ -1,10 +1,11 @@
 {
-  "schema_version": "0.1",
-  "catalog_version": "2026-08-05",
-  "active_compatibility_id": "casting_c3_fixed",
+  "schema_version": "0.2",
+  "catalog_version": "2026-08-12-v2",
+  "active_phase": "P1-REAL-MINERL-ENVIRONMENT-VALIDATION",
+  "active_benchmark_task_id": null,
   "entries": [
     {
-      "kind": "benchmark",
+      "kind": "legacy",
       "canonical_name": "casting_s_c1_fixed",
       "compatibility_id": "casting_c1_fixed",
       "task_instance_id": "casting_c1_fixed_seed_0",
@@ -19,12 +20,13 @@
       "experiment_paths": [
         "configs/experiments/active/casting_c1_contract.json"
       ],
-      "implementation_status": "offline_fake_verified",
-      "benchmark_visible": true,
+      "implementation_status": "legacy_regression",
+      "verification_level": "unit_verified",
+      "benchmark_visible": false,
       "live_run_allowed": false
     },
     {
-      "kind": "benchmark",
+      "kind": "legacy",
       "canonical_name": "casting_s_c2_fixed",
       "compatibility_id": "casting_c3_fixed",
       "task_instance_id": "casting_c3_fixed_seed_0",
@@ -39,12 +41,13 @@
       "experiment_paths": [
         "configs/experiments/active/casting_c3_contract.json"
       ],
-      "implementation_status": "offline_fake_verified",
-      "benchmark_visible": true,
+      "implementation_status": "legacy_regression",
+      "verification_level": "unit_verified",
+      "benchmark_visible": false,
       "live_run_allowed": false
     },
     {
-      "kind": "benchmark",
+      "kind": "legacy",
       "canonical_name": "casting_s_c3_fixed",
       "compatibility_id": "casting_s_c3_fixed",
       "task_instance_id": "casting_s_c3_fixed_seed_0",
@@ -59,12 +62,13 @@
       "experiment_paths": [
         "configs/experiments/active/casting_s_c3_contract.json"
       ],
-      "implementation_status": "contract_only",
-      "benchmark_visible": true,
+      "implementation_status": "legacy_regression",
+      "verification_level": "unit_verified",
+      "benchmark_visible": false,
       "live_run_allowed": false
     },
     {
-      "kind": "benchmark",
+      "kind": "legacy",
       "canonical_name": "casting_s_c4_fixed",
       "compatibility_id": "casting_s_c4_fixed",
       "task_instance_id": "casting_s_c4_fixed_seed_0",
@@ -79,12 +83,13 @@
       "experiment_paths": [
         "configs/experiments/active/casting_s_c4_contract.json"
       ],
-      "implementation_status": "contract_only",
-      "benchmark_visible": true,
+      "implementation_status": "legacy_regression",
+      "verification_level": "unit_verified",
+      "benchmark_visible": false,
       "live_run_allowed": false
     },
     {
-      "kind": "benchmark",
+      "kind": "legacy",
       "canonical_name": "casting_s_c5_fixed",
       "compatibility_id": "casting_s_c5_fixed",
       "task_instance_id": "casting_s_c5_fixed_seed_0",
@@ -99,8 +104,9 @@
       "experiment_paths": [
         "configs/experiments/active/casting_s_c5_contract.json"
       ],
-      "implementation_status": "contract_only",
-      "benchmark_visible": true,
+      "implementation_status": "legacy_regression",
+      "verification_level": "unit_verified",
+      "benchmark_visible": false,
       "live_run_allowed": false
     },
     {
@@ -115,6 +121,7 @@
         "configs/experiments/phase0_fake_a0.json"
       ],
       "implementation_status": "legacy_regression",
+      "verification_level": "unit_verified",
       "benchmark_visible": false,
       "live_run_allowed": false
     },
@@ -133,6 +140,7 @@
         "configs/experiments/phase3_single_workflow_a0.json"
       ],
       "implementation_status": "legacy_regression",
+      "verification_level": "unit_verified",
       "benchmark_visible": false,
       "live_run_allowed": false
     }

@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://obsidianlink.local/schemas/task_instance.schema.json",
-  "title": "ObsidianLink TaskInstance",
+  "title": "ObsidianLink v1 Legacy TaskInstance",
+  "description": "Compatibility schema for quarantined v1 instances. New v2 task schemas are frozen in later roadmap phases; this schema does not define active v2 benchmark tasks.",
   "type": "object",
   "additionalProperties": false,
   "required": [

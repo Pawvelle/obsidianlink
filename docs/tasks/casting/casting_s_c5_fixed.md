@@ -1,4 +1,6 @@
-# `casting_s_c5_fixed` 浇筑、点火与进入 Nether 任务（C5 合同冻结）
+# Legacy v1 — `casting_s_c5_fixed` 浇筑、点火与进入 Nether 任务
+
+> 旧 taxonomy Nether-entry contract，仅用于 unit/regression；不是 v2 P-level。
 
 `casting_s_c5_fixed` 是 **Casting-S-C5 / fixed** 端到端任务合同。它继承 C3 的水/熔岩 full-ring 浇筑和 C4 的固定点火规则，再要求指定 Agent 通过同一个本 episode 门框进入 Nether。C5 evaluator + 347-step C5 deterministic driver 均已在 FakeBackend 上离线实现；真实 MineRL 接入、真实维度切换证据采集、正式 benchmark episode 与 live runs 仍未实现。
 

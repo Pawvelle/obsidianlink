@@ -6,8 +6,6 @@ from obsidianlink.env.capabilities import (
     assert_casting_c1_capabilities,
     missing_for_casting_c1,
 )
-from obsidianlink.env.fake import FakeEnvironmentBackend
-
 __all__ = [
     "BackendCapabilities",
     "CAPABILITY_IDS",
@@ -17,3 +15,13 @@ __all__ = [
     "assert_casting_c1_capabilities",
     "missing_for_casting_c1",
 ]
+
+
+def __getattr__(name: str):
+    """Keep the legacy FakeBackend import lazy for clean v2 kernel imports."""
+
+    if name == "FakeEnvironmentBackend":
+        from obsidianlink.env.fake import FakeEnvironmentBackend
+
+        return FakeEnvironmentBackend
+    raise AttributeError(name)

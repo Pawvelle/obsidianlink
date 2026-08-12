@@ -371,13 +371,20 @@ class OfflineRunnerSafetyRegressionTests(unittest.TestCase):
 
     def test_catalog_unchanged_after_live_module_import(self) -> None:
         catalog = load_task_catalog(CATALOG_PATH)
-        self.assertEqual(catalog.active_compatibility_id, "casting_c3_fixed")
+        self.assertEqual(
+            catalog.active_phase, "P1-REAL-MINERL-ENVIRONMENT-VALIDATION"
+        )
+        self.assertIsNone(catalog.active_benchmark_task_id)
         self.assertFalse(
             catalog.entry_for_compatibility_id("casting_c1_fixed").live_run_allowed
         )
         self.assertEqual(
             catalog.entry_for_compatibility_id("casting_s_c5_fixed").implementation_status,
-            "contract_only",
+            "legacy_regression",
+        )
+        self.assertEqual(
+            catalog.entry_for_compatibility_id("casting_s_c5_fixed").kind,
+            "legacy",
         )
         self.assertFalse(
             catalog.entry_for_compatibility_id("casting_s_c5_fixed").live_run_allowed

@@ -1,4 +1,6 @@
-# `casting_s_c4_fixed` 门框浇筑与点火任务（C4 合同冻结）
+# Legacy v1 — `casting_s_c4_fixed` 门框浇筑与点火任务
+
+> 旧 taxonomy ignition contract，仅用于 unit/regression；不是 v2 P-level。
 
 `casting_s_c4_fixed` 是 **Casting-S-C4 / fixed** 合同。它完整继承 C3 的水/熔岩 full-ring 浇筑要求，再增加一次可归因的固定位置点火。当前已完成 FakeBackend 上的 evaluator 与 deterministic driver 离线证明，但仍未接入正式 runner 或真实 MineRL。
 

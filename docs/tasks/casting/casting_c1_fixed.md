@@ -1,4 +1,6 @@
-# `casting_c1_fixed` 单块浇筑任务
+# Legacy v1 — `casting_c1_fixed` 单块浇筑任务
+
+> 保留兼容 ID 与 regression contract；不属于 v2 active benchmark。
 
 本文档保存历史兼容任务 `casting_c1_fixed` 的具体合同。其文档级分类名称是 `casting_s_c1_fixed`：Casting family、Single-Agent、C1、fixed layout。兼容 ID、任务文件、workflow 和 schema 均不改名。
 
