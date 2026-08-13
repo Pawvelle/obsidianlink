@@ -396,6 +396,8 @@ class ImportSafetyTests(unittest.TestCase):
             "obsidianlink/env/integration/e0_run.py",
             "obsidianlink/env/integration/e0_config.py",
             "obsidianlink/env/integration/e0_cleanup.py",
+            "obsidianlink/env/integration/e1_adapter.py",
+            "obsidianlink/env/integration/e1_run.py",
         ):
             source = ROOT / relative
             imported = _top_level_imported_modules(source)

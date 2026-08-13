@@ -1,8 +1,9 @@
 """Minimal P1 validation runner.
 
 Executes one validation case in a controlled lifecycle. This phase
-implements E0 only: create, reset, require an initial state, and close
-reliably. The runner never uses benchmark evaluator success semantics.
+implements E0 (create, reset, require an initial state, close) and E1
+(the same lifecycle plus public RGB inspection). The runner never uses
+benchmark evaluator success semantics.
 """
 
 from __future__ import annotations
@@ -14,12 +15,17 @@ from obsidianlink.env.validation.contract import (
     EnvironmentValidationCase,
     EnvironmentValidationId,
 )
-from obsidianlink.env.validation.result import EnvironmentValidationResult
+from obsidianlink.env.validation.result import (
+    E0_SUCCESS_OUTCOME,
+    E1_SUCCESS_OUTCOME,
+    EnvironmentValidationResult,
+)
+from obsidianlink.env.validation.rgb import RGBInspection, inspect_public_rgb
 
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest backend surface required by E0.
+    """Smallest backend surface required by E0/E1.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -56,6 +62,7 @@ def _result(
     closed: bool,
     error: str | None = None,
     close_error: str | None = None,
+    rgb: RGBInspection | None = None,
 ) -> EnvironmentValidationResult:
     return EnvironmentValidationResult(
         check_id=case.check_id,
@@ -70,6 +77,11 @@ def _result(
         closed=closed,
         error=error,
         close_error=close_error,
+        rgb_present=None if rgb is None else rgb.present,
+        rgb_height=None if rgb is None else rgb.height,
+        rgb_width=None if rgb is None else rgb.width,
+        rgb_channels=None if rgb is None else rgb.channels,
+        rgb_dtype=None if rgb is None else rgb.dtype,
     )
 
 
@@ -82,6 +94,14 @@ def _close_backend(backend: object) -> tuple[bool, str | None]:
     except Exception as exc:
         return False, _format_error(exc)
     return True, None
+
+
+def _success_outcome(case: EnvironmentValidationCase) -> str | None:
+    if case.check_id is EnvironmentValidationId.E0:
+        return E0_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E1:
+        return E1_SUCCESS_OUTCOME
+    return None
 
 
 class EnvironmentValidationRunner:
@@ -102,7 +122,8 @@ class EnvironmentValidationRunner:
             raise ValueError("episode_id must be a non-empty string")
         episode_id = episode_id.strip()
 
-        if case.check_id is not EnvironmentValidationId.E0:
+        expected_success = _success_outcome(case)
+        if expected_success is None:
             return _result(
                 case=case,
                 episode_id=episode_id,
@@ -123,6 +144,7 @@ class EnvironmentValidationRunner:
         close_error: str | None = None
         outcome = "runtime_error"
         backend: object | None = None
+        rgb: RGBInspection | None = None
 
         try:
             backend = backend_factory()
@@ -140,7 +162,14 @@ class EnvironmentValidationRunner:
                     reset_completed = True
                     if initial_state_exists(reset_result, episode_id=episode_id):
                         initial_state_present = True
-                        outcome = "lifecycle_ok"
+                        if case.check_id is EnvironmentValidationId.E1:
+                            rgb = inspect_public_rgb(
+                                reset_result, episode_id=episode_id
+                            )
+                            outcome = rgb.outcome
+                            error = rgb.error
+                        else:
+                            outcome = E0_SUCCESS_OUTCOME
                     else:
                         outcome = "initial_state_missing"
                         error = "reset did not return a usable initial state"
@@ -157,12 +186,12 @@ class EnvironmentValidationRunner:
                 closed, close_error = _close_backend(backend)
 
         if close_error is not None:
-            if outcome == "lifecycle_ok":
+            if outcome in {E0_SUCCESS_OUTCOME, E1_SUCCESS_OUTCOME}:
                 outcome = "close_failed"
             error = error or close_error
 
         success = (
-            outcome == "lifecycle_ok"
+            outcome == expected_success
             and created
             and reset_completed
             and initial_state_present
@@ -170,7 +199,7 @@ class EnvironmentValidationRunner:
             and error is None
             and close_error is None
         )
-        if not success and outcome == "lifecycle_ok":
+        if not success and outcome in {E0_SUCCESS_OUTCOME, E1_SUCCESS_OUTCOME}:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
         return _result(
@@ -184,4 +213,5 @@ class EnvironmentValidationRunner:
             closed=closed,
             error=error,
             close_error=close_error,
+            rgb=rgb if case.check_id is EnvironmentValidationId.E1 else None,
         )
