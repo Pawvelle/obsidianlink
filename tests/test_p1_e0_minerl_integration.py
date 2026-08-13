@@ -23,10 +23,12 @@ from obsidianlink.env.integration import (
 )
 from obsidianlink.env.integration.e0_cleanup import inspect_minerl_cleanup
 from obsidianlink.env.integration.e0_config import (
+    E0_COMPATIBILITY_INVENTORY,
     E0_COMPATIBILITY_WORKFLOW,
     build_e0_compatibility_task,
 )
 from obsidianlink.env.integration.e0_run import reset_authorized_e0_process_guards_for_tests
+from obsidianlink.env.portal_spec import PortalA0EnvSpec
 from obsidianlink.env.validation import (
     E0_LIFECYCLE_CASE,
     EnvironmentValidationRunner,
@@ -328,6 +330,31 @@ class CompatibilityIsolationTests(unittest.TestCase):
         self.assertNotIn("TaskInstance", integration.__all__)
         self.assertFalse(hasattr(integration, "TaskInstance"))
         self.assertFalse(hasattr(integration, "build_e0_compatibility_task"))
+
+    def test_compatibility_inventory_is_nonempty_for_legacy_backend(self) -> None:
+        task = build_e0_compatibility_task(EPISODE_ID)
+        inventory = dict(task.initial_inventories["agent_1"])
+        self.assertTrue(inventory)
+        self.assertEqual(inventory, {"dirt": 1})
+        self.assertEqual(inventory, dict(E0_COMPATIBILITY_INVENTORY))
+
+        # Offline PortalA0EnvSpec construction only. This does not call
+        # make() and does not start MineRL.
+        initial_inventory = tuple(
+            {"type": item, "quantity": quantity}
+            for item, quantity in inventory.items()
+            if quantity > 0
+        )
+        specification = PortalA0EnvSpec(
+            max_episode_steps=task.limits["max_environment_steps"],
+            max_game_time_seconds=task.limits["max_game_time_seconds"],
+            initial_inventory=initial_inventory,
+            initial_position=tuple(task.spawn_positions["agent_1"]),
+        )
+        self.assertEqual(
+            specification.initial_inventory,
+            ({"type": "dirt", "quantity": 1},),
+        )
 
     def test_validation_package_does_not_import_task_instance_or_integration(self) -> None:
         for source in VALIDATION_PACKAGE.rglob("*.py"):

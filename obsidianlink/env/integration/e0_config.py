@@ -18,13 +18,22 @@ from obsidianlink.core.types import TaskInstance
 E0_COMPATIBILITY_WORKFLOW = "route_a_a0"
 E0_AGENT_ID = "agent_1"
 E0_WORLD_SEED = 0
+# Dirt exists only to satisfy the legacy MineRL backend /
+# PortalA0EnvSpec contract that ``initial_inventory`` must be
+# non-empty. It is not an E0 evaluation requirement: E0 does not
+# inspect inventory contents, and this must not be treated as E2
+# inventory semantics.
+E0_COMPATIBILITY_INVENTORY = {"dirt": 1}
 
 
 def build_e0_compatibility_task(episode_id: str) -> TaskInstance:
     """Return the smallest backend-compatible task for an E0 reset.
 
-    Callers outside this integration package must not treat the result
-    as a public P1 API object.
+    The compatibility inventory is a non-empty placeholder required by
+    the existing MineRL backend. Callers must not treat it as an E0
+    evaluation input or as E2 inventory semantics. Callers outside this
+    integration package must not treat the result as a public P1 API
+    object.
     """
 
     if not isinstance(episode_id, str) or not episode_id.strip():
@@ -42,7 +51,9 @@ def build_e0_compatibility_task(episode_id: str) -> TaskInstance:
                 "P1 E0 lifecycle validation only. Do not construct a portal."
             ),
             "spawn_positions": {E0_AGENT_ID: [0, 64, 0]},
-            "initial_inventories": {E0_AGENT_ID: {}},
+            "initial_inventories": {
+                E0_AGENT_ID: dict(E0_COMPATIBILITY_INVENTORY)
+            },
             "workflow": E0_COMPATIBILITY_WORKFLOW,
             "milestones": ["task_reset"],
             "limits": {
