@@ -97,6 +97,21 @@ class V2ArchitectureTests(unittest.TestCase):
             + LEGACY_TASK_TYPE_PREFIXES,
         )
 
+    def test_p1_validation_does_not_import_legacy_or_benchmark_evaluator_modules(
+        self,
+    ) -> None:
+        self.assert_package_avoids_imports(
+            "obsidianlink/env/validation",
+            LEGACY_SOLUTION_PREFIXES
+            + LEGACY_EVALUATION_PREFIXES
+            + AGENT_LAYER_PREFIXES
+            + (
+                "obsidianlink.benchmark.evaluator",
+                "obsidianlink.env.fake",
+                "obsidianlink.env.minerl_backend",
+            ),
+        )
+
     def test_v2_packages_do_not_import_legacy_task_instance(self) -> None:
         for package in ("obsidianlink/benchmark", "obsidianlink/tasks"):
             for source in _python_sources(package):

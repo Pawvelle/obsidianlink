@@ -47,24 +47,34 @@ v2 已完成 scope freeze、architecture reset 与 legacy quarantine：
 
 E10 允许预置合法 support/trench，并由 deterministic calibration script 只执行最小流体交互。Evaluator 必须观察 server-side `air/lava/... -> obsidian`。它验证 `MineRL Action -> Minecraft Server -> Vanilla Mechanics -> Evaluator-only World Truth -> Verdict`，不是正式 benchmark task。
 
+## P1-E0 lifecycle runtime（offline / unit_verified only）
+
+- 已实现最小 P1 validation runtime：`EnvironmentValidationResult`、runner、recorder 与 E0 `reset_close` case；
+- E0 离线证明 create -> reset -> 初始状态存在 -> close，失败路径 fail closed，close/cleanup 在异常后仍会尝试；
+- 该结果只支持 `unit_verified`；E0 不是 `integration_verified`，静态 P1 manifest 仍报告 E0–E12 为 `not_run`；
+- 未运行真实 MineRL/Minecraft，未运行 Gradle，未调用付费模型 API；FakeBackend/stub success 不能证明真实 Minecraft 能力；
+- E1–E12 仍未实现、未运行；P1 Hard Gate 未通过；P2 不得开始。
+
 ## 本次 v2 refactor 已完成
 
-- `unit_verified`：v2 taxonomy、verification vocabulary、P1 E0–E12 manifest、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
+- `unit_verified`：v2 taxonomy、verification vocabulary、P1 E0–E12 manifest、E0 lifecycle runtime、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
 - legacy infrastructure 保持原 import，可继续运行离线 regression；
 - active catalog 不包含旧 C1–C5 正式 benchmark entries，也没有批量创建空壳 v2 task instances；
-- `python -m obsidianlink --check` 与 `scripts/check_environment.py` 使用 v2/P1 语义，不执行 deterministic drivers。
+- `python -m obsidianlink --check` 与 `scripts/check_environment.py` 使用 v2/P1 语义，不执行 deterministic drivers，也不把离线 E0 提升为真实 integration。
 
 ## 本次离线验收
 
 - 2026-08-12：离线测试 1250 项通过；该结果只支持 `unit_verified` 声明，不代表真实 Minecraft 能力；
 - 2026-08-13：P0.1 cleanup 后完整离线回归 1259 项通过；仍只支持 `unit_verified` 声明；
+- 2026-08-13：P1-E0 lifecycle runtime 后完整离线回归 1277 项通过；E0 仅为 `unit_verified`；
 - v2 CLI 自检与 P1 环境状态检查脚本通过，均报告 E0–E12 为 `not_run`；
 - Python compile check 与 `git diff --check` 通过。
 - 标准本地运行时冻结为 `environment.yml` 中的 Conda 环境 `mc-agent`；Python 命令与测试不得使用系统 Python 或其他环境，环境检查会 fail closed 验证该身份。
 
 ## 尚未验证
 
-- P1 任一 E0–E12 case 尚未在本次重构中运行；
+- E0 仅离线/unit verified；真实 MineRL E0 尚未执行；
+- E1–E12 尚未实现或尚未运行；P1 Hard Gate 未通过；
 - 真实 MineRL/Minecraft casting 不是 `integration_verified`；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4 正式 end-to-end task 尚未实现；
@@ -73,8 +83,8 @@ E10 允许预置合法 support/trench，并由 deterministic calibration script 
 
 ## P1 hard gate
 
-进入 P2 前必须完成真实环境 validation suite，并达到稳定重复成功、`truth_missing=0`、无人工干预。规划建议至少 20 个 fresh episodes；最终次数、seed 和失败处理规则在真实实验合同冻结时确定。每次真实 MineRL/Minecraft 运行与每次 Gradle 构建仍需用户单独授权。
+P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation suite，并达到稳定重复成功、`truth_missing=0`、无人工干预。规划建议至少 20 个 fresh episodes；最终次数、seed 和失败处理规则在真实实验合同冻结时确定。每次真实 MineRL/Minecraft 运行与每次 Gradle 构建仍需用户单独授权。
 
 ## 下一精确任务
 
-P1 real MineRL environment validation, beginning with the smallest controlled integration case and only running real MineRL after explicit user authorization.
+P1 observation validation, beginning with E1–E3 after this E0 implementation is reviewed. P1 real MineRL environment validation still requires explicit user authorization; P1 Hard Gate has not passed and P2 must not begin.

@@ -38,6 +38,6 @@ E10 通过不表示正式 portal task 成功。
 
 ## Authorization and hard gate
 
-本文件和 `obsidianlink.env.validation` 只是离线 contract/scaffolding。每次真实 MineRL/Minecraft 与每次 Gradle 构建需用户单独授权。
+E0 lifecycle runtime 已有离线/unit 实现，但这不是真实 MineRL 证据。`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E1–E12 尚未实现。每次真实 MineRL/Minecraft 与每次 Gradle 构建需用户单独授权。
 
-进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。
+进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。
