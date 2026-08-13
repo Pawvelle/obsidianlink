@@ -47,7 +47,7 @@ v2 已完成 scope freeze、architecture reset 与 legacy quarantine：
 
 E10 允许预置合法 support/trench，并由 deterministic calibration script 只执行最小流体交互。Evaluator 必须观察 server-side `air/lava/... -> obsidian`。它验证 `MineRL Action -> Minecraft Server -> Vanilla Mechanics -> Evaluator-only World Truth -> Verdict`，不是正式 benchmark task。
 
-## P1-E0 / E1 status
+## P1-E0 / E1 / E2 status
 
 - E0 contract: complete
 - E0 offline runtime: `unit_verified`
@@ -58,7 +58,13 @@ E10 允许预置合法 support/trench，并由 deterministic calibration script 
 - E1 real MineRL execution: one authorized RGB success reviewed
 - E1 RGB: 360×640×3 uint8
 - E1 `integration_verified`: NO
-- E2–E12: not started / not run
+- E2 contract / offline runtime: complete / `unit_verified`
+- E2 MineRL adapter / live bridge: implemented / offline tested
+- E2 real MineRL execution: one authorized inventory success pending review
+- E2 observed inventory: `{"dirt": 7, "obsidian": 4, "flint_and_steel": 1}`
+- E2 `inventory_matches_expected`: true
+- E2 `integration_verified`: NO
+- E3–E12: not started / not run
 - P1 Hard Gate: NOT PASSED
 - P2: NOT STARTED
 
@@ -66,13 +72,15 @@ Reviewed E0 live evidence (not modified): `runs/p1_e0_reset_close/e0-live-202608
 
 Reviewed E1 live evidence (not modified): `runs/p1_e1_rgb_observation/e1-live-20260813-162733`, episode `p1-e1-live-001`. `success=true`, `outcome=rgb_ok`, `real_execution_performed=true`; `opened=true`, `reset_completed=true`, `initial_state_present=true`, `rgb_present=true`, `rgb_height=360`, `rgb_width=640`, `rgb_channels=3`, `rgb_dtype=uint8`, `closed=true`, `error=null`. Observable cleanup `close_returned`, `backend_marked_closed`, `environment_reference_cleared`, and `owner_cleared` are true. `process_release_proven` remains false and is not rewritten.
 
-E0/E1 are not promoted to `integration_verified`. Existing policy: live runtimes and `p1_validation_manifest()` / `--check` are fail-closed offline surfaces and never emit that claim; AGENTS.md forbids declaring `integration_verified` before the P1 Hard Gate; a single reviewed success is recorded evidence, not suite promotion. `benchmark_evaluated` is not claimed.
+Pending-review E2 live evidence (not modified): `runs/p1_e2_inventory_observation/e2-live-20260813-232125`, episode `p1-e2-live-001`. `success=true`, `outcome=inventory_ok`, `real_execution_performed=true`; expected and observed inventory both equal `{"dirt": 7, "obsidian": 4, "flint_and_steel": 1}`, and `inventory_matches_expected=true`. Opened/reset/initial state/closed are true; observable cleanup succeeded and `process_release_proven=false`.
 
-The solver-independent E0/E1 runtime remains in `obsidianlink/env/validation/`. MineRL adapters live in `obsidianlink/env/integration/`. Authorized E0: `python -m obsidianlink.env.integration.e0_run --execution-mode authorized_live_e0 --authorized-live-run e0_reset_close`. Authorized E1: `python -m obsidianlink.env.integration.e1_run --execution-mode authorized_live_e1 --authorized-live-run e1_rgb_observation`. Import, `--check`, and unit tests do not start MineRL.
+E0/E1/E2 are not promoted to `integration_verified`. Existing policy: live runtimes and `p1_validation_manifest()` / `--check` are fail-closed offline surfaces and never emit that claim; AGENTS.md forbids declaring `integration_verified` before the P1 Hard Gate; a single reviewed or pending-review success is recorded evidence, not suite promotion. `benchmark_evaluated` is not claimed.
+
+The solver-independent E0/E1/E2 runtime remains in `obsidianlink/env/validation/`. MineRL adapters live in `obsidianlink/env/integration/`. Authorized E0: `python -m obsidianlink.env.integration.e0_run --execution-mode authorized_live_e0 --authorized-live-run e0_reset_close`. Authorized E1: `python -m obsidianlink.env.integration.e1_run --execution-mode authorized_live_e1 --authorized-live-run e1_rgb_observation`. Authorized E2: `python -m obsidianlink.env.integration.e2_run --execution-mode authorized_live_e2 --authorized-live-run e2_inventory_observation`. Import, `--check`, and unit tests do not start MineRL.
 
 ## 本次 v2 refactor 已完成
 
-- `unit_verified`：v2 taxonomy、verification vocabulary、P1 E0–E12 manifest、E0 lifecycle runtime、E0 MineRL integration bridge、E1 RGB observation runtime/adapter/live bridge、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
+- `unit_verified`：v2 taxonomy、verification vocabulary、P1 E0–E12 manifest、E0 lifecycle runtime、E0 MineRL integration bridge、E1 RGB observation runtime/adapter/live bridge、E2 inventory observation runtime/adapter/live bridge、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
 - legacy infrastructure 保持原 import，可继续运行离线 regression；
 - active catalog 不包含旧 C1–C5 正式 benchmark entries，也没有批量创建空壳 v2 task instances；
 - `python -m obsidianlink --check` 与 `scripts/check_environment.py` 使用 v2/P1 语义，不执行 deterministic drivers，也不把离线 E0 提升为真实 integration。
@@ -85,6 +93,8 @@ The solver-independent E0/E1 runtime remains in `obsidianlink/env/validation/`. 
 - 2026-08-13：授权真实 E0 lifecycle run `p1-e0-live-002` 成功并已审查；`process_release_proven=false`，E0 仍不是 `integration_verified`；
 - 2026-08-13：P1-E1 RGB observation contract/adapter/offline runtime/live bridge 已实现；
 - 2026-08-13：授权真实 E1 RGB run `p1-e1-live-001` 成功并已审查（360×640×3 uint8）；`process_release_proven=false`，E1 仍不是 `integration_verified`；
+- 2026-08-13：P1-E2 inventory observation contract/adapter/offline runtime/live bridge 已实现；
+- 2026-08-13：唯一一次授权真实 E2 inventory run `p1-e2-live-001` 成功并等待人工审阅；expected/observed inventory 精确一致，`process_release_proven=false`，E2 仍不是 `integration_verified`；
 - v2 CLI 自检与 P1 环境状态检查脚本通过，均报告 E0–E12 为 `not_run`；
 - Python compile check 与 `git diff --check` 通过。
 - 标准本地运行时冻结为 `environment.yml` 中的 Conda 环境 `mc-agent`；Python 命令与测试不得使用系统 Python 或其他环境，环境检查会 fail closed 验证该身份。
@@ -93,7 +103,8 @@ The solver-independent E0/E1 runtime remains in `obsidianlink/env/validation/`. 
 
 - E0 已有一次审查过的真实 lifecycle success evidence，但不是 `integration_verified`；OS-level process release 未证明；
 - E1 已有一次审查过的真实 RGB success evidence（360×640×3 uint8），但不是 `integration_verified`；
-- E2–E12 尚未实现或尚未运行；P1 Hard Gate 未通过；
+- E2 已有一次等待人工审阅的真实 inventory success evidence，但不是 `integration_verified`；
+- E3–E12 尚未实现或尚未运行；P1 Hard Gate 未通过；
 - 真实 MineRL/Minecraft casting 不是 `integration_verified`；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4 正式 end-to-end task 尚未实现；
@@ -106,4 +117,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-Implement P1 E2 inventory observation. P1 real MineRL environment validation still requires explicit user authorization; P1 Hard Gate has not passed and P2 must not begin. Do not start E2–E3 in this wrap-up.
+Review the single authorized P1 E2 inventory evidence. P1 real MineRL environment validation still requires explicit user authorization; P1 Hard Gate has not passed and P2 must not begin. Do not start E3 in this wrap-up.
