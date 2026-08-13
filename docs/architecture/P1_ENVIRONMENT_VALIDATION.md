@@ -38,6 +38,6 @@ E10 通过不表示正式 portal task 成功。
 
 ## Authorization and hard gate
 
-E0 contract 已完成；E0 离线 runtime 为 `unit_verified`；E0 MineRL integration bridge 已实现。一次授权真实 E0 lifecycle run 已成功并审查，但 E0 不是 `integration_verified`：`process_release_proven` 仍为 false，仓库没有自动 verification promotion。E1 RGB contract / adapter / offline runtime / live bridge 已实现并离线 `unit_verified`；真实 E1 尚未执行。`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E2–E12 尚未实现。E0 入口为 `python -m obsidianlink.env.integration.e0_run`（`--execution-mode authorized_live_e0 --authorized-live-run e0_reset_close`）。E1 入口为 `python -m obsidianlink.env.integration.e1_run`（`--execution-mode authorized_live_e1 --authorized-live-run e1_rgb_observation`）。每次真实 MineRL/Minecraft 与每次 Gradle 构建需用户单独授权。
+E0 contract 已完成；E0 离线 runtime 为 `unit_verified`；一次授权真实 E0 lifecycle run 已成功并审查，但 E0 不是 `integration_verified`。E1 RGB contract / adapter / offline runtime / live bridge 为 `unit_verified`；一次授权真实 E1 RGB run 已成功并审查（360×640×3 uint8），但 E1 不是 `integration_verified`：`process_release_proven` 仍为 false，live runtime / `--check` / `p1_validation_manifest()` 不得自动 promotion，P1 Hard Gate 要求完整 suite 稳定重复成功。`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E2–E12 尚未实现。E0 入口为 `python -m obsidianlink.env.integration.e0_run`。E1 入口为 `python -m obsidianlink.env.integration.e1_run`。每次真实 MineRL/Minecraft 与每次 Gradle 构建需用户单独授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。

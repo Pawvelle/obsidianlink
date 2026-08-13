@@ -47,24 +47,28 @@ v2 已完成 scope freeze、architecture reset 与 legacy quarantine：
 
 E10 允许预置合法 support/trench，并由 deterministic calibration script 只执行最小流体交互。Evaluator 必须观察 server-side `air/lava/... -> obsidian`。它验证 `MineRL Action -> Minecraft Server -> Vanilla Mechanics -> Evaluator-only World Truth -> Verdict`，不是正式 benchmark task。
 
-## P1-E0 status
+## P1-E0 / E1 status
 
 - E0 contract: complete
 - E0 offline runtime: `unit_verified`
 - E0 MineRL integration bridge: implemented / offline tested
-- E0 cleanup fail-closed semantics: hardened
 - E0 real MineRL execution: one authorized success reviewed
 - E0 `integration_verified`: NO
-- E1 contract / adapter / offline runtime / live bridge: implemented / `unit_verified`
-- E1 real MineRL execution: `not_run`
+- E1 contract / adapter / offline runtime / live bridge: `unit_verified`
+- E1 real MineRL execution: one authorized RGB success reviewed
+- E1 RGB: 360×640×3 uint8
 - E1 `integration_verified`: NO
 - E2–E12: not started / not run
 - P1 Hard Gate: NOT PASSED
 - P2: NOT STARTED
 
-Reviewed E0 live evidence (not modified): `runs/p1_e0_reset_close/e0-live-20260813-130313`, episode `p1-e0-live-002`. Fields: `success=true`, `outcome=lifecycle_ok`, `real_execution_performed=true`, `opened=true`, `created=true`, `reset_completed=true`, `initial_state_present=true`, `closed=true`, `error=null`, observable cleanup `close_returned`, `backend_marked_closed`, `environment_reference_cleared`, and `owner_cleared` are true. `cleanup.process_release_proven` remains false; `close()` returning is not OS-level process-release proof. There is no automatic verification promotion path; this single reviewed success does not mark E0 `integration_verified`. CLI `--check` and `p1_validation_manifest()` remain offline and still report cases as `not_run`.
+Reviewed E0 live evidence (not modified): `runs/p1_e0_reset_close/e0-live-20260813-130313`, episode `p1-e0-live-002`. `success=true`, `outcome=lifecycle_ok`, `real_execution_performed=true`; opened/reset/initial state/closed are true. Observable cleanup succeeded; `process_release_proven=false`.
 
-The solver-independent E0/E1 runtime remains in `obsidianlink/env/validation/`. MineRL adapters live in `obsidianlink/env/integration/`. Authorized E0 entrypoint: `python -m obsidianlink.env.integration.e0_run --execution-mode authorized_live_e0 --authorized-live-run e0_reset_close`. Authorized E1 entrypoint (not executed this round): `python -m obsidianlink.env.integration.e1_run --execution-mode authorized_live_e1 --authorized-live-run e1_rgb_observation`. Import, `--check`, and unit tests do not start MineRL. Real-run success fails closed when observable cleanup signals are explicitly false.
+Reviewed E1 live evidence (not modified): `runs/p1_e1_rgb_observation/e1-live-20260813-162733`, episode `p1-e1-live-001`. `success=true`, `outcome=rgb_ok`, `real_execution_performed=true`; `opened=true`, `reset_completed=true`, `initial_state_present=true`, `rgb_present=true`, `rgb_height=360`, `rgb_width=640`, `rgb_channels=3`, `rgb_dtype=uint8`, `closed=true`, `error=null`. Observable cleanup `close_returned`, `backend_marked_closed`, `environment_reference_cleared`, and `owner_cleared` are true. `process_release_proven` remains false and is not rewritten.
+
+E0/E1 are not promoted to `integration_verified`. Existing policy: live runtimes and `p1_validation_manifest()` / `--check` are fail-closed offline surfaces and never emit that claim; AGENTS.md forbids declaring `integration_verified` before the P1 Hard Gate; a single reviewed success is recorded evidence, not suite promotion. `benchmark_evaluated` is not claimed.
+
+The solver-independent E0/E1 runtime remains in `obsidianlink/env/validation/`. MineRL adapters live in `obsidianlink/env/integration/`. Authorized E0: `python -m obsidianlink.env.integration.e0_run --execution-mode authorized_live_e0 --authorized-live-run e0_reset_close`. Authorized E1: `python -m obsidianlink.env.integration.e1_run --execution-mode authorized_live_e1 --authorized-live-run e1_rgb_observation`. Import, `--check`, and unit tests do not start MineRL.
 
 ## 本次 v2 refactor 已完成
 
@@ -79,7 +83,8 @@ The solver-independent E0/E1 runtime remains in `obsidianlink/env/validation/`. 
 - 2026-08-13：P0.1 cleanup 后完整离线回归 1259 项通过；仍只支持 `unit_verified` 声明；
 - 2026-08-13：P1-E0 MineRL integration bridge 后完整离线回归 1292 项通过；E0 当时仍仅为 `unit_verified`；
 - 2026-08-13：授权真实 E0 lifecycle run `p1-e0-live-002` 成功并已审查；`process_release_proven=false`，E0 仍不是 `integration_verified`；
-- 2026-08-13：P1-E1 RGB observation contract/adapter/offline runtime/live bridge 已实现；E1 真实 MineRL 未执行；
+- 2026-08-13：P1-E1 RGB observation contract/adapter/offline runtime/live bridge 已实现；
+- 2026-08-13：授权真实 E1 RGB run `p1-e1-live-001` 成功并已审查（360×640×3 uint8）；`process_release_proven=false`，E1 仍不是 `integration_verified`；
 - v2 CLI 自检与 P1 环境状态检查脚本通过，均报告 E0–E12 为 `not_run`；
 - Python compile check 与 `git diff --check` 通过。
 - 标准本地运行时冻结为 `environment.yml` 中的 Conda 环境 `mc-agent`；Python 命令与测试不得使用系统 Python 或其他环境，环境检查会 fail closed 验证该身份。
@@ -87,7 +92,7 @@ The solver-independent E0/E1 runtime remains in `obsidianlink/env/validation/`. 
 ## 尚未验证
 
 - E0 已有一次审查过的真实 lifecycle success evidence，但不是 `integration_verified`；OS-level process release 未证明；
-- E1 contract/offline runtime/live bridge 为 `unit_verified`；真实 MineRL E1 尚未执行，不是 `integration_verified`；
+- E1 已有一次审查过的真实 RGB success evidence（360×640×3 uint8），但不是 `integration_verified`；
 - E2–E12 尚未实现或尚未运行；P1 Hard Gate 未通过；
 - 真实 MineRL/Minecraft casting 不是 `integration_verified`；
 - E10、portal activation、dimension transition 尚未真实验证；
@@ -101,4 +106,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-Authorized real MineRL E1 RGB observation execution. P1 real MineRL environment validation still requires explicit user authorization; P1 Hard Gate has not passed and P2 must not begin. Do not start E2–E3 yet.
+Implement P1 E2 inventory observation. P1 real MineRL environment validation still requires explicit user authorization; P1 Hard Gate has not passed and P2 must not begin. Do not start E2–E3 in this wrap-up.
