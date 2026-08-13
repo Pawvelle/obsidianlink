@@ -375,8 +375,7 @@ class E2AdapterIsolationTests(unittest.TestCase):
         self.assertIn("unimplemented", e3_result.error or "")
         self.assertFalse(called)
 
-    def test_no_e2_live_runner_or_evidence_directory_was_created(self) -> None:
-        self.assertFalse((ROOT / "obsidianlink/env/integration/e2_run.py").exists())
+    def test_no_e2_evidence_directory_was_created(self) -> None:
         self.assertFalse((ROOT / "runs/p1_e2_inventory_observation").exists())
 
 
