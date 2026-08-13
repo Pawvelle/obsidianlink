@@ -1,4 +1,4 @@
-"""P1 E0/E1 MineRL integration boundary.
+"""P1 E0--E2 MineRL integration boundary.
 
 This package may depend on the validation core and on the MineRL backend.
 The solver-independent validation core must not import this package.
@@ -24,6 +24,7 @@ from obsidianlink.env.integration.e1_run import (
     preflight_authorized_e1,
     run_authorized_e1_minerl,
 )
+from obsidianlink.env.integration.e2_adapter import MineRLE2InventoryAdapter
 
 __all__ = [
     "AUTHORIZED_LIVE_E1_RUN_VALUE",
@@ -37,6 +38,7 @@ __all__ = [
     "E1MineRLRunRecord",
     "MineRLE0LifecycleAdapter",
     "MineRLE1RGBAdapter",
+    "MineRLE2InventoryAdapter",
     "preflight_authorized_e0",
     "preflight_authorized_e1",
     "run_authorized_e0_minerl",

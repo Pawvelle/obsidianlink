@@ -80,7 +80,13 @@ class MineRLE0LifecycleAdapter:
         self._open_succeeded = False
         self._close_returned = False
         self._cleanup = inspect_minerl_cleanup(None, close_returned=False)
-        self._compatibility_task = build_e0_compatibility_task(self.episode_id)
+        self._compatibility_task = self._build_compatibility_task(self.episode_id)
+
+    @staticmethod
+    def _build_compatibility_task(episode_id: str) -> object:
+        """Build this adapter's internal legacy backend task."""
+
+        return build_e0_compatibility_task(episode_id)
 
     @property
     def backend_identity(self) -> str:
