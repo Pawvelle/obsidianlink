@@ -112,16 +112,23 @@ class E0MineRLRunRecord:
             raise ValueError("this runtime cannot claim integration_verified")
         if not self.calibration_only:
             raise ValueError("E0 MineRL records must remain calibration-only")
-        if self.success and not (
-            self.opened
-            and self.created
-            and self.reset_completed
-            and self.initial_state_present
-            and self.closed
-            and self.error is None
-            and self.close_error is None
-        ):
-            raise ValueError("success requires a clean E0 MineRL lifecycle")
+        if self.success:
+            if self.outcome != "lifecycle_ok":
+                raise ValueError("success requires outcome lifecycle_ok")
+            if not (
+                self.opened
+                and self.created
+                and self.reset_completed
+                and self.initial_state_present
+                and self.closed
+                and self.error is None
+                and self.close_error is None
+            ):
+                raise ValueError("success requires a clean E0 MineRL lifecycle")
+            if self.cleanup.has_explicit_failure():
+                raise ValueError(
+                    "success requires observable cleanup without explicit failure"
+                )
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -304,6 +311,13 @@ def _record_from_lifecycle(
         )
     )
     opened = False if adapter is None else adapter.open_succeeded
+    success = lifecycle.success
+    outcome = lifecycle.outcome
+    error = lifecycle.error
+    if success and cleanup.has_explicit_failure():
+        success = False
+        outcome = "cleanup_failed"
+        error = cleanup.failure_detail()
     return E0MineRLRunRecord(
         check_id=EnvironmentValidationId.E0.value,
         name="reset_close",
@@ -315,10 +329,10 @@ def _record_from_lifecycle(
         reset_completed=lifecycle.reset_completed,
         initial_state_present=lifecycle.initial_state_present,
         closed=lifecycle.closed,
-        success=lifecycle.success,
-        outcome=lifecycle.outcome,
+        success=success,
+        outcome=outcome,
         cleanup=cleanup,
-        error=lifecycle.error,
+        error=error,
         close_error=lifecycle.close_error,
         authorization_accepted=authorization_accepted,
         real_execution_performed=real_execution_performed,

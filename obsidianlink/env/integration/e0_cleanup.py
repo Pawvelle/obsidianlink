@@ -50,6 +50,39 @@ class E0CleanupStatus:
                 "this runtime cannot claim MineRL/Minecraft process release"
             )
 
+    def has_explicit_failure(self) -> bool:
+        """Return True when an observed cleanup signal is explicitly False.
+
+        ``None`` means the signal is unavailable and is not treated as
+        failure. ``process_release_proven`` is never a success condition.
+        """
+
+        if self.close_returned is False:
+            return True
+        return any(
+            value is False
+            for value in (
+                self.backend_marked_closed,
+                self.environment_reference_cleared,
+                self.owner_cleared,
+            )
+        )
+
+    def failure_detail(self) -> str | None:
+        failed = [
+            name
+            for name, value in (
+                ("close_returned", self.close_returned),
+                ("backend_marked_closed", self.backend_marked_closed),
+                ("environment_reference_cleared", self.environment_reference_cleared),
+                ("owner_cleared", self.owner_cleared),
+            )
+            if value is False
+        ]
+        if not failed:
+            return None
+        return "observable cleanup failed: " + ", ".join(failed)
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "backend_marked_closed": self.backend_marked_closed,

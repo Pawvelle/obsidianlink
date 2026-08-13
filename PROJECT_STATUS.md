@@ -52,13 +52,14 @@ E10 允许预置合法 support/trench，并由 deterministic calibration script 
 - E0 contract: complete
 - E0 offline runtime: `unit_verified`
 - E0 MineRL integration bridge: implemented / offline tested
+- E0 cleanup fail-closed semantics: hardened
 - E0 real MineRL execution: `not_run`
 - E0 `integration_verified`: NO
 - E1–E12: not implemented / not run
 - P1 Hard Gate: NOT PASSED
 - P2: NOT STARTED
 
-The solver-independent E0 runtime remains in `obsidianlink/env/validation/`. The MineRL adapter lives in `obsidianlink/env/integration/` and translates `open` / `reset(task)` / `close` into the generic lifecycle protocol without leaking legacy `TaskInstance` into the validation core. The authorized entrypoint is `python -m obsidianlink.env.integration.e0_run` and requires `--execution-mode authorized_live_e0 --authorized-live-run e0_reset_close`. Import, `--check`, and unit tests do not start MineRL. `close()` returning is not proof that Java/Minecraft/MineRL processes were released.
+The solver-independent E0 runtime remains in `obsidianlink/env/validation/`. The MineRL adapter lives in `obsidianlink/env/integration/` and translates `open` / `reset(task)` / `close` into the generic lifecycle protocol without leaking legacy `TaskInstance` into the validation core. The authorized entrypoint is `python -m obsidianlink.env.integration.e0_run` and requires `--execution-mode authorized_live_e0 --authorized-live-run e0_reset_close`. Import, `--check`, and unit tests do not start MineRL. Real-run success fails closed when observable cleanup signals are explicitly false. `close()` returning is not proof that Java/Minecraft/MineRL processes were released.
 
 ## 本次 v2 refactor 已完成
 

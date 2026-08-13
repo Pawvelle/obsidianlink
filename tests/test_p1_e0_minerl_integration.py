@@ -111,13 +111,18 @@ class _RecordingMineRLBackend:
         self.reset_error: Exception | None = None
         self.close_error: Exception | None = None
         self.reset_result: object | None = None
+        self.leave_opened = False
+        self.leave_env = False
+        self.leave_owner = False
+        self.omit_owner = False
 
     def open(self) -> None:
         self.calls.append("open")
         if self.open_error is not None:
             raise self.open_error
         self._opened = True
-        self._owner_thread = 1
+        if not self.omit_owner:
+            self._owner_thread = 1
 
     def reset(self, task: object) -> object:
         self.calls.append(("reset", type(task).__name__, getattr(task, "task_id", None)))
@@ -143,10 +148,13 @@ class _RecordingMineRLBackend:
         self.calls.append("close")
         if self.close_error is not None:
             raise self.close_error
-        self._env = None
+        if not self.leave_env:
+            self._env = None
         self._task = None
-        self._owner_thread = None
-        self._opened = False
+        if not self.omit_owner and not self.leave_owner:
+            self._owner_thread = None
+        if not self.leave_opened:
+            self._opened = False
 
 
 def _backend_cls(
@@ -155,6 +163,10 @@ def _backend_cls(
     reset_error: Exception | None = None,
     close_error: Exception | None = None,
     reset_result: object | None = None,
+    leave_opened: bool = False,
+    leave_env: bool = False,
+    leave_owner: bool = False,
+    omit_owner: bool = False,
 ) -> type[_RecordingMineRLBackend]:
     class _Configured(_RecordingMineRLBackend):
         def __init__(self, **kwargs: Any) -> None:
@@ -163,6 +175,12 @@ def _backend_cls(
             self.reset_error = reset_error
             self.close_error = close_error
             self.reset_result = reset_result
+            self.leave_opened = leave_opened
+            self.leave_env = leave_env
+            self.leave_owner = leave_owner
+            self.omit_owner = omit_owner
+            if omit_owner and hasattr(self, "_owner_thread"):
+                delattr(self, "_owner_thread")
 
     _Configured.__name__ = "RecordingMineRLBackend"
     return _Configured
@@ -469,6 +487,112 @@ class AuthorizationTests(unittest.TestCase):
                 owner_cleared=True,
                 process_release_proven=True,
             )
+        with self.assertRaisesRegex(ValueError, "observable cleanup"):
+            E0MineRLRunRecord(
+                check_id="E0",
+                name="reset_close",
+                episode_id=EPISODE_ID,
+                step_id=0,
+                backend_identity="RecordingMineRLBackend",
+                opened=True,
+                created=True,
+                reset_completed=True,
+                initial_state_present=True,
+                closed=True,
+                success=True,
+                outcome="lifecycle_ok",
+                cleanup=E0CleanupStatus(
+                    close_returned=True,
+                    backend_marked_closed=False,
+                    environment_reference_cleared=True,
+                    owner_cleared=True,
+                ),
+            )
+
+
+class CleanupFailClosedTests(unittest.TestCase):
+    def setUp(self) -> None:
+        reset_authorized_e0_process_guards_for_tests()
+
+    def tearDown(self) -> None:
+        reset_authorized_e0_process_guards_for_tests()
+
+    def _run(self, backend_cls: type) -> E0MineRLRunRecord:
+        with tempfile.TemporaryDirectory() as directory:
+            runs_root = Path(directory) / "p1_e0_reset_close"
+            runs_root.mkdir()
+            output_dir = runs_root / "run-cleanup"
+            with patch(
+                "obsidianlink.env.integration.e0_run.FORMAL_E0_RUNS_ROOT",
+                runs_root.resolve(),
+            ), patch(
+                "obsidianlink.env.integration.e0_run._production_backend_cls",
+                return_value=backend_cls,
+            ):
+                record = run_authorized_e0_minerl(
+                    execution_mode=EXECUTION_MODE_AUTHORIZED_LIVE_E0,
+                    authorized_live_run=AUTHORIZED_LIVE_RUN_VALUE,
+                    output_dir=output_dir,
+                    episode_id=EPISODE_ID,
+                )
+        assert isinstance(record, E0MineRLRunRecord)
+        return record
+
+    def test_opened_leftover_fails_closed(self) -> None:
+        record = self._run(_backend_cls(leave_opened=True))
+        self.assertFalse(record.success)
+        self.assertEqual(record.outcome, "cleanup_failed")
+        self.assertTrue(record.closed)
+        self.assertTrue(record.reset_completed)
+        self.assertTrue(record.initial_state_present)
+        self.assertTrue(record.cleanup.close_returned)
+        self.assertFalse(record.cleanup.backend_marked_closed)
+        self.assertFalse(record.integration_verified)
+        self.assertFalse(record.cleanup.process_release_proven)
+
+    def test_env_leftover_fails_closed(self) -> None:
+        record = self._run(_backend_cls(leave_env=True))
+        self.assertFalse(record.success)
+        self.assertEqual(record.outcome, "cleanup_failed")
+        self.assertTrue(record.closed)
+        self.assertTrue(record.cleanup.close_returned)
+        self.assertFalse(record.cleanup.environment_reference_cleared)
+        self.assertFalse(record.integration_verified)
+        self.assertFalse(record.cleanup.process_release_proven)
+
+    def test_owner_leftover_fails_closed(self) -> None:
+        record = self._run(_backend_cls(leave_owner=True))
+        self.assertFalse(record.success)
+        self.assertEqual(record.outcome, "cleanup_failed")
+        self.assertTrue(record.closed)
+        self.assertTrue(record.cleanup.close_returned)
+        self.assertFalse(record.cleanup.owner_cleared)
+        self.assertFalse(record.integration_verified)
+        self.assertFalse(record.cleanup.process_release_proven)
+
+    def test_clean_fake_backend_succeeds_without_integration_claim(self) -> None:
+        record = self._run(_backend_cls())
+        self.assertTrue(record.success)
+        self.assertEqual(record.outcome, "lifecycle_ok")
+        self.assertTrue(record.cleanup.close_returned)
+        self.assertTrue(record.cleanup.backend_marked_closed)
+        self.assertTrue(record.cleanup.environment_reference_cleared)
+        self.assertTrue(record.cleanup.owner_cleared)
+        self.assertFalse(record.integration_verified)
+        self.assertFalse(record.cleanup.process_release_proven)
+        self.assertFalse(record.real_execution_performed)
+
+    def test_unavailable_optional_cleanup_signal_is_not_a_false_failure(self) -> None:
+        record = self._run(_backend_cls(omit_owner=True))
+        self.assertTrue(record.success)
+        self.assertEqual(record.outcome, "lifecycle_ok")
+        self.assertIsNone(record.cleanup.owner_cleared)
+        self.assertTrue(record.cleanup.close_returned)
+        self.assertTrue(record.cleanup.backend_marked_closed)
+        self.assertTrue(record.cleanup.environment_reference_cleared)
+        self.assertFalse(record.cleanup.has_explicit_failure())
+        self.assertFalse(record.integration_verified)
+        self.assertFalse(record.cleanup.process_release_proven)
 
 
 class PublicApiTests(unittest.TestCase):
