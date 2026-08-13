@@ -230,11 +230,13 @@ class EnvironmentValidationResult:
                     self.inventory_present is not True
                     or self.observed_inventory is None
                     or self.expected_inventory is None
+                    or not self.expected_inventory
                     or self.inventory_matches_expected is not True
                     or self.observed_inventory != self.expected_inventory
                 ):
                     raise ValueError(
-                        "E2 success requires exact observed/expected inventory equality"
+                        "E2 success requires a non-empty expected inventory and "
+                        "exact observed/expected inventory equality"
                     )
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,

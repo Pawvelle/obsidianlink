@@ -164,7 +164,12 @@ class EnvironmentValidationRunner:
                 expected_error = expected_inspection.error
                 if expected_inspection.valid:
                     assert expected_inspection.inventory is not None
-                    expected_inventory_snapshot = dict(expected_inspection.inventory)
+                    if expected_inspection.inventory:
+                        expected_inventory_snapshot = dict(
+                            expected_inspection.inventory
+                        )
+                    else:
+                        expected_error = "expected_inventory must be non-empty"
             if expected_inventory_snapshot is None:
                 return _result(
                     case=case,

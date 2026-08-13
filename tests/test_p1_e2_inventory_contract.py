@@ -65,6 +65,12 @@ def _imported_modules(source: Path) -> tuple[str, ...]:
 
 
 class E2InventoryContractTests(unittest.TestCase):
+    def test_empty_inventory_remains_structurally_valid(self) -> None:
+        inspection = inspect_inventory({})
+        self.assertTrue(inspection.valid)
+        self.assertEqual(inspection.outcome, "inventory_ok")
+        self.assertEqual(inspection.inventory, {})
+
     def test_valid_multi_item_inventory_succeeds(self) -> None:
         inventory = {"dirt": 7, "obsidian": 4, "flint_and_steel": 1}
         inspection = _inspection(inventory)

@@ -137,6 +137,15 @@ class E2InventoryValidationTests(unittest.TestCase):
         self.assertEqual(stub.reset_calls, 0)
         self.assertEqual(stub.close_calls, 0)
 
+    def test_empty_expected_inventory_fails_before_backend_creation(self) -> None:
+        result, stub = _run({}, expected={})
+        self.assertFalse(result.success)
+        self.assertEqual(result.outcome, "runtime_error")
+        self.assertIn("non-empty", result.error or "")
+        self.assertFalse(result.created)
+        self.assertEqual(stub.reset_calls, 0)
+        self.assertEqual(stub.close_calls, 0)
+
     def test_invalid_expected_item_name_fails_closed(self) -> None:
         for item in ("", "   ", 1):
             with self.subTest(item=repr(item)):
@@ -167,6 +176,14 @@ class E2InventoryValidationTests(unittest.TestCase):
                 self.assertFalse(result.success)
                 self.assertEqual(result.outcome, outcome)
                 self.assertIsNone(result.inventory_matches_expected)
+
+    def test_empty_observed_inventory_is_a_mismatch_not_structure_error(self) -> None:
+        result, _ = _run({}, expected={"obsidian": 4})
+        self.assertFalse(result.success)
+        self.assertEqual(result.outcome, "inventory_mismatch")
+        self.assertEqual(result.observed_inventory, {})
+        self.assertEqual(result.expected_inventory, {"obsidian": 4})
+        self.assertFalse(result.inventory_matches_expected)
 
     def test_missing_public_inventory_is_preserved(self) -> None:
         stub = _InventoryStub(
@@ -320,6 +337,25 @@ class E2InventoryValidationTests(unittest.TestCase):
                 observed_inventory={"obsidian": 3},
                 expected_inventory={"obsidian": 4},
                 inventory_matches_expected=False,
+            )
+
+    def test_result_rejects_empty_expected_inventory_success(self) -> None:
+        with self.assertRaisesRegex(ValueError, "non-empty expected"):
+            EnvironmentValidationResult(
+                check_id=EnvironmentValidationId.E2,
+                name="inventory_observation",
+                episode_id=EPISODE_ID,
+                step_id=0,
+                success=True,
+                outcome="inventory_ok",
+                created=True,
+                reset_completed=True,
+                initial_state_present=True,
+                closed=True,
+                inventory_present=True,
+                observed_inventory={},
+                expected_inventory={},
+                inventory_matches_expected=True,
             )
 
     def test_e2_case_and_manifest_remain_calibration_only_not_run(self) -> None:
