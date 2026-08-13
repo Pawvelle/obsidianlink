@@ -11,6 +11,12 @@ from obsidianlink.env.validation.contract import (
     EnvironmentValidationId,
     p1_validation_manifest,
 )
+from obsidianlink.env.validation.inventory import (
+    InventoryInspection,
+    PublicInventoryObservation,
+    inspect_inventory,
+    inspect_public_inventory,
+)
 from obsidianlink.env.validation.recorder import EnvironmentValidationRecorder
 from obsidianlink.env.validation.result import EnvironmentValidationResult
 from obsidianlink.env.validation.runner import EnvironmentValidationRunner
@@ -30,8 +36,12 @@ __all__ = [
     "EnvironmentValidationResult",
     "EnvironmentValidationRunner",
     "P1_VALIDATION_CASES",
+    "InventoryInspection",
+    "PublicInventoryObservation",
     "PublicRGBObservation",
     "RGBInspection",
+    "inspect_inventory",
+    "inspect_public_inventory",
     "inspect_public_rgb",
     "inspect_rgb_array",
     "p1_validation_manifest",
