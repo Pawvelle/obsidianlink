@@ -154,4 +154,4 @@ E10 是 calibration，不是 benchmark：可预置合法 support/trench，determ
 
 ## 12. Current implementation statement
 
-当前只能声称 v2 architecture/scope frozen、legacy infrastructure preserved、P1 E0 lifecycle runtime 离线 `unit_verified`。没有真实 P1 result、E0 不是 `integration_verified`、E1–E12 尚未实现、没有 end-to-end task implementation、没有 Multi-Agent gameplay、没有 formal dataset 或 benchmark evaluation。P1 Hard Gate 未通过，P2 不得开始。
+当前只能声称 v2 architecture/scope frozen、legacy infrastructure preserved、P1 E0 lifecycle runtime 离线 `unit_verified`、P1 E0 MineRL integration bridge 离线测试通过。没有真实 P1 result、E0 不是 `integration_verified`、E1–E12 尚未实现、没有 end-to-end task implementation、没有 Multi-Agent gameplay、没有 formal dataset 或 benchmark evaluation。P1 Hard Gate 未通过，P2 不得开始。

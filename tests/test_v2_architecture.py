@@ -109,6 +109,7 @@ class V2ArchitectureTests(unittest.TestCase):
                 "obsidianlink.benchmark.evaluator",
                 "obsidianlink.env.fake",
                 "obsidianlink.env.minerl_backend",
+                "obsidianlink.env.integration",
             ),
         )
 

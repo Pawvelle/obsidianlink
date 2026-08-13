@@ -37,6 +37,7 @@ BANNED_PREFIXES = (
     "obsidianlink.benchmark.evaluator",
     "obsidianlink.env.fake",
     "obsidianlink.env.minerl_backend",
+    "obsidianlink.env.integration",
     "minerl",
 )
 EPISODE_ID = "e0-offline-episode"
