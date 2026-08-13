@@ -8,12 +8,19 @@ or reuse ``EvaluatorVerdict``. Offline results cannot claim
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 from obsidianlink.env.validation.contract import EnvironmentValidationId
+from obsidianlink.env.validation.inventory import (
+    INVENTORY_OK,
+    INVENTORY_OUTCOMES,
+    inspect_inventory,
+)
 
 
 UNIT_VERIFIED = "unit_verified"
+
+INVENTORY_MISMATCH = "inventory_mismatch"
 
 VALIDATION_OUTCOMES = frozenset(
     {
@@ -30,9 +37,10 @@ VALIDATION_OUTCOMES = frozenset(
         "close_failed",
         "runtime_error",
     }
-)
+) | INVENTORY_OUTCOMES | frozenset({INVENTORY_MISMATCH})
 E0_SUCCESS_OUTCOME = "lifecycle_ok"
 E1_SUCCESS_OUTCOME = "rgb_ok"
+E2_SUCCESS_OUTCOME = INVENTORY_OK
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -54,14 +62,25 @@ def _optional_error(value: object, field_name: str) -> str | None:
     return value.strip()
 
 
+def _inventory_snapshot(
+    value: object, field_name: str
+) -> dict[str, int]:
+    inspection = inspect_inventory(value)
+    if not inspection.valid or inspection.inventory is None:
+        detail = inspection.error or "invalid inventory"
+        raise ValueError(f"{field_name} must be a valid inventory Mapping: {detail}")
+    return dict(inspection.inventory)
+
+
 @dataclass(frozen=True)
 class EnvironmentValidationResult:
     """Deterministic, serializable P1 validation result.
 
-    Success is fail-closed: missing initial state, invalid RGB, reset
-    failure, close failure, or any runtime exception cannot be recorded
-    as a clean result. This runtime always emits ``unit_verified`` and
-    never sets ``integration_verified`` or ``real_execution_performed``.
+    Success is fail-closed: missing initial state, invalid RGB/inventory,
+    inventory mismatch, reset failure, close failure, or any runtime
+    exception cannot be recorded as a clean result. This runtime always
+    emits ``unit_verified`` and never sets ``integration_verified`` or
+    ``real_execution_performed``.
     """
 
     check_id: EnvironmentValidationId
@@ -85,6 +104,10 @@ class EnvironmentValidationResult:
     rgb_width: int | None = None
     rgb_channels: int | None = None
     rgb_dtype: str | None = None
+    inventory_present: bool | None = None
+    observed_inventory: Mapping[str, int] | None = None
+    expected_inventory: Mapping[str, int] | None = None
+    inventory_matches_expected: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.check_id, EnvironmentValidationId):
@@ -130,6 +153,44 @@ class EnvironmentValidationResult:
             _require_bool(self.rgb_present, "rgb_present")
         if self.rgb_dtype is not None:
             _require_identifier(self.rgb_dtype, "rgb_dtype")
+        if self.inventory_present is not None:
+            _require_bool(self.inventory_present, "inventory_present")
+        if self.inventory_matches_expected is not None:
+            _require_bool(
+                self.inventory_matches_expected,
+                "inventory_matches_expected",
+            )
+        if self.observed_inventory is not None:
+            object.__setattr__(
+                self,
+                "observed_inventory",
+                _inventory_snapshot(self.observed_inventory, "observed_inventory"),
+            )
+        if self.expected_inventory is not None:
+            object.__setattr__(
+                self,
+                "expected_inventory",
+                _inventory_snapshot(self.expected_inventory, "expected_inventory"),
+            )
+        if self.check_id is not EnvironmentValidationId.E2 and any(
+            value is not None
+            for value in (
+                self.inventory_present,
+                self.observed_inventory,
+                self.expected_inventory,
+                self.inventory_matches_expected,
+            )
+        ):
+            raise ValueError("inventory metadata is only valid for E2 results")
+        if (
+            self.check_id is EnvironmentValidationId.E2
+            and self.observed_inventory is not None
+            and self.expected_inventory is not None
+            and self.inventory_matches_expected is not None
+            and self.inventory_matches_expected
+            != (self.observed_inventory == self.expected_inventory)
+        ):
+            raise ValueError("inventory_matches_expected contradicts inventory mappings")
         lifecycle_clean = (
             self.created
             and self.reset_completed
@@ -144,6 +205,9 @@ class EnvironmentValidationResult:
         elif self.check_id is EnvironmentValidationId.E1:
             success_outcome = E1_SUCCESS_OUTCOME
             success_error = "success requires a clean E1 RGB observation"
+        elif self.check_id is EnvironmentValidationId.E2:
+            success_outcome = E2_SUCCESS_OUTCOME
+            success_error = "success requires a clean matching E2 inventory"
         else:
             success_outcome = None
             success_error = "success is not defined for this validation case"
@@ -161,8 +225,35 @@ class EnvironmentValidationResult:
                     or self.rgb_width < 1
                 ):
                     raise ValueError("E1 success requires HxWx3 uint8 RGB metadata")
-        elif self.outcome in {E0_SUCCESS_OUTCOME, E1_SUCCESS_OUTCOME}:
+            elif self.check_id is EnvironmentValidationId.E2:
+                if (
+                    self.inventory_present is not True
+                    or self.observed_inventory is None
+                    or self.expected_inventory is None
+                    or self.inventory_matches_expected is not True
+                    or self.observed_inventory != self.expected_inventory
+                ):
+                    raise ValueError(
+                        "E2 success requires exact observed/expected inventory equality"
+                    )
+        elif self.outcome in {
+            E0_SUCCESS_OUTCOME,
+            E1_SUCCESS_OUTCOME,
+            E2_SUCCESS_OUTCOME,
+        }:
             raise ValueError(f"{self.outcome} requires success=True")
+        if self.outcome == INVENTORY_MISMATCH:
+            if (
+                self.check_id is not EnvironmentValidationId.E2
+                or self.inventory_present is not True
+                or self.observed_inventory is None
+                or self.expected_inventory is None
+                or self.inventory_matches_expected is not False
+                or self.observed_inventory == self.expected_inventory
+            ):
+                raise ValueError(
+                    "inventory_mismatch requires unequal valid E2 inventories"
+                )
 
     def as_dict(self) -> dict[str, Any]:
         """Return a detached, JSON-serializable snapshot."""
@@ -193,6 +284,23 @@ class EnvironmentValidationResult:
                     "rgb_height": self.rgb_height,
                     "rgb_present": self.rgb_present,
                     "rgb_width": self.rgb_width,
+                }
+            )
+        elif self.check_id is EnvironmentValidationId.E2:
+            payload.update(
+                {
+                    "expected_inventory": (
+                        None
+                        if self.expected_inventory is None
+                        else dict(self.expected_inventory)
+                    ),
+                    "inventory_matches_expected": self.inventory_matches_expected,
+                    "inventory_present": self.inventory_present,
+                    "observed_inventory": (
+                        None
+                        if self.observed_inventory is None
+                        else dict(self.observed_inventory)
+                    ),
                 }
             )
         return payload

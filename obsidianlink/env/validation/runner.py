@@ -1,23 +1,31 @@
 """Minimal P1 validation runner.
 
 Executes one validation case in a controlled lifecycle. This phase
-implements E0 (create, reset, require an initial state, close) and E1
-(the same lifecycle plus public RGB inspection). The runner never uses
-benchmark evaluator success semantics.
+implements E0 (create, reset, require an initial state, close), E1 (the same
+lifecycle plus public RGB inspection), and E2 (reset-time public inventory
+inspection plus exact comparison with an explicit calibration expectation).
+The runner never uses benchmark evaluator success semantics.
 """
 
 from __future__ import annotations
 
-from typing import Callable, Protocol, runtime_checkable
+from typing import Callable, Mapping, Protocol, runtime_checkable
 
 from obsidianlink.env.validation.cases.lifecycle import initial_state_exists
 from obsidianlink.env.validation.contract import (
     EnvironmentValidationCase,
     EnvironmentValidationId,
 )
+from obsidianlink.env.validation.inventory import (
+    InventoryInspection,
+    inspect_inventory,
+    inspect_public_inventory,
+)
 from obsidianlink.env.validation.result import (
     E0_SUCCESS_OUTCOME,
     E1_SUCCESS_OUTCOME,
+    E2_SUCCESS_OUTCOME,
+    INVENTORY_MISMATCH,
     EnvironmentValidationResult,
 )
 from obsidianlink.env.validation.rgb import RGBInspection, inspect_public_rgb
@@ -25,7 +33,7 @@ from obsidianlink.env.validation.rgb import RGBInspection, inspect_public_rgb
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest backend surface required by E0/E1.
+    """Smallest backend surface required by E0--E2.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -63,6 +71,9 @@ def _result(
     error: str | None = None,
     close_error: str | None = None,
     rgb: RGBInspection | None = None,
+    inventory: InventoryInspection | None = None,
+    expected_inventory: Mapping[str, int] | None = None,
+    inventory_matches_expected: bool | None = None,
 ) -> EnvironmentValidationResult:
     return EnvironmentValidationResult(
         check_id=case.check_id,
@@ -82,6 +93,10 @@ def _result(
         rgb_width=None if rgb is None else rgb.width,
         rgb_channels=None if rgb is None else rgb.channels,
         rgb_dtype=None if rgb is None else rgb.dtype,
+        inventory_present=None if inventory is None else inventory.present,
+        observed_inventory=None if inventory is None else inventory.inventory,
+        expected_inventory=expected_inventory,
+        inventory_matches_expected=inventory_matches_expected,
     )
 
 
@@ -101,6 +116,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E0_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E1:
         return E1_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E2:
+        return E2_SUCCESS_OUTCOME
     return None
 
 
@@ -113,6 +130,7 @@ class EnvironmentValidationRunner:
         backend_factory: BackendFactory,
         *,
         episode_id: str,
+        expected_inventory: Mapping[str, int] | None = None,
     ) -> EnvironmentValidationResult:
         if not isinstance(case, EnvironmentValidationCase):
             raise ValueError("case must be EnvironmentValidationCase")
@@ -136,6 +154,31 @@ class EnvironmentValidationRunner:
                 error=f"unimplemented validation case: {case.check_id.value}",
             )
 
+        expected_inventory_snapshot: dict[str, int] | None = None
+        if case.check_id is EnvironmentValidationId.E2:
+            try:
+                expected_inspection = inspect_inventory(expected_inventory)
+            except Exception as exc:
+                expected_error = _format_error(exc)
+            else:
+                expected_error = expected_inspection.error
+                if expected_inspection.valid:
+                    assert expected_inspection.inventory is not None
+                    expected_inventory_snapshot = dict(expected_inspection.inventory)
+            if expected_inventory_snapshot is None:
+                return _result(
+                    case=case,
+                    episode_id=episode_id,
+                    success=False,
+                    outcome="runtime_error",
+                    created=False,
+                    reset_completed=False,
+                    initial_state_present=False,
+                    closed=False,
+                    error="invalid expected_inventory: "
+                    + (expected_error or "expected_inventory is required"),
+                )
+
         created = False
         reset_completed = False
         initial_state_present = False
@@ -145,6 +188,8 @@ class EnvironmentValidationRunner:
         outcome = "runtime_error"
         backend: object | None = None
         rgb: RGBInspection | None = None
+        inventory: InventoryInspection | None = None
+        inventory_matches_expected: bool | None = None
 
         try:
             backend = backend_factory()
@@ -168,6 +213,28 @@ class EnvironmentValidationRunner:
                             )
                             outcome = rgb.outcome
                             error = rgb.error
+                        elif case.check_id is EnvironmentValidationId.E2:
+                            inventory = inspect_public_inventory(
+                                reset_result, episode_id=episode_id
+                            )
+                            outcome = inventory.outcome
+                            error = inventory.error
+                            if inventory.valid:
+                                assert inventory.inventory is not None
+                                assert expected_inventory_snapshot is not None
+                                inventory_matches_expected = (
+                                    inventory.inventory
+                                    == expected_inventory_snapshot
+                                )
+                                if inventory_matches_expected:
+                                    outcome = E2_SUCCESS_OUTCOME
+                                    error = None
+                                else:
+                                    outcome = INVENTORY_MISMATCH
+                                    error = (
+                                        "observed inventory does not exactly match "
+                                        "expected_inventory"
+                                    )
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -186,7 +253,11 @@ class EnvironmentValidationRunner:
                 closed, close_error = _close_backend(backend)
 
         if close_error is not None:
-            if outcome in {E0_SUCCESS_OUTCOME, E1_SUCCESS_OUTCOME}:
+            if outcome in {
+                E0_SUCCESS_OUTCOME,
+                E1_SUCCESS_OUTCOME,
+                E2_SUCCESS_OUTCOME,
+            }:
                 outcome = "close_failed"
             error = error or close_error
 
@@ -199,7 +270,11 @@ class EnvironmentValidationRunner:
             and error is None
             and close_error is None
         )
-        if not success and outcome in {E0_SUCCESS_OUTCOME, E1_SUCCESS_OUTCOME}:
+        if not success and outcome in {
+            E0_SUCCESS_OUTCOME,
+            E1_SUCCESS_OUTCOME,
+            E2_SUCCESS_OUTCOME,
+        }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
         return _result(
@@ -214,4 +289,17 @@ class EnvironmentValidationRunner:
             error=error,
             close_error=close_error,
             rgb=rgb if case.check_id is EnvironmentValidationId.E1 else None,
+            inventory=(
+                inventory if case.check_id is EnvironmentValidationId.E2 else None
+            ),
+            expected_inventory=(
+                expected_inventory_snapshot
+                if case.check_id is EnvironmentValidationId.E2
+                else None
+            ),
+            inventory_matches_expected=(
+                inventory_matches_expected
+                if case.check_id is EnvironmentValidationId.E2
+                else None
+            ),
         )

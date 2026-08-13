@@ -3,6 +3,7 @@
 Importing this package never starts MineRL or Minecraft.
 """
 
+from obsidianlink.env.validation.cases.inventory import E2_INVENTORY_CASE
 from obsidianlink.env.validation.cases.lifecycle import E0_LIFECYCLE_CASE
 from obsidianlink.env.validation.cases.rgb import E1_RGB_CASE
 from obsidianlink.env.validation.contract import (
@@ -30,6 +31,7 @@ from obsidianlink.env.validation.rgb import (
 __all__ = [
     "E0_LIFECYCLE_CASE",
     "E1_RGB_CASE",
+    "E2_INVENTORY_CASE",
     "EnvironmentValidationCase",
     "EnvironmentValidationId",
     "EnvironmentValidationRecorder",
