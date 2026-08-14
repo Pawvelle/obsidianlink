@@ -16,11 +16,17 @@ from obsidianlink.env.validation.inventory import (
     INVENTORY_OUTCOMES,
     inspect_inventory,
 )
+from obsidianlink.env.validation.selected_item import (
+    SELECTED_ITEM_OK,
+    SELECTED_ITEM_OUTCOMES,
+    validate_selected_item,
+)
 
 
 UNIT_VERIFIED = "unit_verified"
 
 INVENTORY_MISMATCH = "inventory_mismatch"
+SELECTED_ITEM_MISMATCH = "selected_item_mismatch"
 
 VALIDATION_OUTCOMES = frozenset(
     {
@@ -37,10 +43,13 @@ VALIDATION_OUTCOMES = frozenset(
         "close_failed",
         "runtime_error",
     }
-) | INVENTORY_OUTCOMES | frozenset({INVENTORY_MISMATCH})
+) | INVENTORY_OUTCOMES | SELECTED_ITEM_OUTCOMES | frozenset(
+    {INVENTORY_MISMATCH, SELECTED_ITEM_MISMATCH}
+)
 E0_SUCCESS_OUTCOME = "lifecycle_ok"
 E1_SUCCESS_OUTCOME = "rgb_ok"
 E2_SUCCESS_OUTCOME = INVENTORY_OK
+E3_SUCCESS_OUTCOME = SELECTED_ITEM_OK
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -108,6 +117,10 @@ class EnvironmentValidationResult:
     observed_inventory: Mapping[str, int] | None = None
     expected_inventory: Mapping[str, int] | None = None
     inventory_matches_expected: bool | None = None
+    selected_item_present: bool | None = None
+    observed_selected_item: str | None = None
+    expected_selected_item: str | None = None
+    selected_item_matches_expected: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.check_id, EnvironmentValidationId):
@@ -160,6 +173,29 @@ class EnvironmentValidationResult:
                 self.inventory_matches_expected,
                 "inventory_matches_expected",
             )
+        if self.selected_item_present is not None:
+            _require_bool(self.selected_item_present, "selected_item_present")
+        if self.selected_item_matches_expected is not None:
+            _require_bool(
+                self.selected_item_matches_expected,
+                "selected_item_matches_expected",
+            )
+        if self.observed_selected_item is not None:
+            object.__setattr__(
+                self,
+                "observed_selected_item",
+                validate_selected_item(
+                    self.observed_selected_item, "observed_selected_item"
+                ),
+            )
+        if self.expected_selected_item is not None:
+            object.__setattr__(
+                self,
+                "expected_selected_item",
+                validate_selected_item(
+                    self.expected_selected_item, "expected_selected_item"
+                ),
+            )
         if self.observed_inventory is not None:
             object.__setattr__(
                 self,
@@ -182,6 +218,16 @@ class EnvironmentValidationResult:
             )
         ):
             raise ValueError("inventory metadata is only valid for E2 results")
+        if self.check_id is not EnvironmentValidationId.E3 and any(
+            value is not None
+            for value in (
+                self.selected_item_present,
+                self.observed_selected_item,
+                self.expected_selected_item,
+                self.selected_item_matches_expected,
+            )
+        ):
+            raise ValueError("selected-item metadata is only valid for E3 results")
         if (
             self.check_id is EnvironmentValidationId.E2
             and self.observed_inventory is not None
@@ -191,6 +237,17 @@ class EnvironmentValidationResult:
             != (self.observed_inventory == self.expected_inventory)
         ):
             raise ValueError("inventory_matches_expected contradicts inventory mappings")
+        if (
+            self.check_id is EnvironmentValidationId.E3
+            and self.observed_selected_item is not None
+            and self.expected_selected_item is not None
+            and self.selected_item_matches_expected is not None
+            and self.selected_item_matches_expected
+            != (self.observed_selected_item == self.expected_selected_item)
+        ):
+            raise ValueError(
+                "selected_item_matches_expected contradicts selected-item values"
+            )
         lifecycle_clean = (
             self.created
             and self.reset_completed
@@ -208,6 +265,9 @@ class EnvironmentValidationResult:
         elif self.check_id is EnvironmentValidationId.E2:
             success_outcome = E2_SUCCESS_OUTCOME
             success_error = "success requires a clean matching E2 inventory"
+        elif self.check_id is EnvironmentValidationId.E3:
+            success_outcome = E3_SUCCESS_OUTCOME
+            success_error = "success requires a clean matching E3 selected item"
         else:
             success_outcome = None
             success_error = "success is not defined for this validation case"
@@ -238,10 +298,22 @@ class EnvironmentValidationResult:
                         "E2 success requires a non-empty expected inventory and "
                         "exact observed/expected inventory equality"
                     )
+            elif self.check_id is EnvironmentValidationId.E3:
+                if (
+                    self.selected_item_present is not True
+                    or self.observed_selected_item is None
+                    or self.expected_selected_item is None
+                    or self.selected_item_matches_expected is not True
+                    or self.observed_selected_item != self.expected_selected_item
+                ):
+                    raise ValueError(
+                        "E3 success requires exact observed/expected selected-item equality"
+                    )
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,
             E1_SUCCESS_OUTCOME,
             E2_SUCCESS_OUTCOME,
+            E3_SUCCESS_OUTCOME,
         }:
             raise ValueError(f"{self.outcome} requires success=True")
         if self.outcome == INVENTORY_MISMATCH:
@@ -255,6 +327,18 @@ class EnvironmentValidationResult:
             ):
                 raise ValueError(
                     "inventory_mismatch requires unequal valid E2 inventories"
+                )
+        if self.outcome == SELECTED_ITEM_MISMATCH:
+            if (
+                self.check_id is not EnvironmentValidationId.E3
+                or self.selected_item_present is not True
+                or self.observed_selected_item is None
+                or self.expected_selected_item is None
+                or self.selected_item_matches_expected is not False
+                or self.observed_selected_item == self.expected_selected_item
+            ):
+                raise ValueError(
+                    "selected_item_mismatch requires unequal valid E3 items"
                 )
 
     def as_dict(self) -> dict[str, Any]:
@@ -303,6 +387,17 @@ class EnvironmentValidationResult:
                         if self.observed_inventory is None
                         else dict(self.observed_inventory)
                     ),
+                }
+            )
+        elif self.check_id is EnvironmentValidationId.E3:
+            payload.update(
+                {
+                    "expected_selected_item": self.expected_selected_item,
+                    "observed_selected_item": self.observed_selected_item,
+                    "selected_item_matches_expected": (
+                        self.selected_item_matches_expected
+                    ),
+                    "selected_item_present": self.selected_item_present,
                 }
             )
         return payload

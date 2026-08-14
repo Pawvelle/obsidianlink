@@ -354,29 +354,21 @@ class E2AdapterIsolationTests(unittest.TestCase):
             )
         )
 
-    def test_manifest_remains_not_run_and_e3_remains_unimplemented(self) -> None:
+    def test_manifest_remains_not_run_through_e3(self) -> None:
         e2 = p1_validation_manifest()[2]
         self.assertEqual(e2["status"], "not_run")
         self.assertFalse(e2["requires_server_truth"])
 
-        called = False
+        self.assertEqual(P1_VALIDATION_CASES[3].check_id.value, "E3")
 
-        def forbidden_factory() -> object:
-            nonlocal called
-            called = True
-            raise AssertionError("E3 backend must not be created")
-
-        e3_result = EnvironmentValidationRunner().run(
-            P1_VALIDATION_CASES[3],
-            forbidden_factory,
-            episode_id=EPISODE_ID,
+    def test_offline_adapter_did_not_create_episode_evidence(self) -> None:
+        self.assertFalse(
+            (
+                ROOT
+                / "runs/p1_e2_inventory_observation"
+                / EPISODE_ID
+            ).exists()
         )
-        self.assertFalse(e3_result.success)
-        self.assertIn("unimplemented", e3_result.error or "")
-        self.assertFalse(called)
-
-    def test_no_e2_evidence_directory_was_created(self) -> None:
-        self.assertFalse((ROOT / "runs/p1_e2_inventory_observation").exists())
 
 
 if __name__ == "__main__":

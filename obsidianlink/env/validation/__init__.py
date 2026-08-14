@@ -6,6 +6,7 @@ Importing this package never starts MineRL or Minecraft.
 from obsidianlink.env.validation.cases.inventory import E2_INVENTORY_CASE
 from obsidianlink.env.validation.cases.lifecycle import E0_LIFECYCLE_CASE
 from obsidianlink.env.validation.cases.rgb import E1_RGB_CASE
+from obsidianlink.env.validation.cases.selected_item import E3_SELECTED_ITEM_CASE
 from obsidianlink.env.validation.contract import (
     P1_VALIDATION_CASES,
     EnvironmentValidationCase,
@@ -27,11 +28,18 @@ from obsidianlink.env.validation.rgb import (
     inspect_public_rgb,
     inspect_rgb_array,
 )
+from obsidianlink.env.validation.selected_item import (
+    PublicSelectedItemObservation,
+    SelectedItemInspection,
+    inspect_public_selected_item,
+    inspect_selected_item,
+)
 
 __all__ = [
     "E0_LIFECYCLE_CASE",
     "E1_RGB_CASE",
     "E2_INVENTORY_CASE",
+    "E3_SELECTED_ITEM_CASE",
     "EnvironmentValidationCase",
     "EnvironmentValidationId",
     "EnvironmentValidationRecorder",
@@ -41,10 +49,14 @@ __all__ = [
     "InventoryInspection",
     "PublicInventoryObservation",
     "PublicRGBObservation",
+    "PublicSelectedItemObservation",
     "RGBInspection",
+    "SelectedItemInspection",
     "inspect_inventory",
     "inspect_public_inventory",
     "inspect_public_rgb",
     "inspect_rgb_array",
+    "inspect_public_selected_item",
+    "inspect_selected_item",
     "p1_validation_manifest",
 ]

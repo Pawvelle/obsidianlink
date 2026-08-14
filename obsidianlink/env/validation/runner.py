@@ -3,7 +3,8 @@
 Executes one validation case in a controlled lifecycle. This phase
 implements E0 (create, reset, require an initial state, close), E1 (the same
 lifecycle plus public RGB inspection), and E2 (reset-time public inventory
-inspection plus exact comparison with an explicit calibration expectation).
+inspection plus exact comparison with an explicit calibration expectation),
+and E3 (backend-public selected-item inspection and independent comparison).
 The runner never uses benchmark evaluator success semantics.
 """
 
@@ -25,15 +26,22 @@ from obsidianlink.env.validation.result import (
     E0_SUCCESS_OUTCOME,
     E1_SUCCESS_OUTCOME,
     E2_SUCCESS_OUTCOME,
+    E3_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
+    SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
 )
 from obsidianlink.env.validation.rgb import RGBInspection, inspect_public_rgb
+from obsidianlink.env.validation.selected_item import (
+    SelectedItemInspection,
+    inspect_public_selected_item,
+    validate_selected_item,
+)
 
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest backend surface required by E0--E2.
+    """Smallest backend surface required by E0--E3.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -74,6 +82,9 @@ def _result(
     inventory: InventoryInspection | None = None,
     expected_inventory: Mapping[str, int] | None = None,
     inventory_matches_expected: bool | None = None,
+    selected_item: SelectedItemInspection | None = None,
+    expected_selected_item: str | None = None,
+    selected_item_matches_expected: bool | None = None,
 ) -> EnvironmentValidationResult:
     return EnvironmentValidationResult(
         check_id=case.check_id,
@@ -97,6 +108,14 @@ def _result(
         observed_inventory=None if inventory is None else inventory.inventory,
         expected_inventory=expected_inventory,
         inventory_matches_expected=inventory_matches_expected,
+        selected_item_present=(
+            None if selected_item is None else selected_item.present
+        ),
+        observed_selected_item=(
+            None if selected_item is None else selected_item.selected_item
+        ),
+        expected_selected_item=expected_selected_item,
+        selected_item_matches_expected=selected_item_matches_expected,
     )
 
 
@@ -118,6 +137,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E1_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E2:
         return E2_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E3:
+        return E3_SUCCESS_OUTCOME
     return None
 
 
@@ -131,6 +152,7 @@ class EnvironmentValidationRunner:
         *,
         episode_id: str,
         expected_inventory: Mapping[str, int] | None = None,
+        expected_selected_item: str | None = None,
     ) -> EnvironmentValidationResult:
         if not isinstance(case, EnvironmentValidationCase):
             raise ValueError("case must be EnvironmentValidationCase")
@@ -184,6 +206,25 @@ class EnvironmentValidationRunner:
                     + (expected_error or "expected_inventory is required"),
                 )
 
+        expected_selected_item_snapshot: str | None = None
+        if case.check_id is EnvironmentValidationId.E3:
+            try:
+                expected_selected_item_snapshot = validate_selected_item(
+                    expected_selected_item, "expected_selected_item"
+                )
+            except (TypeError, ValueError) as exc:
+                return _result(
+                    case=case,
+                    episode_id=episode_id,
+                    success=False,
+                    outcome="runtime_error",
+                    created=False,
+                    reset_completed=False,
+                    initial_state_present=False,
+                    closed=False,
+                    error="invalid expected_selected_item: " + _format_error(exc),
+                )
+
         created = False
         reset_completed = False
         initial_state_present = False
@@ -195,6 +236,8 @@ class EnvironmentValidationRunner:
         rgb: RGBInspection | None = None
         inventory: InventoryInspection | None = None
         inventory_matches_expected: bool | None = None
+        selected_item: SelectedItemInspection | None = None
+        selected_item_matches_expected: bool | None = None
 
         try:
             backend = backend_factory()
@@ -240,6 +283,28 @@ class EnvironmentValidationRunner:
                                         "observed inventory does not exactly match "
                                         "expected_inventory"
                                     )
+                        elif case.check_id is EnvironmentValidationId.E3:
+                            selected_item = inspect_public_selected_item(
+                                reset_result, episode_id=episode_id
+                            )
+                            outcome = selected_item.outcome
+                            error = selected_item.error
+                            if selected_item.valid:
+                                assert selected_item.selected_item is not None
+                                assert expected_selected_item_snapshot is not None
+                                selected_item_matches_expected = (
+                                    selected_item.selected_item
+                                    == expected_selected_item_snapshot
+                                )
+                                if selected_item_matches_expected:
+                                    outcome = E3_SUCCESS_OUTCOME
+                                    error = None
+                                else:
+                                    outcome = SELECTED_ITEM_MISMATCH
+                                    error = (
+                                        "observed selected item does not exactly match "
+                                        "expected_selected_item"
+                                    )
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -262,6 +327,7 @@ class EnvironmentValidationRunner:
                 E0_SUCCESS_OUTCOME,
                 E1_SUCCESS_OUTCOME,
                 E2_SUCCESS_OUTCOME,
+                E3_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -279,6 +345,7 @@ class EnvironmentValidationRunner:
             E0_SUCCESS_OUTCOME,
             E1_SUCCESS_OUTCOME,
             E2_SUCCESS_OUTCOME,
+            E3_SUCCESS_OUTCOME,
         }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
@@ -305,6 +372,19 @@ class EnvironmentValidationRunner:
             inventory_matches_expected=(
                 inventory_matches_expected
                 if case.check_id is EnvironmentValidationId.E2
+                else None
+            ),
+            selected_item=(
+                selected_item if case.check_id is EnvironmentValidationId.E3 else None
+            ),
+            expected_selected_item=(
+                expected_selected_item_snapshot
+                if case.check_id is EnvironmentValidationId.E3
+                else None
+            ),
+            selected_item_matches_expected=(
+                selected_item_matches_expected
+                if case.check_id is EnvironmentValidationId.E3
                 else None
             ),
         )

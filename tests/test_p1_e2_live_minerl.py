@@ -427,7 +427,7 @@ class E2LiveRunnerTests(unittest.TestCase):
         self.assertNotIn("model", run_source.lower())
         self.assertIn("_production_backend_cls()", run_source)
 
-    def test_manifest_stays_not_run_and_e3_is_unimplemented(self) -> None:
+    def test_manifest_stays_not_run_through_e3(self) -> None:
         manifest = p1_validation_manifest()
         self.assertEqual(manifest[2]["status"], "not_run")
         self.assertEqual(manifest[3]["status"], "not_run")
