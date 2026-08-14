@@ -89,6 +89,9 @@ E10 允许预置合法 support/trench，并由 deterministic calibration script 
 - E5 authorized real attempt reviewed: episode `p1-e5-live-001`, evidence `runs/p1_e5_movement/e5-live-20260814-001`
 - E5 attempt execution state: `real_execution_performed=true`, `success=false`, `outcome=reset_failed`, `reset_completed=false`, `initial_state_present=false`, `tested_action_count=0`
 - E5 movement action not executed; reviewed real success: NO. The reset failure is not a movement capability negative result
+- E5 attempt #2: episode `p1-e5-live-002`, evidence `runs/p1_e5_movement/e5-live-20260815-002`; real execution, `success=true`, `movement_ok`
+- E5 #2 truth: before `(0.5,4.0,0.5,yaw=0.0)`, after `(0.5,4.0,0.5980000033676625)`, delta `(0.0,0.0,0.09800000336766246)`; horizontal/total/forward `0.09800000336766246`, lateral `0.0`
+- E5 #2: one action accepted; movement/direction/lateral/vertical/teleport verdicts true; cleanup signals true; `process_release_proven=false`; one reviewed real movement success
 - E5 `integration_verified`: NO
 - E6–E12: NOT STARTED
 - P1 Hard Gate: NOT PASSED
@@ -103,7 +106,7 @@ Reviewed live evidence (not modified):
 - E4: `runs/p1_e4_camera_control/e4-live-20260814-001`, episode `p1-e4-live-001`, `camera_ok`.
 - E5: `runs/p1_e5_movement/e5-live-20260814-001`, episode `p1-e5-live-001`, production path reached; reset failed before initial state or movement action.
 
-E0–E4 each have `success=true`, `real_execution_performed=true`, clean lifecycle/cleanup, and `process_release_proven=false`; none is `integration_verified`. E5 has no reviewed real success and is also not `integration_verified`.
+E0–E4 each have one reviewed success. E5 #2 is its first reviewed movement success. None is `integration_verified`; `process_release_proven=false`.
 
 E5 root cause: Minecraft/JVM native `SIGSEGV`, `Sound engine`, `liblwjgl_stb.dylib`; then Malmo socket EOF, surfaced in MineRL Python as `TypeError: a bytes-like object is required, not 'NoneType'`. It is `reset_failed`, not `movement_failed`.
 
@@ -133,7 +136,7 @@ E0–E5 validation remains solver-independent. E4 submits one bounded look; E5 s
 - E2 已有一次审阅通过的真实 inventory success evidence，但不是 `integration_verified`；
 - E3 已有一次审阅通过的真实 selected-item success evidence，但稳定重复性与 OS-level process release 尚未证明，`integration_verified`: NO；
 - E4 已有一次审阅通过的真实 camera success evidence，但稳定重复性与 OS-level process release 尚未证明，`integration_verified`: NO；
-- E5 reviewed real success: NO，`integration_verified`: NO；下一次 real run 需新的单次授权；
+- E5 now has one reviewed real movement success, but stable repetition and OS-level process release remain unverified; E5 `integration_verified`: NO；
 - E6–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - 真实 MineRL/Minecraft casting 不是 `integration_verified`；
 - E10、portal activation、dimension transition 尚未真实验证；
@@ -147,12 +150,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E5 remains `unit_verified`; the reviewed `p1-e5-live-001` failure is preserved. A second real attempt requires new explicit single-run authorization. Do not start E6.
-
-下一次 E5 real run 的候选命令（`NOT AUTHORIZED / NOT RUN`）：
-
-```bash
-/opt/anaconda3/bin/conda run -n mc-agent python -m obsidianlink.env.integration.e5_run --execution-mode authorized_live_e5 --authorized-live-run e5_movement --episode-id p1-e5-live-002 --output-dir /Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_e5_movement/e5-live-20260814-002
-```
-
-Candidate is not authorized and has not run. E5 reviewed real success: NO; `integration_verified`: NO; P1 Hard Gate: NOT PASSED; P2: NOT STARTED.
+E5 has one reviewed real movement success and remains `unit_verified`; `integration_verified`: NO. P1 Hard Gate: NOT PASSED. E6–E12: NOT STARTED. P2: NOT STARTED. Do not start E6. Any further real MineRL/Minecraft run requires new explicit single-run authorization.
