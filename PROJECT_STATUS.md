@@ -49,7 +49,7 @@ P1 real MineRL environment validation remains the only active phase.
 
 E10 允许预置合法 support/trench，并由 deterministic calibration script 只执行最小流体交互。Evaluator 必须观察 server-side `air/lava/... -> obsidian`。它验证 `MineRL Action -> Minecraft Server -> Vanilla Mechanics -> Evaluator-only World Truth -> Verdict`，不是正式 benchmark task。
 
-## P1-E0 / E1 / E2 / E3 / E4 status
+## P1-E0 / E1 / E2 / E3 / E4 / E5 status
 
 - E0 contract: complete
 - E0 offline runtime: `unit_verified`
@@ -81,7 +81,14 @@ E10 允许预置合法 support/trench，并由 deterministic calibration script 
 - E4 yaw/pitch tolerance: 1.0° inclusive; yaw difference uses signed shortest-angle normalization across ±180°
 - E4 real MineRL execution: one authorized success reviewed (`camera_ok`); requested yaw/pitch `20.0/0.0`, before `0.0/0.0`, after `20.000002/0.0`, normalized yaw delta `20.000001999999995°`, pitch delta `0.0°`
 - E4 `integration_verified`: NO
-- E5–E12: not started / not run
+- E5 contract / offline runtime: complete / `unit_verified`
+- E5 MineRL adapter / live bridge: implemented / offline tested
+- E5 calibration: exactly one `move(forward=1.0, strafe=0.0, sprint=false, jump=false)`, `duration_ticks=1`; no settle step
+- E5 evaluator-only truth: MineRL FullStats `info.location_stats.xpos/ypos/zpos`; reset yaw comes from the existing FullStats orientation bridge and defines Minecraft forward as `(-sin(yaw), cos(yaw))` in X/Z
+- E5 frozen bounds: minimum horizontal/forward `0.02` block; maximum lateral `0.02`, horizontal `0.5`, vertical `0.25` block
+- E5 real MineRL execution: NOT RUN / awaiting explicit authorization
+- E5 `integration_verified`: NO
+- E6–E12: not started / not run
 - P1 Hard Gate: NOT PASSED
 - P2: NOT STARTED
 
@@ -97,34 +104,21 @@ All five have `success=true`, `real_execution_performed=true`, clean lifecycle/c
 
 E0/E1/E2/E3/E4 are not promoted to `integration_verified`. Existing policy: live runtimes and `p1_validation_manifest()` / `--check` are fail-closed surfaces and never emit that claim; AGENTS.md forbids declaring `integration_verified` before the P1 Hard Gate; a single reviewed success is recorded evidence, not suite promotion. `benchmark_evaluated` is not claimed.
 
-E0–E4 validation remains solver-independent. E4 submits one protocol-validated `MacroAction("look")`; its before/after truth independently comes from backend-retained FullStats. Raw `location_stats` and typed camera truth never enter Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
+E0–E5 validation remains solver-independent. E4 submits one bounded look; E5 submits one bounded move. Their observed truth independently comes from backend-retained FullStats. Raw `location_stats` and typed evaluator truth never enter Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
 
 ## 本次 v2 refactor 已完成
 
-- `unit_verified`：v2 taxonomy、verification vocabulary、P1 E0–E12 manifest、E0 lifecycle runtime、E0 MineRL integration bridge、E1 RGB observation runtime/adapter/live bridge、E2 inventory observation runtime/adapter/live bridge、E3 selected-item contract/runtime/adapter/live bridge、E4 camera contract/runtime/adapter/live bridge、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
+- `unit_verified`：v2 taxonomy、verification vocabulary、P1 manifest、E0–E5 contracts/offline runtimes/MineRL bridges、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
 - legacy infrastructure 保持原 import，可继续运行离线 regression；
 - active catalog 不包含旧 C1–C5 正式 benchmark entries，也没有批量创建空壳 v2 task instances；
 - `python -m obsidianlink --check` 与 `scripts/check_environment.py` 使用 v2/P1 语义，不执行 deterministic drivers，也不把离线 E0 提升为真实 integration。
 
 ## 本次离线验收
 
-- 2026-08-12：离线测试 1250 项通过；该结果只支持 `unit_verified` 声明，不代表真实 Minecraft 能力；
-- 2026-08-13：P0.1 cleanup 后完整离线回归 1259 项通过；仍只支持 `unit_verified` 声明；
-- 2026-08-13：P1-E0 MineRL integration bridge 后完整离线回归 1292 项通过；E0 当时仍仅为 `unit_verified`；
-- 2026-08-13：授权真实 E0 lifecycle run `p1-e0-live-002` 成功并已审查；`process_release_proven=false`，E0 仍不是 `integration_verified`；
-- 2026-08-13：P1-E1 RGB observation contract/adapter/offline runtime/live bridge 已实现；
-- 2026-08-13：授权真实 E1 RGB run `p1-e1-live-001` 成功并已审查（360×640×3 uint8）；`process_release_proven=false`，E1 仍不是 `integration_verified`；
-- 2026-08-13：P1-E2 inventory observation contract/adapter/offline runtime/live bridge 已实现；
-- 2026-08-13：唯一一次授权真实 E2 inventory run `p1-e2-live-001` 成功并已审阅；expected/observed inventory 精确一致，`process_release_proven=false`，E2 仍不是 `integration_verified`；
-- 2026-08-14：P1-E3 selected-item contract、offline runtime、MineRL adapter 与显式授权 live bridge 已实现；E3 targeted tests 32 项、E0–E3 regression 166 项通过；仅支持 `unit_verified`；
-- 2026-08-14：E3 完成后完整离线回归 1426 项通过；该结果不代表真实 Minecraft capability；
-- 2026-08-14：唯一一次授权真实 E3 selected-item run `p1-e3-live-001` 成功并已审阅；expected/observed 均为 `flint_and_steel`，`selected_item_matches_expected=true`，可观察 cleanup 成功，`process_release_proven=false`，E3 仍不是 `integration_verified`；
-- 2026-08-14：P1-E4 camera contract、offline runtime、evaluator-only FullStats orientation bridge、MineRL adapter 与显式授权 live bridge 已实现；E4 targeted tests 23 项、E0–E4 regression 189 项、action/backend regression 44 项通过；仅支持 `unit_verified`；
-- 2026-08-14：E4 offline 完成时完整离线回归 1449 项通过；当时未运行真实 MineRL/Minecraft；
-- 2026-08-14：唯一一次授权真实 E4 camera run `p1-e4-live-001` 成功并已审阅；一次 bounded look、FullStats before/after、方向、1° tolerance、lifecycle 与 cleanup 均通过；`process_release_proven=false`，E4 仍不是 `integration_verified`；
-- v2 CLI 自检与 P1 环境状态检查脚本通过，均报告 E0–E12 为 `not_run`；
-- Python compile check 与 `git diff --check` 通过。
-- 标准本地运行时冻结为 `environment.yml` 中的 Conda 环境 `mc-agent`；Python 命令与测试不得使用系统 Python 或其他环境，环境检查会 fail closed 验证该身份。
+- 历史 reviewed live evidence：E0 lifecycle、E1 RGB、E2 inventory、E3 selected-item、E4 camera 各一次成功；均不提升为 `integration_verified`，`process_release_proven=false`；
+- 2026-08-14：P1-E5 movement contract、FullStats position truth、offline runtime、MineRL adapter 与显式授权 live bridge 已实现；E5 targeted 21 项、E0–E5 regression 210 项、action protocol/translator 7 项通过；
+- E5 完成后完整离线回归 1470 项通过；CLI/environment/compile/diff checks 通过；结果只支持 `unit_verified`，不代表真实 Minecraft movement capability；
+- 标准本地运行时为 `environment.yml` 的 `mc-agent`；环境检查 fail closed 验证该身份。
 
 ## 尚未验证
 
@@ -133,7 +127,7 @@ E0–E4 validation remains solver-independent. E4 submits one protocol-validated
 - E2 已有一次审阅通过的真实 inventory success evidence，但不是 `integration_verified`；
 - E3 已有一次审阅通过的真实 selected-item success evidence，但稳定重复性与 OS-level process release 尚未证明，`integration_verified`: NO；
 - E4 已有一次审阅通过的真实 camera success evidence，但稳定重复性与 OS-level process release 尚未证明，`integration_verified`: NO；
-- E5–E12 尚未实现或尚未运行；P1 Hard Gate 未通过；
+- E5 offline implementation 已完成，但真实 MineRL/Minecraft 尚未运行；E6–E12 尚未实现；P1 Hard Gate 未通过；
 - 真实 MineRL/Minecraft casting 不是 `integration_verified`；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4 正式 end-to-end task 尚未实现；
@@ -146,12 +140,12 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-P1 E4 camera-control is complete through one reviewed authorized real MineRL calibration success. Stop here; do not start E5.
+E5 offline implementation ready -> waiting for explicit authorized real MineRL run. Do not start E6.
 
-本次唯一授权并已执行的 E4 live command（不得在没有新授权时重跑）：
+唯一需要用户另行明确授权的 E5 live command（当前未执行）：
 
 ```bash
-/opt/anaconda3/bin/conda run -n mc-agent python -m obsidianlink.env.integration.e4_run --execution-mode authorized_live_e4 --authorized-live-run e4_camera_control --episode-id p1-e4-live-001 --output-dir /Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_e4_camera_control/e4-live-20260814-001
+/opt/anaconda3/bin/conda run -n mc-agent python -m obsidianlink.env.integration.e5_run --execution-mode authorized_live_e5 --authorized-live-run e5_movement --episode-id p1-e5-live-001 --output-dir /Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_e5_movement/e5-live-20260814-001
 ```
 
-E4 has one reviewed live success but is not `integration_verified`. E5 movement is not started. P1 Hard Gate has not passed and P2 must not begin.
+E5 is `unit_verified` only. Its real run is NOT RUN, `integration_verified`: NO. P1 Hard Gate has not passed and P2 must not begin.

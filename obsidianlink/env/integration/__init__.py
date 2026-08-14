@@ -1,4 +1,4 @@
-"""P1 E0--E4 MineRL integration boundary.
+"""P1 E0--E5 MineRL integration boundary.
 
 This package may depend on the validation core and on the MineRL backend.
 The solver-independent validation core must not import this package.
@@ -51,18 +51,29 @@ from obsidianlink.env.integration.e4_run import (
     preflight_authorized_e4,
     run_authorized_e4_minerl,
 )
+from obsidianlink.env.integration.e5_adapter import MineRLE5MovementAdapter
+from obsidianlink.env.integration.e5_run import (
+    AUTHORIZED_LIVE_E5_RUN_VALUE,
+    EXECUTION_MODE_AUTHORIZED_LIVE_E5,
+    E5AuthorizationError,
+    E5MineRLRunRecord,
+    preflight_authorized_e5,
+    run_authorized_e5_minerl,
+)
 
 __all__ = [
     "AUTHORIZED_LIVE_E1_RUN_VALUE",
     "AUTHORIZED_LIVE_E2_RUN_VALUE",
     "AUTHORIZED_LIVE_E3_RUN_VALUE",
     "AUTHORIZED_LIVE_E4_RUN_VALUE",
+    "AUTHORIZED_LIVE_E5_RUN_VALUE",
     "AUTHORIZED_LIVE_RUN_VALUE",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E0",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E1",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E2",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E3",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E4",
+    "EXECUTION_MODE_AUTHORIZED_LIVE_E5",
     "E0AuthorizationError",
     "E0CleanupStatus",
     "E0MineRLRunRecord",
@@ -74,19 +85,24 @@ __all__ = [
     "E3MineRLRunRecord",
     "E4AuthorizationError",
     "E4MineRLRunRecord",
+    "E5AuthorizationError",
+    "E5MineRLRunRecord",
     "MineRLE0LifecycleAdapter",
     "MineRLE1RGBAdapter",
     "MineRLE2InventoryAdapter",
     "MineRLE3SelectedItemAdapter",
     "MineRLE4CameraAdapter",
+    "MineRLE5MovementAdapter",
     "preflight_authorized_e0",
     "preflight_authorized_e1",
     "preflight_authorized_e2",
     "preflight_authorized_e3",
     "preflight_authorized_e4",
+    "preflight_authorized_e5",
     "run_authorized_e0_minerl",
     "run_authorized_e1_minerl",
     "run_authorized_e2_minerl",
     "run_authorized_e3_minerl",
     "run_authorized_e4_minerl",
+    "run_authorized_e5_minerl",
 ]

@@ -488,6 +488,32 @@ class MineRLEnvironmentBackend:
             payload["pitch"] = location["pitch"]
         return payload
 
+    def get_player_position_truth(self) -> Mapping[str, Any] | None:
+        """Return narrow evaluator-only FullStats player-position truth.
+
+        Values come only from the latest MineRL environment ``info`` at
+        ``location_stats.xpos/ypos/zpos``. They are never inferred from the
+        requested move, spawn configuration, RGB, or public observations.
+        Structural and numeric validation belongs to the P1 E5 contract.
+        """
+
+        task = self._require_task()
+        info = self._latest_environment_info
+        if not isinstance(info, Mapping):
+            return None
+        location = info.get("location_stats")
+        if not isinstance(location, Mapping):
+            return None
+        payload: dict[str, Any] = {
+            "episode_id": task.task_id,
+            "agent_id": "agent_1",
+            "step_id": self._step_id,
+        }
+        for source, target in (("xpos", "x"), ("ypos", "y"), ("zpos", "z")):
+            if source in location:
+                payload[target] = location[source]
+        return payload
+
     def mark_terminated(
         self,
         *,

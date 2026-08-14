@@ -12,6 +12,7 @@ from typing import Any, Mapping
 
 from obsidianlink.env.validation.contract import EnvironmentValidationId
 from obsidianlink.env.validation.camera import CAMERA_OK, CAMERA_OUTCOMES, finite_angle
+from obsidianlink.env.validation.movement import MOVEMENT_OK, MOVEMENT_OUTCOMES, finite_number
 from obsidianlink.env.validation.inventory import (
     INVENTORY_OK,
     INVENTORY_OUTCOMES,
@@ -46,12 +47,13 @@ VALIDATION_OUTCOMES = frozenset(
     }
 ) | INVENTORY_OUTCOMES | SELECTED_ITEM_OUTCOMES | frozenset(
     {INVENTORY_MISMATCH, SELECTED_ITEM_MISMATCH}
-) | CAMERA_OUTCOMES | frozenset({"cleanup_failed"})
+) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | frozenset({"cleanup_failed"})
 E0_SUCCESS_OUTCOME = "lifecycle_ok"
 E1_SUCCESS_OUTCOME = "rgb_ok"
 E2_SUCCESS_OUTCOME = INVENTORY_OK
 E3_SUCCESS_OUTCOME = SELECTED_ITEM_OK
 E4_SUCCESS_OUTCOME = CAMERA_OK
+E5_SUCCESS_OUTCOME = MOVEMENT_OK
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -87,9 +89,9 @@ def _inventory_snapshot(
 class EnvironmentValidationResult:
     """Deterministic, serializable P1 validation result.
 
-    Success is fail-closed: missing initial state, invalid RGB/inventory,
-    inventory mismatch, reset failure, close failure, or any runtime
-    exception cannot be recorded as a clean result. This runtime always
+    Success is fail-closed: missing or invalid observations/truth, calibration
+    mismatch, lifecycle failure, cleanup failure, or any runtime exception
+    cannot be recorded as a clean result. This runtime always
     emits ``unit_verified`` and never sets ``integration_verified`` or
     ``real_execution_performed``.
     """
@@ -138,6 +140,35 @@ class EnvironmentValidationResult:
     pitch_delta: float | None = None
     direction_match: bool | None = None
     magnitude_match: bool | None = None
+    requested_forward: float | None = None
+    requested_strafe: float | None = None
+    requested_sprint: bool | None = None
+    requested_jump: bool | None = None
+    requested_duration_ticks: int | None = None
+    before_x: float | None = None
+    before_y: float | None = None
+    before_z: float | None = None
+    movement_before_yaw: float | None = None
+    after_x: float | None = None
+    after_y: float | None = None
+    after_z: float | None = None
+    delta_x: float | None = None
+    delta_y: float | None = None
+    delta_z: float | None = None
+    horizontal_distance: float | None = None
+    total_distance: float | None = None
+    forward_projection: float | None = None
+    lateral_projection: float | None = None
+    minimum_horizontal_distance: float | None = None
+    minimum_forward_projection: float | None = None
+    maximum_lateral_drift: float | None = None
+    maximum_horizontal_distance: float | None = None
+    maximum_vertical_drift: float | None = None
+    moved: bool | None = None
+    movement_direction_match: bool | None = None
+    lateral_drift_ok: bool | None = None
+    teleport_guard_ok: bool | None = None
+    vertical_drift_ok: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.check_id, EnvironmentValidationId):
@@ -201,6 +232,9 @@ class EnvironmentValidationResult:
             "translated_action_accepted",
             "direction_match",
             "magnitude_match",
+            "requested_sprint", "requested_jump", "moved",
+            "movement_direction_match", "lateral_drift_ok",
+            "teleport_guard_ok", "vertical_drift_ok",
         ):
             value = getattr(self, field_name)
             if value is not None:
@@ -213,6 +247,11 @@ class EnvironmentValidationResult:
             value = getattr(self, field_name)
             if value is not None and (type(value) is not int or value < 0):
                 raise ValueError(f"{field_name} must be a non-negative int or None")
+        if self.requested_duration_ticks is not None and (
+            type(self.requested_duration_ticks) is not int
+            or self.requested_duration_ticks < 1
+        ):
+            raise ValueError("requested_duration_ticks must be a positive int or None")
         for field_name in (
             "requested_yaw", "requested_pitch", "before_yaw", "before_pitch",
             "after_yaw", "after_pitch", "normalized_yaw_delta", "pitch_delta",
@@ -220,6 +259,18 @@ class EnvironmentValidationResult:
             value = getattr(self, field_name)
             if value is not None:
                 object.__setattr__(self, field_name, finite_angle(value, field_name))
+        for field_name in (
+            "requested_forward", "requested_strafe", "before_x", "before_y",
+            "before_z", "movement_before_yaw", "after_x", "after_y", "after_z",
+            "delta_x", "delta_y", "delta_z", "horizontal_distance",
+            "total_distance", "forward_projection", "lateral_projection",
+            "minimum_horizontal_distance", "minimum_forward_projection",
+            "maximum_lateral_drift", "maximum_horizontal_distance",
+            "maximum_vertical_drift",
+        ):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(self, field_name, finite_number(value, field_name))
         if self.observed_selected_item is not None:
             object.__setattr__(
                 self,
@@ -268,10 +319,16 @@ class EnvironmentValidationResult:
             )
         ):
             raise ValueError("selected-item metadata is only valid for E3 results")
-        camera_fields = (
+        action_fields = (
             self.agent_id, self.tested_step_id, self.action_type,
-            self.requested_yaw, self.requested_pitch,
             self.translated_action_accepted, self.tested_action_count,
+        )
+        if self.check_id not in (EnvironmentValidationId.E4, EnvironmentValidationId.E5) and any(
+            value is not None for value in action_fields
+        ):
+            raise ValueError("action metadata is only valid for E4/E5 results")
+        camera_fields = (
+            self.requested_yaw, self.requested_pitch,
             self.before_yaw, self.before_pitch, self.after_yaw, self.after_pitch,
             self.normalized_yaw_delta, self.pitch_delta,
             self.direction_match, self.magnitude_match,
@@ -280,6 +337,37 @@ class EnvironmentValidationResult:
             value is not None for value in camera_fields
         ):
             raise ValueError("camera metadata is only valid for E4 results")
+        movement_fields = (
+            self.requested_forward, self.requested_strafe, self.requested_sprint,
+            self.requested_jump, self.requested_duration_ticks,
+            self.before_x, self.before_y, self.before_z, self.movement_before_yaw,
+            self.after_x, self.after_y, self.after_z,
+            self.delta_x, self.delta_y, self.delta_z, self.horizontal_distance,
+            self.total_distance, self.forward_projection, self.lateral_projection,
+            self.minimum_horizontal_distance, self.minimum_forward_projection,
+            self.maximum_lateral_drift, self.maximum_horizontal_distance,
+            self.maximum_vertical_drift, self.moved, self.movement_direction_match,
+            self.lateral_drift_ok, self.teleport_guard_ok, self.vertical_drift_ok,
+        )
+        if self.check_id is not EnvironmentValidationId.E5 and any(
+            value is not None for value in movement_fields
+        ):
+            raise ValueError("movement metadata is only valid for E5 results")
+        movement_thresholds = (
+            self.minimum_horizontal_distance,
+            self.minimum_forward_projection,
+            self.maximum_lateral_drift,
+            self.maximum_horizontal_distance,
+            self.maximum_vertical_drift,
+        )
+        if any(value is not None and value < 0 for value in movement_thresholds):
+            raise ValueError("movement thresholds must be non-negative")
+        if (
+            self.minimum_horizontal_distance is not None
+            and self.maximum_horizontal_distance is not None
+            and self.maximum_horizontal_distance < self.minimum_horizontal_distance
+        ):
+            raise ValueError("maximum horizontal distance must cover the minimum")
         if (
             self.check_id is EnvironmentValidationId.E2
             and self.observed_inventory is not None
@@ -323,6 +411,9 @@ class EnvironmentValidationResult:
         elif self.check_id is EnvironmentValidationId.E4:
             success_outcome = E4_SUCCESS_OUTCOME
             success_error = "success requires a clean independently observed E4 camera change"
+        elif self.check_id is EnvironmentValidationId.E5:
+            success_outcome = E5_SUCCESS_OUTCOME
+            success_error = "success requires a clean independently observed E5 movement"
         else:
             success_outcome = None
             success_error = "success is not defined for this validation case"
@@ -381,12 +472,44 @@ class EnvironmentValidationResult:
                     and self.magnitude_match is True
                 ):
                     raise ValueError("E4 success requires one accepted look and complete orientation evidence")
+            elif self.check_id is EnvironmentValidationId.E5:
+                if not (
+                    self.agent_id is not None
+                    and self.tested_step_id == 1
+                    and self.action_type == "move"
+                    and self.translated_action_accepted is True
+                    and self.tested_action_count == 1
+                    and self.requested_forward == 1.0
+                    and self.requested_strafe == 0.0
+                    and self.requested_sprint is False
+                    and self.requested_jump is False
+                    and self.requested_duration_ticks == 1
+                    and all(value is not None for value in (
+                        self.before_x, self.before_y, self.before_z,
+                        self.movement_before_yaw, self.after_x, self.after_y,
+                        self.after_z, self.delta_x, self.delta_y, self.delta_z,
+                        self.horizontal_distance, self.total_distance,
+                        self.forward_projection, self.lateral_projection,
+                        self.minimum_horizontal_distance,
+                        self.minimum_forward_projection,
+                        self.maximum_lateral_drift,
+                        self.maximum_horizontal_distance,
+                        self.maximum_vertical_drift,
+                    ))
+                    and self.moved is True
+                    and self.movement_direction_match is True
+                    and self.lateral_drift_ok is True
+                    and self.teleport_guard_ok is True
+                    and self.vertical_drift_ok is True
+                ):
+                    raise ValueError("E5 success requires one accepted move and complete position evidence")
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,
             E1_SUCCESS_OUTCOME,
             E2_SUCCESS_OUTCOME,
             E3_SUCCESS_OUTCOME,
             E4_SUCCESS_OUTCOME,
+            E5_SUCCESS_OUTCOME,
         }:
             raise ValueError(f"{self.outcome} requires success=True")
         if self.outcome == INVENTORY_MISMATCH:
@@ -491,6 +614,45 @@ class EnvironmentValidationResult:
                     "tested_action_count": self.tested_action_count,
                     "tested_step_id": self.tested_step_id,
                     "translated_action_accepted": self.translated_action_accepted,
+                }
+            )
+        elif self.check_id is EnvironmentValidationId.E5:
+            payload.update(
+                {
+                    "action_type": self.action_type,
+                    "after_x": self.after_x,
+                    "after_y": self.after_y,
+                    "after_z": self.after_z,
+                    "agent_id": self.agent_id,
+                    "before_x": self.before_x,
+                    "before_y": self.before_y,
+                    "before_z": self.before_z,
+                    "before_yaw": self.movement_before_yaw,
+                    "delta_x": self.delta_x,
+                    "delta_y": self.delta_y,
+                    "delta_z": self.delta_z,
+                    "forward_projection": self.forward_projection,
+                    "horizontal_distance": self.horizontal_distance,
+                    "lateral_drift_ok": self.lateral_drift_ok,
+                    "lateral_projection": self.lateral_projection,
+                    "maximum_horizontal_distance": self.maximum_horizontal_distance,
+                    "maximum_lateral_drift": self.maximum_lateral_drift,
+                    "maximum_vertical_drift": self.maximum_vertical_drift,
+                    "minimum_forward_projection": self.minimum_forward_projection,
+                    "minimum_horizontal_distance": self.minimum_horizontal_distance,
+                    "moved": self.moved,
+                    "movement_direction_match": self.movement_direction_match,
+                    "requested_duration_ticks": self.requested_duration_ticks,
+                    "requested_forward": self.requested_forward,
+                    "requested_jump": self.requested_jump,
+                    "requested_sprint": self.requested_sprint,
+                    "requested_strafe": self.requested_strafe,
+                    "teleport_guard_ok": self.teleport_guard_ok,
+                    "tested_action_count": self.tested_action_count,
+                    "tested_step_id": self.tested_step_id,
+                    "total_distance": self.total_distance,
+                    "translated_action_accepted": self.translated_action_accepted,
+                    "vertical_drift_ok": self.vertical_drift_ok,
                 }
             )
         return payload

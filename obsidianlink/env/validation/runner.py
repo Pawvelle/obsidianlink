@@ -1,10 +1,9 @@
 """Minimal P1 validation runner.
 
 Executes one validation case in a controlled lifecycle. This phase
-implements E0 (create, reset, require an initial state, close), E1 (the same
-lifecycle plus public RGB inspection), and E2 (reset-time public inventory
-inspection plus exact comparison with an explicit calibration expectation),
-and E3 (backend-public selected-item inspection and independent comparison).
+implements E0 lifecycle, E1 RGB, E2 inventory, E3 selected item, E4 camera,
+and E5 movement. E4/E5 consume only narrow evaluator truth from their
+integration adapters; the validation core remains MineRL-independent.
 The runner never uses benchmark evaluator success semantics.
 """
 
@@ -34,12 +33,25 @@ from obsidianlink.env.validation.inventory import (
     inspect_inventory,
     inspect_public_inventory,
 )
+from obsidianlink.env.validation.movement import (
+    MOVEMENT_ORIENTATION_INVALID,
+    MOVEMENT_ORIENTATION_MISSING,
+    POSITION_AFTER_MISSING,
+    POSITION_BEFORE_MISSING,
+    POSITION_INVALID,
+    MovementActionExecution,
+    MovementInspection,
+    MovementOrientationSnapshot,
+    PlayerPositionSnapshot,
+    inspect_movement,
+)
 from obsidianlink.env.validation.result import (
     E0_SUCCESS_OUTCOME,
     E1_SUCCESS_OUTCOME,
     E2_SUCCESS_OUTCOME,
     E3_SUCCESS_OUTCOME,
     E4_SUCCESS_OUTCOME,
+    E5_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
     SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
@@ -54,7 +66,7 @@ from obsidianlink.env.validation.selected_item import (
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest backend surface required by E0--E3.
+    """Smallest common backend surface required by E0--E5.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -105,6 +117,22 @@ def _result(
     camera_agent_id: str | None = None,
     camera_requested_yaw: float | None = None,
     camera_requested_pitch: float | None = None,
+    before_position: PlayerPositionSnapshot | None = None,
+    after_position: PlayerPositionSnapshot | None = None,
+    movement_orientation: MovementOrientationSnapshot | None = None,
+    movement_execution: MovementActionExecution | None = None,
+    movement: MovementInspection | None = None,
+    movement_agent_id: str | None = None,
+    requested_forward: float | None = None,
+    requested_strafe: float | None = None,
+    requested_sprint: bool | None = None,
+    requested_jump: bool | None = None,
+    requested_duration_ticks: int | None = None,
+    minimum_horizontal_distance: float | None = None,
+    minimum_forward_projection: float | None = None,
+    maximum_lateral_drift: float | None = None,
+    maximum_horizontal_distance: float | None = None,
+    maximum_vertical_drift: float | None = None,
 ) -> EnvironmentValidationResult:
     return EnvironmentValidationResult(
         check_id=case.check_id,
@@ -136,20 +164,18 @@ def _result(
         ),
         expected_selected_item=expected_selected_item,
         selected_item_matches_expected=selected_item_matches_expected,
-        agent_id=(
-            camera_agent_id
-            if camera_execution is None
-            else camera_execution.agent_id
-        ),
-        tested_step_id=None if camera_execution is None else camera_execution.step_id,
+        agent_id=(movement_execution.agent_id if movement_execution is not None else movement_agent_id if movement_agent_id is not None else camera_execution.agent_id if camera_execution is not None else camera_agent_id),
+        tested_step_id=(movement_execution.step_id if movement_execution is not None else None if camera_execution is None else camera_execution.step_id),
         action_type=(
-            "look" if camera_requested_yaw is not None and camera_execution is None
+            movement_execution.action_type if movement_execution is not None
+            else "move" if requested_forward is not None
+            else "look" if camera_requested_yaw is not None and camera_execution is None
             else None if camera_execution is None else camera_execution.action_type
         ),
         requested_yaw=(camera_requested_yaw if camera_execution is None else camera_execution.requested_yaw),
         requested_pitch=(camera_requested_pitch if camera_execution is None else camera_execution.requested_pitch),
-        translated_action_accepted=None if camera_execution is None else camera_execution.translated_action_accepted,
-        tested_action_count=(0 if camera_requested_yaw is not None and camera_execution is None else None if camera_execution is None else camera_execution.tested_action_count),
+        translated_action_accepted=(movement_execution.translated_action_accepted if movement_execution is not None else None if camera_execution is None else camera_execution.translated_action_accepted),
+        tested_action_count=(movement_execution.tested_action_count if movement_execution is not None else 0 if requested_forward is not None else 0 if camera_requested_yaw is not None and camera_execution is None else None if camera_execution is None else camera_execution.tested_action_count),
         before_yaw=None if before_orientation is None else before_orientation.yaw,
         before_pitch=None if before_orientation is None else before_orientation.pitch,
         after_yaw=None if after_orientation is None else after_orientation.yaw,
@@ -158,6 +184,35 @@ def _result(
         pitch_delta=None if camera is None else camera.pitch_delta,
         direction_match=None if camera is None else camera.direction_match,
         magnitude_match=None if camera is None else camera.magnitude_match,
+        requested_forward=(requested_forward if movement_execution is None else movement_execution.forward),
+        requested_strafe=(requested_strafe if movement_execution is None else movement_execution.strafe),
+        requested_sprint=(requested_sprint if movement_execution is None else movement_execution.sprint),
+        requested_jump=(requested_jump if movement_execution is None else movement_execution.jump),
+        requested_duration_ticks=(requested_duration_ticks if movement_execution is None else movement_execution.duration_ticks),
+        before_x=None if before_position is None else before_position.x,
+        before_y=None if before_position is None else before_position.y,
+        before_z=None if before_position is None else before_position.z,
+        movement_before_yaw=None if movement_orientation is None else movement_orientation.yaw,
+        after_x=None if after_position is None else after_position.x,
+        after_y=None if after_position is None else after_position.y,
+        after_z=None if after_position is None else after_position.z,
+        delta_x=None if movement is None else movement.delta_x,
+        delta_y=None if movement is None else movement.delta_y,
+        delta_z=None if movement is None else movement.delta_z,
+        horizontal_distance=None if movement is None else movement.horizontal_distance,
+        total_distance=None if movement is None else movement.total_distance,
+        forward_projection=None if movement is None else movement.forward_projection,
+        lateral_projection=None if movement is None else movement.lateral_projection,
+        minimum_horizontal_distance=minimum_horizontal_distance,
+        minimum_forward_projection=minimum_forward_projection,
+        maximum_lateral_drift=maximum_lateral_drift,
+        maximum_horizontal_distance=maximum_horizontal_distance,
+        maximum_vertical_drift=maximum_vertical_drift,
+        moved=None if movement is None else movement.moved,
+        movement_direction_match=None if movement is None else movement.direction_match,
+        lateral_drift_ok=None if movement is None else movement.lateral_drift_ok,
+        teleport_guard_ok=None if movement is None else movement.teleport_guard_ok,
+        vertical_drift_ok=None if movement is None else movement.vertical_drift_ok,
     )
 
 
@@ -183,6 +238,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E3_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E4:
         return E4_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E5:
+        return E5_SUCCESS_OUTCOME
     return None
 
 
@@ -201,6 +258,16 @@ class EnvironmentValidationRunner:
         requested_pitch: float = 0.0,
         yaw_tolerance: float = 1.0,
         pitch_tolerance: float = 1.0,
+        requested_forward: float = 1.0,
+        requested_strafe: float = 0.0,
+        requested_sprint: bool = False,
+        requested_jump: bool = False,
+        requested_duration_ticks: int = 1,
+        minimum_horizontal_distance: float = 0.02,
+        minimum_forward_projection: float = 0.02,
+        maximum_lateral_drift: float = 0.02,
+        maximum_horizontal_distance: float = 0.5,
+        maximum_vertical_drift: float = 0.25,
     ) -> EnvironmentValidationResult:
         if not isinstance(case, EnvironmentValidationCase):
             raise ValueError("case must be EnvironmentValidationCase")
@@ -291,6 +358,12 @@ class EnvironmentValidationRunner:
         camera_execution: CameraActionExecution | None = None
         camera: CameraInspection | None = None
         camera_agent_id: str | None = None
+        before_position: PlayerPositionSnapshot | None = None
+        after_position: PlayerPositionSnapshot | None = None
+        movement_orientation: MovementOrientationSnapshot | None = None
+        movement_execution: MovementActionExecution | None = None
+        movement: MovementInspection | None = None
+        movement_agent_id: str | None = None
 
         try:
             backend = backend_factory()
@@ -429,6 +502,99 @@ class EnvironmentValidationRunner:
                                                 )
                                                 outcome = camera.outcome
                                                 error = camera.error
+                        elif case.check_id is EnvironmentValidationId.E5:
+                            if isinstance(reset_result, Mapping) and reset_result:
+                                first_agent = next(iter(reset_result))
+                                if isinstance(first_agent, str) and first_agent.strip():
+                                    movement_agent_id = first_agent.strip()
+                            position_truth = getattr(backend, "player_position_truth", None)
+                            orientation_truth = getattr(backend, "movement_orientation_truth", None)
+                            execute = getattr(backend, "execute_movement_action", None)
+                            if not all(callable(value) for value in (position_truth, orientation_truth, execute)):
+                                outcome = "runtime_error"
+                                error = "E5 backend position/orientation/action surface is not callable"
+                            else:
+                                try:
+                                    candidate_before = position_truth()
+                                except (TypeError, ValueError) as exc:
+                                    outcome = POSITION_INVALID
+                                    error = _format_error(exc)
+                                else:
+                                    if candidate_before is None:
+                                        outcome = POSITION_BEFORE_MISSING
+                                        error = "position truth is missing before action"
+                                    elif not isinstance(candidate_before, PlayerPositionSnapshot):
+                                        outcome = POSITION_INVALID
+                                        error = "before position has the wrong type"
+                                    else:
+                                        before_position = candidate_before
+                                if before_position is not None:
+                                    try:
+                                        candidate_orientation = orientation_truth()
+                                    except (TypeError, ValueError) as exc:
+                                        outcome = MOVEMENT_ORIENTATION_INVALID
+                                        error = _format_error(exc)
+                                    else:
+                                        if candidate_orientation is None:
+                                            outcome = MOVEMENT_ORIENTATION_MISSING
+                                            error = "reset yaw truth is missing"
+                                        elif not isinstance(candidate_orientation, MovementOrientationSnapshot):
+                                            outcome = MOVEMENT_ORIENTATION_INVALID
+                                            error = "reset yaw truth has the wrong type"
+                                        else:
+                                            movement_orientation = candidate_orientation
+                                if before_position is not None and movement_orientation is not None:
+                                    parsed = parse_macro_action(
+                                        json.dumps(
+                                            {
+                                                "action_type": "move",
+                                                "duration_ticks": requested_duration_ticks,
+                                                "parameters": {
+                                                    "forward": requested_forward,
+                                                    "strafe": requested_strafe,
+                                                    "sprint": requested_sprint,
+                                                    "jump": requested_jump,
+                                                },
+                                            },
+                                            allow_nan=False,
+                                            sort_keys=True,
+                                        )
+                                    )
+                                    if not parsed.accepted:
+                                        outcome = "movement_action_rejected"
+                                        error = "movement action protocol rejected: " + (parsed.error or "unknown error")
+                                    else:
+                                        candidate_execution = execute(parsed.action)
+                                        if not isinstance(candidate_execution, MovementActionExecution):
+                                            raise TypeError("execute_movement_action must return MovementActionExecution")
+                                        movement_execution = candidate_execution
+                                        try:
+                                            candidate_after = position_truth()
+                                        except (TypeError, ValueError) as exc:
+                                            outcome = POSITION_INVALID
+                                            error = _format_error(exc)
+                                        else:
+                                            if candidate_after is None:
+                                                outcome = POSITION_AFTER_MISSING
+                                                error = "position truth is missing after action"
+                                            elif not isinstance(candidate_after, PlayerPositionSnapshot):
+                                                outcome = POSITION_INVALID
+                                                error = "after position has the wrong type"
+                                            else:
+                                                after_position = candidate_after
+                                                movement = inspect_movement(
+                                                    before_position,
+                                                    after_position,
+                                                    movement_orientation,
+                                                    movement_execution,
+                                                    minimum_horizontal_distance=minimum_horizontal_distance,
+                                                    minimum_forward_projection=minimum_forward_projection,
+                                                    maximum_lateral_drift=maximum_lateral_drift,
+                                                    maximum_horizontal_distance=maximum_horizontal_distance,
+                                                    maximum_vertical_drift=maximum_vertical_drift,
+                                                )
+                                                outcome = movement.outcome
+                                                error = movement.error
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -453,6 +619,7 @@ class EnvironmentValidationRunner:
                 E2_SUCCESS_OUTCOME,
                 E3_SUCCESS_OUTCOME,
                 E4_SUCCESS_OUTCOME,
+                E5_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -472,6 +639,7 @@ class EnvironmentValidationRunner:
             E2_SUCCESS_OUTCOME,
             E3_SUCCESS_OUTCOME,
             E4_SUCCESS_OUTCOME,
+            E5_SUCCESS_OUTCOME,
         }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
@@ -520,4 +688,20 @@ class EnvironmentValidationRunner:
             camera_agent_id=camera_agent_id if case.check_id is EnvironmentValidationId.E4 else None,
             camera_requested_yaw=requested_yaw if case.check_id is EnvironmentValidationId.E4 else None,
             camera_requested_pitch=requested_pitch if case.check_id is EnvironmentValidationId.E4 else None,
+            before_position=before_position if case.check_id is EnvironmentValidationId.E5 else None,
+            after_position=after_position if case.check_id is EnvironmentValidationId.E5 else None,
+            movement_orientation=movement_orientation if case.check_id is EnvironmentValidationId.E5 else None,
+            movement_execution=movement_execution if case.check_id is EnvironmentValidationId.E5 else None,
+            movement=movement if case.check_id is EnvironmentValidationId.E5 else None,
+            movement_agent_id=movement_agent_id if case.check_id is EnvironmentValidationId.E5 else None,
+            requested_forward=requested_forward if case.check_id is EnvironmentValidationId.E5 else None,
+            requested_strafe=requested_strafe if case.check_id is EnvironmentValidationId.E5 else None,
+            requested_sprint=requested_sprint if case.check_id is EnvironmentValidationId.E5 else None,
+            requested_jump=requested_jump if case.check_id is EnvironmentValidationId.E5 else None,
+            requested_duration_ticks=requested_duration_ticks if case.check_id is EnvironmentValidationId.E5 else None,
+            minimum_horizontal_distance=minimum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
+            minimum_forward_projection=minimum_forward_projection if case.check_id is EnvironmentValidationId.E5 else None,
+            maximum_lateral_drift=maximum_lateral_drift if case.check_id is EnvironmentValidationId.E5 else None,
+            maximum_horizontal_distance=maximum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
+            maximum_vertical_drift=maximum_vertical_drift if case.check_id is EnvironmentValidationId.E5 else None,
         )
