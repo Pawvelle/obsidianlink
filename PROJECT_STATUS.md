@@ -69,8 +69,10 @@ E10 允许预置合法 support/trench，并由 deterministic calibration script 
 - E3 contract / offline runtime: complete / `unit_verified`
 - E3 MineRL adapter / live bridge: implemented / offline tested
 - E3 expected selected item: `flint_and_steel`
+- E3 observed selected item: `flint_and_steel`
+- E3 `selected_item_matches_expected`: true
 - E3 observed selected item source: backend public `Observation.selected_item`
-- E3 real MineRL execution: NOT RUN / awaiting explicit authorization
+- E3 real MineRL execution: one authorized success reviewed
 - E3 `integration_verified`: NO
 - E4–E12: not started / not run
 - P1 Hard Gate: NOT PASSED
@@ -82,9 +84,11 @@ Reviewed E1 live evidence (not modified): `runs/p1_e1_rgb_observation/e1-live-20
 
 Reviewed E2 live evidence (not modified): `runs/p1_e2_inventory_observation/e2-live-20260813-232125`, episode `p1-e2-live-001`. `success=true`, `outcome=inventory_ok`, `real_execution_performed=true`; expected and observed inventory both equal `{"dirt": 7, "obsidian": 4, "flint_and_steel": 1}`, and `inventory_matches_expected=true`. Opened/reset/initial state/closed are true; observable cleanup succeeded and `process_release_proven=false`.
 
+Reviewed E3 live evidence: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`, episode `p1-e3-live-001`. `success=true`, `outcome=selected_item_ok`, `real_execution_performed=true`; expected and observed selected item both equal `flint_and_steel`, and `selected_item_matches_expected=true`. Opened/reset/initial state/closed are true; `error=null`, `close_error=null`; observable cleanup `close_returned`, `backend_marked_closed`, `environment_reference_cleared`, and `owner_cleared` are true. `process_release_proven=false` and E3 is not promoted to `integration_verified`.
+
 E0/E1/E2/E3 are not promoted to `integration_verified`. Existing policy: live runtimes and `p1_validation_manifest()` / `--check` are fail-closed surfaces and never emit that claim; AGENTS.md forbids declaring `integration_verified` before the P1 Hard Gate; a single reviewed success is recorded evidence, not suite promotion. `benchmark_evaluated` is not claimed.
 
-The solver-independent E0/E1/E2/E3 runtime remains in `obsidianlink/env/validation/`. MineRL adapters live in `obsidianlink/env/integration/`. E3's adapter projects only backend public `Observation.selected_item`; it does not read initial inventory, hotbar mapping, action intent, raw `equipped_items`, or expected calibration state. Expected and observed values remain independent. Authorized E3 command is recorded below but has not been run. Import, `--check`, and unit tests do not start MineRL.
+The solver-independent E0/E1/E2/E3 runtime remains in `obsidianlink/env/validation/`. MineRL adapters live in `obsidianlink/env/integration/`. E3's adapter projects only backend public `Observation.selected_item`; it does not read initial inventory, hotbar mapping, action intent, raw `equipped_items`, or expected calibration state. Expected and observed values remain independent. The single authorized E3 command recorded below has now been executed once and must not be rerun without new authorization. Import, `--check`, and unit tests do not start MineRL.
 
 ## 本次 v2 refactor 已完成
 
@@ -105,6 +109,7 @@ The solver-independent E0/E1/E2/E3 runtime remains in `obsidianlink/env/validati
 - 2026-08-13：唯一一次授权真实 E2 inventory run `p1-e2-live-001` 成功并已审阅；expected/observed inventory 精确一致，`process_release_proven=false`，E2 仍不是 `integration_verified`；
 - 2026-08-14：P1-E3 selected-item contract、offline runtime、MineRL adapter 与显式授权 live bridge 已实现；E3 targeted tests 32 项、E0–E3 regression 166 项通过；仅支持 `unit_verified`；
 - 2026-08-14：E3 完成后完整离线回归 1426 项通过；该结果不代表真实 Minecraft capability；
+- 2026-08-14：唯一一次授权真实 E3 selected-item run `p1-e3-live-001` 成功并已审阅；expected/observed 均为 `flint_and_steel`，`selected_item_matches_expected=true`，可观察 cleanup 成功，`process_release_proven=false`，E3 仍不是 `integration_verified`；
 - v2 CLI 自检与 P1 环境状态检查脚本通过，均报告 E0–E12 为 `not_run`；
 - Python compile check 与 `git diff --check` 通过。
 - 标准本地运行时冻结为 `environment.yml` 中的 Conda 环境 `mc-agent`；Python 命令与测试不得使用系统 Python 或其他环境，环境检查会 fail closed 验证该身份。
@@ -114,7 +119,7 @@ The solver-independent E0/E1/E2/E3 runtime remains in `obsidianlink/env/validati
 - E0 已有一次审查过的真实 lifecycle success evidence，但不是 `integration_verified`；OS-level process release 未证明；
 - E1 已有一次审查过的真实 RGB success evidence（360×640×3 uint8），但不是 `integration_verified`；
 - E2 已有一次审阅通过的真实 inventory success evidence，但不是 `integration_verified`；
-- E3 offline implementation 已完成，但真实 MineRL/Minecraft E3 尚未运行，observed selected item 尚无 live evidence，`integration_verified`: NO；
+- E3 已有一次审阅通过的真实 selected-item success evidence，但稳定重复性与 OS-level process release 尚未证明，`integration_verified`: NO；
 - E4–E12 尚未实现或尚未运行；P1 Hard Gate 未通过；
 - 真实 MineRL/Minecraft casting 不是 `integration_verified`；
 - E10、portal activation、dimension transition 尚未真实验证；
@@ -128,12 +133,12 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E3 offline implementation ready -> waiting for explicit authorized real MineRL run.
+P1 E3 selected-item observation is complete through one reviewed authorized real MineRL calibration success. Stop here for this development session.
 
-唯一后续 E3 live command（尚未执行，且每次执行仍需用户单独明确授权）：
+本次唯一授权并已执行的 E3 live command（不得在没有新授权时重跑）：
 
 ```bash
 /opt/anaconda3/bin/conda run -n mc-agent python -m obsidianlink.env.integration.e3_run --execution-mode authorized_live_e3 --authorized-live-run e3_selected_item --episode-id p1-e3-live-001 --output-dir /Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_e3_selected_item_observation/e3-live-20260814-001
 ```
 
-Do not start E4. P1 Hard Gate has not passed and P2 must not begin.
+E4 camera control remains the next P1 validation item but has not started. Do not start E4 in this session. P1 Hard Gate has not passed and P2 must not begin.
