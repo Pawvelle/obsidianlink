@@ -1,6 +1,6 @@
 # ObsidianLink v2.0 项目状态
 
-更新时间：2026-08-14
+更新时间：2026-08-15
 
 ## Scope decision
 
@@ -86,9 +86,11 @@ E10 允许预置合法 support/trench，并由 deterministic calibration script 
 - E5 calibration: exactly one `move(forward=1.0, strafe=0.0, sprint=false, jump=false)`, `duration_ticks=1`; no settle step
 - E5 evaluator-only truth: MineRL FullStats `info.location_stats.xpos/ypos/zpos`; reset yaw comes from the existing FullStats orientation bridge and defines Minecraft forward as `(-sin(yaw), cos(yaw))` in X/Z
 - E5 frozen bounds: minimum horizontal/forward `0.02` block; maximum lateral `0.02`, horizontal `0.5`, vertical `0.25` block
-- E5 real MineRL execution: NOT RUN / awaiting explicit authorization
+- E5 authorized real attempt reviewed: episode `p1-e5-live-001`, evidence `runs/p1_e5_movement/e5-live-20260814-001`
+- E5 attempt execution state: `real_execution_performed=true`, `success=false`, `outcome=reset_failed`, `reset_completed=false`, `initial_state_present=false`, `tested_action_count=0`
+- E5 movement action not executed; reviewed real success: NO. The reset failure is not a movement capability negative result
 - E5 `integration_verified`: NO
-- E6–E12: not started / not run
+- E6–E12: NOT STARTED
 - P1 Hard Gate: NOT PASSED
 - P2: NOT STARTED
 
@@ -99,8 +101,11 @@ Reviewed live evidence (not modified):
 - E2: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`, episode `p1-e2-live-001`, exact expected/observed inventory match.
 - E3: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`, episode `p1-e3-live-001`, exact `flint_and_steel` match.
 - E4: `runs/p1_e4_camera_control/e4-live-20260814-001`, episode `p1-e4-live-001`, `camera_ok`.
+- E5: `runs/p1_e5_movement/e5-live-20260814-001`, episode `p1-e5-live-001`, production path reached; reset failed before initial state or movement action.
 
-All five have `success=true`, `real_execution_performed=true`, clean lifecycle/cleanup, and `process_release_proven=false`; none is `integration_verified`.
+E0–E4 each have `success=true`, `real_execution_performed=true`, clean lifecycle/cleanup, and `process_release_proven=false`; none is `integration_verified`. E5 has no reviewed real success and is also not `integration_verified`.
+
+E5 root cause: Minecraft/JVM native `SIGSEGV`, `Sound engine`, `liblwjgl_stb.dylib`; then Malmo socket EOF, surfaced in MineRL Python as `TypeError: a bytes-like object is required, not 'NoneType'`. It is `reset_failed`, not `movement_failed`.
 
 E0/E1/E2/E3/E4 are not promoted to `integration_verified`. Existing policy: live runtimes and `p1_validation_manifest()` / `--check` are fail-closed surfaces and never emit that claim; AGENTS.md forbids declaring `integration_verified` before the P1 Hard Gate; a single reviewed success is recorded evidence, not suite promotion. `benchmark_evaluated` is not claimed.
 
@@ -116,8 +121,9 @@ E0–E5 validation remains solver-independent. E4 submits one bounded look; E5 s
 ## 本次离线验收
 
 - 历史 reviewed live evidence：E0 lifecycle、E1 RGB、E2 inventory、E3 selected-item、E4 camera 各一次成功；均不提升为 `integration_verified`，`process_release_proven=false`；
-- 2026-08-14：P1-E5 movement contract、FullStats position truth、offline runtime、MineRL adapter 与显式授权 live bridge 已实现；E5 targeted 21 项、E0–E5 regression 210 项、action protocol/translator 7 项通过；
-- E5 完成后完整离线回归 1470 项通过；CLI/environment/compile/diff checks 通过；结果只支持 `unit_verified`，不代表真实 Minecraft movement capability；
+- E5 movement contract、FullStats truth、offline runtime、MineRL adapter/live bridge 已实现并保持 `unit_verified`；
+- E5 reset-failure audit hardening 已完成：planned/actual action count 分离；`failure_stage`、`original_exception_type`、chained traceback、`reset_attempt_count`、`environment_launch_count`、runtime log manifest/SHA-256、fail-closed cause classification；
+- hardening 验收：E5 targeted 25 项、E0–E5 regression 214 项、完整离线回归 1474 项及 CLI/environment/compile/diff checks 通过；
 - 标准本地运行时为 `environment.yml` 的 `mc-agent`；环境检查 fail closed 验证该身份。
 
 ## 尚未验证
@@ -127,7 +133,8 @@ E0–E5 validation remains solver-independent. E4 submits one bounded look; E5 s
 - E2 已有一次审阅通过的真实 inventory success evidence，但不是 `integration_verified`；
 - E3 已有一次审阅通过的真实 selected-item success evidence，但稳定重复性与 OS-level process release 尚未证明，`integration_verified`: NO；
 - E4 已有一次审阅通过的真实 camera success evidence，但稳定重复性与 OS-level process release 尚未证明，`integration_verified`: NO；
-- E5 offline implementation 已完成，但真实 MineRL/Minecraft 尚未运行；E6–E12 尚未实现；P1 Hard Gate 未通过；
+- E5 reviewed real success: NO，`integration_verified`: NO；下一次 real run 需新的单次授权；
+- E6–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - 真实 MineRL/Minecraft casting 不是 `integration_verified`；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4 正式 end-to-end task 尚未实现；
@@ -140,12 +147,12 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E5 offline implementation ready -> waiting for explicit authorized real MineRL run. Do not start E6.
+E5 remains `unit_verified`; the reviewed `p1-e5-live-001` failure is preserved. A second real attempt requires new explicit single-run authorization. Do not start E6.
 
-唯一需要用户另行明确授权的 E5 live command（当前未执行）：
+下一次 E5 real run 的候选命令（`NOT AUTHORIZED / NOT RUN`）：
 
 ```bash
-/opt/anaconda3/bin/conda run -n mc-agent python -m obsidianlink.env.integration.e5_run --execution-mode authorized_live_e5 --authorized-live-run e5_movement --episode-id p1-e5-live-001 --output-dir /Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_e5_movement/e5-live-20260814-001
+/opt/anaconda3/bin/conda run -n mc-agent python -m obsidianlink.env.integration.e5_run --execution-mode authorized_live_e5 --authorized-live-run e5_movement --episode-id p1-e5-live-002 --output-dir /Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_e5_movement/e5-live-20260814-002
 ```
 
-E5 is `unit_verified` only. Its real run is NOT RUN, `integration_verified`: NO. P1 Hard Gate has not passed and P2 must not begin.
+Candidate is not authorized and has not run. E5 reviewed real success: NO; `integration_verified`: NO; P1 Hard Gate: NOT PASSED; P2: NOT STARTED.
