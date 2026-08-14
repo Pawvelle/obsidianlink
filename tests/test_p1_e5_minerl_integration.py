@@ -75,6 +75,7 @@ class E5MineRLIntegrationTests(unittest.TestCase):
         backend.open()
         try:
             backend.reset(sample_task()); before = backend.get_player_position_truth()
+            self.assertEqual(backend.get_reset_audit(), {"reset_attempt_count": 1, "environment_launch_count": 1})
             self.assertAlmostEqual(float(before["z"]), 2.0)  # type: ignore[index]
             step = backend.step({"agent_1": MacroAction("move", parameters={"forward": 1.0, "strafe": 0.0, "sprint": False, "jump": False})})
             after = backend.get_player_position_truth()
@@ -82,6 +83,26 @@ class E5MineRLIntegrationTests(unittest.TestCase):
             for key in ("x", "y", "z", "xpos", "ypos", "zpos"): self.assertNotIn(key, step.info)
             self.assertFalse(hasattr(step.observations[E5_AGENT_ID], "x"))
         finally: backend.close()
+
+    def test_real_backend_counts_failed_reset_and_environment_launch(self):
+        def fail_factory(task):
+            raise TypeError("factory boom")
+
+        backend = MineRLEnvironmentBackend(
+            env_factory=fail_factory,
+            reset_warmup_steps=1,
+            max_reset_attempts=1,
+        )
+        backend.open()
+        try:
+            with self.assertRaisesRegex(RuntimeError, "after 1 attempts"):
+                backend.reset(sample_task())
+            self.assertEqual(
+                backend.get_reset_audit(),
+                {"reset_attempt_count": 1, "environment_launch_count": 1},
+            )
+        finally:
+            backend.close()
 
     def test_protocol_translator_path_and_action_space_rejection(self):
         env = _ControlledMineRLEnv(); action = MacroAction("move", parameters={"forward": 1.0, "strafe": 0.0, "sprint": False, "jump": False})

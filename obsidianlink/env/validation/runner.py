@@ -10,6 +10,7 @@ The runner never uses benchmark evaluator success semantics.
 from __future__ import annotations
 
 import json
+import traceback
 from typing import Callable, Mapping, Protocol, runtime_checkable
 
 from obsidianlink.actions.protocol import parse_macro_action
@@ -91,6 +92,21 @@ def _format_error(exc: BaseException) -> str:
     return f"{name}: {message}"
 
 
+def _root_exception(exc: BaseException) -> BaseException:
+    """Return the deepest explicit cause/context without looping."""
+
+    current = exc
+    seen = {id(current)}
+    while True:
+        candidate = current.__cause__
+        if candidate is None and not current.__suppress_context__:
+            candidate = current.__context__
+        if candidate is None or id(candidate) in seen:
+            return current
+        seen.add(id(candidate))
+        current = candidate
+
+
 def _result(
     *,
     case: EnvironmentValidationCase,
@@ -133,6 +149,11 @@ def _result(
     maximum_lateral_drift: float | None = None,
     maximum_horizontal_distance: float | None = None,
     maximum_vertical_drift: float | None = None,
+    failure_stage: str | None = None,
+    original_exception_type: str | None = None,
+    reset_attempt_count: int | None = None,
+    environment_launch_count: int | None = None,
+    exception_traceback: str | None = None,
 ) -> EnvironmentValidationResult:
     return EnvironmentValidationResult(
         check_id=case.check_id,
@@ -147,6 +168,11 @@ def _result(
         closed=closed,
         error=error,
         close_error=close_error,
+        failure_stage=failure_stage,
+        original_exception_type=original_exception_type,
+        reset_attempt_count=reset_attempt_count,
+        environment_launch_count=environment_launch_count,
+        exception_traceback=exception_traceback,
         rgb_present=None if rgb is None else rgb.present,
         rgb_height=None if rgb is None else rgb.height,
         rgb_width=None if rgb is None else rgb.width,
@@ -364,6 +390,11 @@ class EnvironmentValidationRunner:
         movement_execution: MovementActionExecution | None = None
         movement: MovementInspection | None = None
         movement_agent_id: str | None = None
+        failure_stage: str | None = None
+        original_exception_type: str | None = None
+        reset_attempt_count: int | None = None
+        environment_launch_count: int | None = None
+        exception_traceback: str | None = None
 
         try:
             backend = backend_factory()
@@ -606,6 +637,38 @@ class EnvironmentValidationRunner:
                 outcome = "create_failed"
             elif not reset_completed:
                 outcome = "reset_failed"
+                if case.check_id is EnvironmentValidationId.E5:
+                    failure_stage = "reset"
+                    original_exception_type = type(_root_exception(exc)).__name__
+                    exception_traceback = "".join(
+                        traceback.format_exception(type(exc), exc, exc.__traceback__)
+                    )
+                    audit = getattr(backend, "reset_failure_audit", None)
+                    if callable(audit):
+                        try:
+                            audit_value = audit()
+                        except Exception as audit_exc:
+                            exception_traceback += (
+                                "\nReset audit unavailable: "
+                                + _format_error(audit_exc)
+                                + "\n"
+                            )
+                        else:
+                            if isinstance(audit_value, Mapping):
+                                reset_attempt_count = audit_value.get(
+                                    "reset_attempt_count"
+                                )
+                                environment_launch_count = audit_value.get(
+                                    "environment_launch_count"
+                                )
+                            else:
+                                exception_traceback += (
+                                    "\nReset audit unavailable: wrong return type\n"
+                                )
+                    else:
+                        exception_traceback += (
+                            "\nReset audit unavailable: surface is not callable\n"
+                        )
             else:
                 outcome = "runtime_error"
         finally:
@@ -704,4 +767,9 @@ class EnvironmentValidationRunner:
             maximum_lateral_drift=maximum_lateral_drift if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_horizontal_distance=maximum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_vertical_drift=maximum_vertical_drift if case.check_id is EnvironmentValidationId.E5 else None,
+            failure_stage=failure_stage if case.check_id is EnvironmentValidationId.E5 else None,
+            original_exception_type=original_exception_type if case.check_id is EnvironmentValidationId.E5 else None,
+            reset_attempt_count=reset_attempt_count if case.check_id is EnvironmentValidationId.E5 else None,
+            environment_launch_count=environment_launch_count if case.check_id is EnvironmentValidationId.E5 else None,
+            exception_traceback=exception_traceback if case.check_id is EnvironmentValidationId.E5 else None,
         )

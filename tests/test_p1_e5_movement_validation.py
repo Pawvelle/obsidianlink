@@ -17,6 +17,8 @@ class FakeMovementBackend:
     def reset(self):
         if self.fail_reset: raise RuntimeError("reset boom")
         return {"agent_1": {"episode_id": "episode", "agent_id": "agent_1", "step_id": 0}}
+    def reset_failure_audit(self):
+        return {"reset_attempt_count": 1, "environment_launch_count": 1}
     def player_position_truth(self):
         if (not self.stepped and not self.before_truth) or (self.stepped and not self.after_truth): return None
         x, y, z = self.after if self.stepped else (0.0, 4.0, 0.0)
@@ -64,6 +66,21 @@ class MovementRunnerTests(unittest.TestCase):
                  (FakeMovementBackend(fail_close=True), "close_failed"))
         for backend, outcome in cases:
             with self.subTest(outcome=outcome): self.assertEqual(self.run_backend(backend).outcome, outcome)
+
+    def test_reset_failure_audit_is_complete_and_has_no_movement_verdict(self):
+        payload = self.run_backend(FakeMovementBackend(fail_reset=True)).as_dict()
+        self.assertEqual(payload["failure_stage"], "reset")
+        self.assertEqual(payload["original_exception_type"], "RuntimeError")
+        self.assertEqual(payload["reset_attempt_count"], 1)
+        self.assertEqual(payload["environment_launch_count"], 1)
+        self.assertEqual(payload["tested_action_count"], 0)
+        self.assertIsNone(payload["translated_action_accepted"])
+        self.assertIn("RuntimeError: reset boom", payload["exception_traceback"])
+        for field in (
+            "moved", "movement_direction_match", "forward_projection",
+            "lateral_projection", "horizontal_distance", "total_distance",
+        ):
+            self.assertIsNone(payload[field])
 
     def test_evidence_is_deterministic_and_narrow(self):
         payload = self.run_backend(FakeMovementBackend()).as_dict()

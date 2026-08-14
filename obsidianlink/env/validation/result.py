@@ -108,6 +108,11 @@ class EnvironmentValidationResult:
     closed: bool
     error: str | None = None
     close_error: str | None = None
+    failure_stage: str | None = None
+    original_exception_type: str | None = None
+    reset_attempt_count: int | None = None
+    environment_launch_count: int | None = None
+    exception_traceback: str | None = None
     verification_level: str = UNIT_VERIFIED
     real_execution_performed: bool = False
     integration_verified: bool = False
@@ -194,6 +199,29 @@ class EnvironmentValidationResult:
         object.__setattr__(
             self, "close_error", _optional_error(self.close_error, "close_error")
         )
+        object.__setattr__(
+            self,
+            "exception_traceback",
+            _optional_error(self.exception_traceback, "exception_traceback"),
+        )
+        if self.failure_stage is not None:
+            object.__setattr__(
+                self,
+                "failure_stage",
+                _require_identifier(self.failure_stage, "failure_stage"),
+            )
+        if self.original_exception_type is not None:
+            object.__setattr__(
+                self,
+                "original_exception_type",
+                _require_identifier(
+                    self.original_exception_type, "original_exception_type"
+                ),
+            )
+        for field_name in ("reset_attempt_count", "environment_launch_count"):
+            value = getattr(self, field_name)
+            if value is not None and (type(value) is not int or value < 0):
+                raise ValueError(f"{field_name} must be a non-negative int or None")
         if self.verification_level != UNIT_VERIFIED:
             raise ValueError("this runtime may only emit unit_verified")
         if self.real_execution_performed:
@@ -353,6 +381,54 @@ class EnvironmentValidationResult:
             value is not None for value in movement_fields
         ):
             raise ValueError("movement metadata is only valid for E5 results")
+        reset_failure_fields = (
+            self.failure_stage,
+            self.original_exception_type,
+            self.reset_attempt_count,
+            self.environment_launch_count,
+            self.exception_traceback,
+        )
+        if self.check_id is not EnvironmentValidationId.E5 and any(
+            value is not None for value in reset_failure_fields
+        ):
+            raise ValueError("reset-failure audit metadata is only valid for E5 results")
+        if self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E5:
+            if not (
+                self.failure_stage == "reset"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+                and self.tested_action_count == 0
+                and self.translated_action_accepted is None
+                and all(
+                    value is None
+                    for value in (
+                        self.before_x,
+                        self.before_y,
+                        self.before_z,
+                        self.movement_before_yaw,
+                        self.after_x,
+                        self.after_y,
+                        self.after_z,
+                        self.delta_x,
+                        self.delta_y,
+                        self.delta_z,
+                        self.horizontal_distance,
+                        self.total_distance,
+                        self.forward_projection,
+                        self.lateral_projection,
+                        self.moved,
+                        self.movement_direction_match,
+                        self.lateral_drift_ok,
+                        self.teleport_guard_ok,
+                        self.vertical_drift_ok,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "E5 reset_failed requires complete reset audit and zero action evidence"
+                )
+        elif any(value is not None for value in reset_failure_fields):
+            raise ValueError("reset-failure audit metadata requires E5 reset_failed")
         movement_thresholds = (
             self.minimum_horizontal_distance,
             self.minimum_forward_projection,
@@ -632,6 +708,11 @@ class EnvironmentValidationResult:
                     "delta_y": self.delta_y,
                     "delta_z": self.delta_z,
                     "forward_projection": self.forward_projection,
+                    "failure_stage": self.failure_stage,
+                    "original_exception_type": self.original_exception_type,
+                    "reset_attempt_count": self.reset_attempt_count,
+                    "environment_launch_count": self.environment_launch_count,
+                    "exception_traceback": self.exception_traceback,
                     "horizontal_distance": self.horizontal_distance,
                     "lateral_drift_ok": self.lateral_drift_ok,
                     "lateral_projection": self.lateral_projection,

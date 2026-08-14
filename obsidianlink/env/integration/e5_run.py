@@ -8,6 +8,8 @@ never runs Gradle, models, solvers, placement, or later validation cases.
 from __future__ import annotations
 
 import json
+import hashlib
+import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +41,7 @@ from obsidianlink.env.validation.result import EnvironmentValidationResult
 
 ROOT = Path(__file__).resolve().parents[3]
 FORMAL_E5_RUNS_ROOT = (ROOT / "runs" / "p1_e5_movement").resolve()
+RUNTIME_LOGS_ROOT = (ROOT / "logs").resolve()
 EXECUTION_MODE_AUTHORIZED_LIVE_E5 = "authorized_live_e5"
 AUTHORIZED_LIVE_E5_RUN_VALUE = "e5_movement"
 
@@ -51,6 +54,34 @@ class E5AuthorizationError(ValueError):
 
 
 @dataclass(frozen=True)
+class E5LogEvidence:
+    """Immutable manifest entry for an existing runtime log."""
+
+    kind: str
+    path: str
+    sha256: str
+    summary: str
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"minecraft", "jvm_crash", "process_watcher"}:
+            raise ValueError("unknown E5 log evidence kind")
+        if not Path(self.path).is_absolute():
+            raise ValueError("E5 log evidence path must be absolute")
+        if len(self.sha256) != 64 or any(character not in "0123456789abcdef" for character in self.sha256):
+            raise ValueError("E5 log evidence sha256 must be lowercase hex")
+        if not isinstance(self.summary, str) or not self.summary.strip():
+            raise ValueError("E5 log evidence summary must be non-empty")
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "kind": self.kind,
+            "path": self.path,
+            "sha256": self.sha256,
+            "summary": self.summary,
+        }
+
+
+@dataclass(frozen=True)
 class E5MineRLRunRecord:
     execution_mode: str
     authorized_live_run: str
@@ -60,6 +91,8 @@ class E5MineRLRunRecord:
     real_execution_performed: bool
     lifecycle: EnvironmentValidationResult
     cleanup: E0CleanupStatus
+    failure_cause: str
+    log_evidence: tuple[E5LogEvidence, ...]
 
     def __post_init__(self) -> None:
         if self.execution_mode != EXECUTION_MODE_AUTHORIZED_LIVE_E5:
@@ -72,6 +105,23 @@ class E5MineRLRunRecord:
             raise ValueError("cleanup must be E0CleanupStatus")
         if any(type(value) is not bool for value in (self.opened, self.authorization_accepted, self.real_execution_performed)):
             raise ValueError("record flags must be bool")
+        if self.failure_cause not in {"unknown", "minecraft_native_crash"}:
+            raise ValueError("unknown E5 failure cause")
+        if not isinstance(self.log_evidence, tuple) or not all(
+            isinstance(value, E5LogEvidence) for value in self.log_evidence
+        ):
+            raise ValueError("log_evidence must be a tuple of E5LogEvidence")
+        if self.failure_cause == "minecraft_native_crash" and not (
+            self.lifecycle.outcome == "reset_failed"
+            and any(
+                value.kind in {"minecraft", "jvm_crash"}
+                and value.summary.startswith("JVM fatal SIGSEGV in liblwjgl")
+                for value in self.log_evidence
+            )
+        ):
+            raise ValueError(
+                "native-crash cause requires reset failure and explicit JVM crash evidence"
+            )
 
     @property
     def success(self) -> bool:
@@ -94,6 +144,10 @@ class E5MineRLRunRecord:
                 "backend_identity": self.backend_identity,
                 "cleanup": self.cleanup.as_dict(),
                 "execution_mode": self.execution_mode,
+                "evidence_manifest": {
+                    "logs": [value.as_dict() for value in self.log_evidence]
+                },
+                "failure_cause": self.failure_cause,
                 "opened": self.opened,
                 "outcome": self.outcome,
                 "real_execution_performed": self.real_execution_performed,
@@ -101,6 +155,87 @@ class E5MineRLRunRecord:
             }
         )
         return payload
+
+
+def _runtime_log_paths() -> tuple[Path, ...]:
+    paths = list(RUNTIME_LOGS_ROOT.glob("mc_*.log"))
+    paths.extend((RUNTIME_LOGS_ROOT / "minerl_watchers").glob("watcher_*.log"))
+    return tuple(sorted(path.resolve() for path in paths if path.is_file()))
+
+
+def _snapshot_runtime_logs() -> dict[str, tuple[int, int]]:
+    return {
+        str(path): (path.stat().st_size, path.stat().st_mtime_ns)
+        for path in _runtime_log_paths()
+    }
+
+
+def _log_summary(text: str, kind: str) -> str:
+    if (
+        "A fatal error has been detected by the Java Runtime Environment" in text
+        and "SIGSEGV" in text
+        and "liblwjgl" in text
+    ):
+        if "Sound engine" in text:
+            return "JVM fatal SIGSEGV in liblwjgl native code on the Sound engine thread"
+        return "JVM fatal SIGSEGV in liblwjgl native code"
+    if kind == "process_watcher" and "Child is not running anymore" in text:
+        return "process watcher reports that the child is no longer running"
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return (lines[-1][:240] if lines else "log file is empty")
+
+
+def _make_log_evidence(path: Path, kind: str) -> E5LogEvidence:
+    data = path.read_bytes()
+    text = data.decode("utf-8", errors="replace")
+    return E5LogEvidence(
+        kind=kind,
+        path=str(path.resolve()),
+        sha256=hashlib.sha256(data).hexdigest(),
+        summary=_log_summary(text, kind),
+    )
+
+
+def _collect_runtime_log_evidence(
+    before: Mapping[str, tuple[int, int]],
+) -> tuple[str, tuple[E5LogEvidence, ...]]:
+    """Manifest only logs created or modified by the current live call."""
+
+    changed: list[Path] = []
+    for path in _runtime_log_paths():
+        state = (path.stat().st_size, path.stat().st_mtime_ns)
+        if before.get(str(path)) != state:
+            changed.append(path)
+    evidence: list[E5LogEvidence] = []
+    seen: set[Path] = set()
+    native_crash = False
+    for path in changed:
+        kind = "process_watcher" if path.parent.name == "minerl_watchers" else "minecraft"
+        item = _make_log_evidence(path, kind)
+        evidence.append(item)
+        seen.add(path)
+        text = path.read_text(encoding="utf-8", errors="replace")
+        native_crash = native_crash or (
+            "A fatal error has been detected by the Java Runtime Environment" in text
+            and "SIGSEGV" in text
+            and "liblwjgl" in text
+        )
+        for match in re.findall(r"(/[^\s]+/hs_err_pid\d+\.log)", text):
+            crash_path = Path(match).resolve()
+            if crash_path.is_file() and crash_path not in seen:
+                crash_item = _make_log_evidence(crash_path, "jvm_crash")
+                evidence.append(crash_item)
+                seen.add(crash_path)
+                crash_text = crash_path.read_text(encoding="utf-8", errors="replace")
+                native_crash = native_crash or (
+                    "A fatal error has been detected by the Java Runtime Environment" in crash_text
+                    and "SIGSEGV" in crash_text
+                    and "liblwjgl" in crash_text
+                )
+    return (
+        "minecraft_native_crash" if native_crash else "unknown",
+        tuple(sorted(evidence, key=lambda value: (value.kind, value.path))),
+    )
 
 
 def reset_authorized_e5_process_guards_for_tests() -> None:
@@ -211,7 +346,9 @@ def _write_evidence(record: E5MineRLRunRecord, output_dir: Path) -> Path:
                 "gradle_authorized": False,
                 "integration_verified": False,
                 "model_api_authorized": False,
-                "tested_movement_action_count": 1,
+                # This is the frozen experiment plan. Authoritative execution
+                # count is lifecycle ``tested_action_count``.
+                "planned_tested_movement_action_count": 1,
             },
             indent=2,
             sort_keys=True,
@@ -230,6 +367,7 @@ def run_authorized_e5_minerl(*, execution_mode: str, authorized_live_run: str, o
         if _PROCESS_LIVE_RUN_STARTED:
             raise E5AuthorizationError("authorized E5 allows one real run per process")
         _PROCESS_LIVE_RUN_STARTED = True
+    log_snapshot = _snapshot_runtime_logs()
     backend_cls = _production_backend_cls()
     factory = MineRLE5MovementAdapter.lifecycle_factory(episode_id=episode_id, backend_cls=backend_cls, backend_kwargs={"max_reset_attempts": 1})
     holder: dict[str, MineRLE5MovementAdapter | None] = {"adapter": None}
@@ -256,6 +394,10 @@ def run_authorized_e5_minerl(*, execution_mode: str, authorized_live_run: str, o
     )
     adapter = holder["adapter"]
     cleanup = adapter.cleanup_status() if adapter is not None else E0CleanupStatus(lifecycle.closed, lifecycle.closed, lifecycle.closed, lifecycle.closed)
+    detected_cause, log_evidence = _collect_runtime_log_evidence(log_snapshot)
+    failure_cause = (
+        detected_cause if lifecycle.outcome == "reset_failed" else "unknown"
+    )
     record = E5MineRLRunRecord(
         execution_mode=EXECUTION_MODE_AUTHORIZED_LIVE_E5,
         authorized_live_run=AUTHORIZED_LIVE_E5_RUN_VALUE,
@@ -265,6 +407,8 @@ def run_authorized_e5_minerl(*, execution_mode: str, authorized_live_run: str, o
         real_execution_performed=backend_cls.__name__ == BACKEND_IDENTITY,
         lifecycle=lifecycle,
         cleanup=cleanup,
+        failure_cause=failure_cause,
+        log_evidence=log_evidence,
     )
     _write_evidence(record, _validate_output_dir(output_dir))
     return record

@@ -180,6 +180,8 @@ class MineRLEnvironmentBackend:
         self._env_factory = env_factory
         self._reset_warmup_steps = reset_warmup_steps
         self._max_reset_attempts = max_reset_attempts
+        self._reset_attempt_count = 0
+        self._environment_launch_count = 0
         self._owner_thread: int | None = None
         self._opened = False
         self._env: Any | None = None
@@ -299,6 +301,8 @@ class MineRLEnvironmentBackend:
         # runtime is never touched for a casting-c1 task it cannot
         # serve today. Non-casting workflows pass through untouched
         # so the legacy Route A0 baseline keeps working.
+        self._reset_attempt_count = 0
+        self._environment_launch_count = 0
         assert_backend_can_start_task(self, task)
         if task.agent_ids != ("agent_1",):
             raise ValueError("PortalA0 currently supports exactly agent_1")
@@ -338,10 +342,12 @@ class MineRLEnvironmentBackend:
         info: Mapping[str, Any] = {}
         last_error: Exception | None = None
         for attempt in range(1, self._max_reset_attempts + 1):
+            self._reset_attempt_count = attempt
             if self._env is not None:
                 self._env.close()
                 self._env = None
             try:
+                self._environment_launch_count += 1
                 self._env = self._env_factory(task)
                 if hasattr(self._env, "seed"):
                     self._env.seed(task.world_seed)
@@ -487,6 +493,20 @@ class MineRLEnvironmentBackend:
         if "pitch" in location:
             payload["pitch"] = location["pitch"]
         return payload
+
+    def get_reset_audit(self) -> Mapping[str, int]:
+        """Return narrow counters for the current backend reset invocation.
+
+        An environment launch is counted immediately before calling the env
+        factory. The surface contains no MineRL state and exists only so P1
+        failure evidence can distinguish an outer validation run from the
+        number of reset/environment-construction attempts inside it.
+        """
+
+        return {
+            "reset_attempt_count": self._reset_attempt_count,
+            "environment_launch_count": self._environment_launch_count,
+        }
 
     def get_player_position_truth(self) -> Mapping[str, Any] | None:
         """Return narrow evaluator-only FullStats player-position truth.

@@ -72,8 +72,8 @@ class MineRLE5MovementAdapter(MineRLE0LifecycleAdapter):
         reset = getattr(backend, "reset", None)
         if not callable(reset):
             raise RuntimeError("MineRL backend reset is not callable")
-        raw = reset(self._compatibility_task)
         self._tested_action_count = 0
+        raw = reset(self._compatibility_task)
         return public_initial_state(raw, episode_id=self.episode_id)
 
     def player_position_truth(self) -> PlayerPositionSnapshot | None:
@@ -91,6 +91,25 @@ class MineRLE5MovementAdapter(MineRLE0LifecycleAdapter):
             raise RuntimeError("MineRL backend orientation truth is not callable")
         value = getter()
         return None if value is None else movement_orientation_snapshot(value)
+
+    def reset_failure_audit(self) -> dict[str, int]:
+        """Project backend reset counters without exposing MineRL state."""
+
+        backend = self._ensure_backend()
+        getter = getattr(backend, "get_reset_audit", None)
+        if not callable(getter):
+            raise RuntimeError("MineRL backend reset audit is not callable")
+        value = getter()
+        required = {"reset_attempt_count", "environment_launch_count"}
+        if not isinstance(value, Mapping) or set(value) != required:
+            raise ValueError("backend reset audit fields are missing or unknown")
+        result: dict[str, int] = {}
+        for field_name in sorted(required):
+            field_value = value[field_name]
+            if type(field_value) is not int or field_value < 0:
+                raise ValueError(f"{field_name} must be a non-negative int")
+            result[field_name] = field_value
+        return result
 
     def execute_movement_action(self, action: MacroAction) -> MovementActionExecution:
         if not isinstance(action, MacroAction) or action.action_type != "move":
