@@ -7,6 +7,14 @@ from obsidianlink.env.validation.cases.inventory import E2_INVENTORY_CASE
 from obsidianlink.env.validation.cases.lifecycle import E0_LIFECYCLE_CASE
 from obsidianlink.env.validation.cases.rgb import E1_RGB_CASE
 from obsidianlink.env.validation.cases.selected_item import E3_SELECTED_ITEM_CASE
+from obsidianlink.env.validation.cases.camera import E4_CAMERA_CASE
+from obsidianlink.env.validation.camera import (
+    CameraActionExecution,
+    CameraInspection,
+    CameraOrientationSnapshot,
+    inspect_camera_change,
+    normalized_angular_delta,
+)
 from obsidianlink.env.validation.contract import (
     P1_VALIDATION_CASES,
     EnvironmentValidationCase,
@@ -40,11 +48,15 @@ __all__ = [
     "E1_RGB_CASE",
     "E2_INVENTORY_CASE",
     "E3_SELECTED_ITEM_CASE",
+    "E4_CAMERA_CASE",
     "EnvironmentValidationCase",
     "EnvironmentValidationId",
     "EnvironmentValidationRecorder",
     "EnvironmentValidationResult",
     "EnvironmentValidationRunner",
+    "CameraActionExecution",
+    "CameraInspection",
+    "CameraOrientationSnapshot",
     "P1_VALIDATION_CASES",
     "InventoryInspection",
     "PublicInventoryObservation",
@@ -58,5 +70,7 @@ __all__ = [
     "inspect_rgb_array",
     "inspect_public_selected_item",
     "inspect_selected_item",
+    "inspect_camera_change",
+    "normalized_angular_delta",
     "p1_validation_manifest",
 ]

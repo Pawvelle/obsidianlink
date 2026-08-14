@@ -10,7 +10,19 @@ The runner never uses benchmark evaluator success semantics.
 
 from __future__ import annotations
 
+import json
 from typing import Callable, Mapping, Protocol, runtime_checkable
+
+from obsidianlink.actions.protocol import parse_macro_action
+from obsidianlink.env.validation.camera import (
+    ORIENTATION_AFTER_MISSING,
+    ORIENTATION_BEFORE_MISSING,
+    ORIENTATION_INVALID,
+    CameraActionExecution,
+    CameraInspection,
+    CameraOrientationSnapshot,
+    inspect_camera_change,
+)
 
 from obsidianlink.env.validation.cases.lifecycle import initial_state_exists
 from obsidianlink.env.validation.contract import (
@@ -27,6 +39,7 @@ from obsidianlink.env.validation.result import (
     E1_SUCCESS_OUTCOME,
     E2_SUCCESS_OUTCOME,
     E3_SUCCESS_OUTCOME,
+    E4_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
     SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
@@ -85,6 +98,13 @@ def _result(
     selected_item: SelectedItemInspection | None = None,
     expected_selected_item: str | None = None,
     selected_item_matches_expected: bool | None = None,
+    before_orientation: CameraOrientationSnapshot | None = None,
+    after_orientation: CameraOrientationSnapshot | None = None,
+    camera_execution: CameraActionExecution | None = None,
+    camera: CameraInspection | None = None,
+    camera_agent_id: str | None = None,
+    camera_requested_yaw: float | None = None,
+    camera_requested_pitch: float | None = None,
 ) -> EnvironmentValidationResult:
     return EnvironmentValidationResult(
         check_id=case.check_id,
@@ -116,6 +136,28 @@ def _result(
         ),
         expected_selected_item=expected_selected_item,
         selected_item_matches_expected=selected_item_matches_expected,
+        agent_id=(
+            camera_agent_id
+            if camera_execution is None
+            else camera_execution.agent_id
+        ),
+        tested_step_id=None if camera_execution is None else camera_execution.step_id,
+        action_type=(
+            "look" if camera_requested_yaw is not None and camera_execution is None
+            else None if camera_execution is None else camera_execution.action_type
+        ),
+        requested_yaw=(camera_requested_yaw if camera_execution is None else camera_execution.requested_yaw),
+        requested_pitch=(camera_requested_pitch if camera_execution is None else camera_execution.requested_pitch),
+        translated_action_accepted=None if camera_execution is None else camera_execution.translated_action_accepted,
+        tested_action_count=(0 if camera_requested_yaw is not None and camera_execution is None else None if camera_execution is None else camera_execution.tested_action_count),
+        before_yaw=None if before_orientation is None else before_orientation.yaw,
+        before_pitch=None if before_orientation is None else before_orientation.pitch,
+        after_yaw=None if after_orientation is None else after_orientation.yaw,
+        after_pitch=None if after_orientation is None else after_orientation.pitch,
+        normalized_yaw_delta=None if camera is None else camera.normalized_yaw_delta,
+        pitch_delta=None if camera is None else camera.pitch_delta,
+        direction_match=None if camera is None else camera.direction_match,
+        magnitude_match=None if camera is None else camera.magnitude_match,
     )
 
 
@@ -139,6 +181,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E2_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E3:
         return E3_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E4:
+        return E4_SUCCESS_OUTCOME
     return None
 
 
@@ -153,6 +197,10 @@ class EnvironmentValidationRunner:
         episode_id: str,
         expected_inventory: Mapping[str, int] | None = None,
         expected_selected_item: str | None = None,
+        requested_yaw: float = 20.0,
+        requested_pitch: float = 0.0,
+        yaw_tolerance: float = 1.0,
+        pitch_tolerance: float = 1.0,
     ) -> EnvironmentValidationResult:
         if not isinstance(case, EnvironmentValidationCase):
             raise ValueError("case must be EnvironmentValidationCase")
@@ -238,6 +286,11 @@ class EnvironmentValidationRunner:
         inventory_matches_expected: bool | None = None
         selected_item: SelectedItemInspection | None = None
         selected_item_matches_expected: bool | None = None
+        before_orientation: CameraOrientationSnapshot | None = None
+        after_orientation: CameraOrientationSnapshot | None = None
+        camera_execution: CameraActionExecution | None = None
+        camera: CameraInspection | None = None
+        camera_agent_id: str | None = None
 
         try:
             backend = backend_factory()
@@ -305,6 +358,77 @@ class EnvironmentValidationRunner:
                                         "observed selected item does not exactly match "
                                         "expected_selected_item"
                                     )
+                        elif case.check_id is EnvironmentValidationId.E4:
+                            if isinstance(reset_result, Mapping) and reset_result:
+                                first_agent = next(iter(reset_result))
+                                if isinstance(first_agent, str) and first_agent.strip():
+                                    camera_agent_id = first_agent.strip()
+                            truth = getattr(backend, "camera_orientation_truth", None)
+                            execute = getattr(backend, "execute_camera_action", None)
+                            if not callable(truth) or not callable(execute):
+                                outcome = "runtime_error"
+                                error = "E4 backend camera truth/action surface is not callable"
+                            else:
+                                try:
+                                    candidate = truth()
+                                except (TypeError, ValueError) as exc:
+                                    outcome = ORIENTATION_INVALID
+                                    error = _format_error(exc)
+                                else:
+                                    if candidate is None:
+                                        outcome = ORIENTATION_BEFORE_MISSING
+                                        error = "orientation truth is missing before action"
+                                    elif not isinstance(candidate, CameraOrientationSnapshot):
+                                        outcome = ORIENTATION_INVALID
+                                        error = "before orientation has the wrong type"
+                                    else:
+                                        before_orientation = candidate
+                                if before_orientation is not None:
+                                    parsed = parse_macro_action(
+                                        json.dumps(
+                                            {
+                                                "action_type": "look",
+                                                "duration_ticks": 1,
+                                                "parameters": {
+                                                    "pitch": requested_pitch,
+                                                    "yaw": requested_yaw,
+                                                },
+                                            },
+                                            allow_nan=False,
+                                            sort_keys=True,
+                                        )
+                                    )
+                                    if not parsed.accepted:
+                                        outcome = "action_rejected"
+                                        error = "camera action protocol rejected: " + (parsed.error or "unknown error")
+                                    else:
+                                        candidate_execution = execute(parsed.action)
+                                        if not isinstance(candidate_execution, CameraActionExecution):
+                                            raise TypeError("execute_camera_action must return CameraActionExecution")
+                                        camera_execution = candidate_execution
+                                        try:
+                                            candidate_after = truth()
+                                        except (TypeError, ValueError) as exc:
+                                            outcome = ORIENTATION_INVALID
+                                            error = _format_error(exc)
+                                        else:
+                                            if candidate_after is None:
+                                                outcome = ORIENTATION_AFTER_MISSING
+                                                error = "orientation truth is missing after action"
+                                            elif not isinstance(candidate_after, CameraOrientationSnapshot):
+                                                outcome = ORIENTATION_INVALID
+                                                error = "after orientation has the wrong type"
+                                            else:
+                                                after_orientation = candidate_after
+                                                camera = inspect_camera_change(
+                                                    before_orientation,
+                                                    after_orientation,
+                                                    camera_execution,
+                                                    yaw_tolerance=yaw_tolerance,
+                                                    pitch_tolerance=pitch_tolerance,
+                                                )
+                                                outcome = camera.outcome
+                                                error = camera.error
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -328,6 +452,7 @@ class EnvironmentValidationRunner:
                 E1_SUCCESS_OUTCOME,
                 E2_SUCCESS_OUTCOME,
                 E3_SUCCESS_OUTCOME,
+                E4_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -346,6 +471,7 @@ class EnvironmentValidationRunner:
             E1_SUCCESS_OUTCOME,
             E2_SUCCESS_OUTCOME,
             E3_SUCCESS_OUTCOME,
+            E4_SUCCESS_OUTCOME,
         }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
@@ -387,4 +513,11 @@ class EnvironmentValidationRunner:
                 if case.check_id is EnvironmentValidationId.E3
                 else None
             ),
+            before_orientation=before_orientation if case.check_id is EnvironmentValidationId.E4 else None,
+            after_orientation=after_orientation if case.check_id is EnvironmentValidationId.E4 else None,
+            camera_execution=camera_execution if case.check_id is EnvironmentValidationId.E4 else None,
+            camera=camera if case.check_id is EnvironmentValidationId.E4 else None,
+            camera_agent_id=camera_agent_id if case.check_id is EnvironmentValidationId.E4 else None,
+            camera_requested_yaw=requested_yaw if case.check_id is EnvironmentValidationId.E4 else None,
+            camera_requested_pitch=requested_pitch if case.check_id is EnvironmentValidationId.E4 else None,
         )

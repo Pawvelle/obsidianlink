@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from obsidianlink.env.validation.contract import EnvironmentValidationId
+from obsidianlink.env.validation.camera import CAMERA_OK, CAMERA_OUTCOMES, finite_angle
 from obsidianlink.env.validation.inventory import (
     INVENTORY_OK,
     INVENTORY_OUTCOMES,
@@ -45,11 +46,12 @@ VALIDATION_OUTCOMES = frozenset(
     }
 ) | INVENTORY_OUTCOMES | SELECTED_ITEM_OUTCOMES | frozenset(
     {INVENTORY_MISMATCH, SELECTED_ITEM_MISMATCH}
-)
+) | CAMERA_OUTCOMES | frozenset({"cleanup_failed"})
 E0_SUCCESS_OUTCOME = "lifecycle_ok"
 E1_SUCCESS_OUTCOME = "rgb_ok"
 E2_SUCCESS_OUTCOME = INVENTORY_OK
 E3_SUCCESS_OUTCOME = SELECTED_ITEM_OK
+E4_SUCCESS_OUTCOME = CAMERA_OK
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -121,6 +123,21 @@ class EnvironmentValidationResult:
     observed_selected_item: str | None = None
     expected_selected_item: str | None = None
     selected_item_matches_expected: bool | None = None
+    agent_id: str | None = None
+    tested_step_id: int | None = None
+    action_type: str | None = None
+    requested_yaw: float | None = None
+    requested_pitch: float | None = None
+    translated_action_accepted: bool | None = None
+    tested_action_count: int | None = None
+    before_yaw: float | None = None
+    before_pitch: float | None = None
+    after_yaw: float | None = None
+    after_pitch: float | None = None
+    normalized_yaw_delta: float | None = None
+    pitch_delta: float | None = None
+    direction_match: bool | None = None
+    magnitude_match: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.check_id, EnvironmentValidationId):
@@ -180,6 +197,29 @@ class EnvironmentValidationResult:
                 self.selected_item_matches_expected,
                 "selected_item_matches_expected",
             )
+        for field_name in (
+            "translated_action_accepted",
+            "direction_match",
+            "magnitude_match",
+        ):
+            value = getattr(self, field_name)
+            if value is not None:
+                _require_bool(value, field_name)
+        if self.agent_id is not None:
+            object.__setattr__(self, "agent_id", _require_identifier(self.agent_id, "agent_id"))
+        if self.action_type is not None:
+            object.__setattr__(self, "action_type", _require_identifier(self.action_type, "action_type"))
+        for field_name in ("tested_step_id", "tested_action_count"):
+            value = getattr(self, field_name)
+            if value is not None and (type(value) is not int or value < 0):
+                raise ValueError(f"{field_name} must be a non-negative int or None")
+        for field_name in (
+            "requested_yaw", "requested_pitch", "before_yaw", "before_pitch",
+            "after_yaw", "after_pitch", "normalized_yaw_delta", "pitch_delta",
+        ):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(self, field_name, finite_angle(value, field_name))
         if self.observed_selected_item is not None:
             object.__setattr__(
                 self,
@@ -228,6 +268,18 @@ class EnvironmentValidationResult:
             )
         ):
             raise ValueError("selected-item metadata is only valid for E3 results")
+        camera_fields = (
+            self.agent_id, self.tested_step_id, self.action_type,
+            self.requested_yaw, self.requested_pitch,
+            self.translated_action_accepted, self.tested_action_count,
+            self.before_yaw, self.before_pitch, self.after_yaw, self.after_pitch,
+            self.normalized_yaw_delta, self.pitch_delta,
+            self.direction_match, self.magnitude_match,
+        )
+        if self.check_id is not EnvironmentValidationId.E4 and any(
+            value is not None for value in camera_fields
+        ):
+            raise ValueError("camera metadata is only valid for E4 results")
         if (
             self.check_id is EnvironmentValidationId.E2
             and self.observed_inventory is not None
@@ -268,6 +320,9 @@ class EnvironmentValidationResult:
         elif self.check_id is EnvironmentValidationId.E3:
             success_outcome = E3_SUCCESS_OUTCOME
             success_error = "success requires a clean matching E3 selected item"
+        elif self.check_id is EnvironmentValidationId.E4:
+            success_outcome = E4_SUCCESS_OUTCOME
+            success_error = "success requires a clean independently observed E4 camera change"
         else:
             success_outcome = None
             success_error = "success is not defined for this validation case"
@@ -309,11 +364,29 @@ class EnvironmentValidationResult:
                     raise ValueError(
                         "E3 success requires exact observed/expected selected-item equality"
                     )
+            elif self.check_id is EnvironmentValidationId.E4:
+                if not (
+                    self.agent_id is not None
+                    and self.tested_step_id == 1
+                    and self.action_type == "look"
+                    and self.translated_action_accepted is True
+                    and self.tested_action_count == 1
+                    and self.before_yaw is not None
+                    and self.before_pitch is not None
+                    and self.after_yaw is not None
+                    and self.after_pitch is not None
+                    and self.normalized_yaw_delta is not None
+                    and self.pitch_delta is not None
+                    and self.direction_match is True
+                    and self.magnitude_match is True
+                ):
+                    raise ValueError("E4 success requires one accepted look and complete orientation evidence")
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,
             E1_SUCCESS_OUTCOME,
             E2_SUCCESS_OUTCOME,
             E3_SUCCESS_OUTCOME,
+            E4_SUCCESS_OUTCOME,
         }:
             raise ValueError(f"{self.outcome} requires success=True")
         if self.outcome == INVENTORY_MISMATCH:
@@ -398,6 +471,26 @@ class EnvironmentValidationResult:
                         self.selected_item_matches_expected
                     ),
                     "selected_item_present": self.selected_item_present,
+                }
+            )
+        elif self.check_id is EnvironmentValidationId.E4:
+            payload.update(
+                {
+                    "action_type": self.action_type,
+                    "after_pitch": self.after_pitch,
+                    "after_yaw": self.after_yaw,
+                    "agent_id": self.agent_id,
+                    "before_pitch": self.before_pitch,
+                    "before_yaw": self.before_yaw,
+                    "direction_match": self.direction_match,
+                    "magnitude_match": self.magnitude_match,
+                    "normalized_yaw_delta": self.normalized_yaw_delta,
+                    "pitch_delta": self.pitch_delta,
+                    "requested_pitch": self.requested_pitch,
+                    "requested_yaw": self.requested_yaw,
+                    "tested_action_count": self.tested_action_count,
+                    "tested_step_id": self.tested_step_id,
+                    "translated_action_accepted": self.translated_action_accepted,
                 }
             )
         return payload

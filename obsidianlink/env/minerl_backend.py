@@ -186,6 +186,10 @@ class MineRLEnvironmentBackend:
         self._task: TaskInstance | None = None
         self._step_id = 0
         self._latest_raw: dict[str, Any] | None = None
+        # Raw MineRL step info is retained only for narrow evaluator-only
+        # calibration surfaces such as P1 E4. It is never copied into an
+        # Agent-visible Observation or BackendStep.info.
+        self._latest_environment_info: Mapping[str, Any] | None = None
         self._baseline_grid: np.ndarray | None = None
         self._latched: dict[str, Any] = self._fresh_latched_state()
         # Used by tests / replay scripts to mark termination without
@@ -331,6 +335,7 @@ class MineRLEnvironmentBackend:
             )
         self._task = task
         raw: Mapping[str, Any] | None = None
+        info: Mapping[str, Any] = {}
         last_error: Exception | None = None
         for attempt in range(1, self._max_reset_attempts + 1):
             if self._env is not None:
@@ -342,8 +347,11 @@ class MineRLEnvironmentBackend:
                     self._env.seed(task.world_seed)
                 raw = self._env.reset()
                 for _ in range(self._reset_warmup_steps):
-                    raw, _, done, info = self._env.step(self.action_space.no_op())
-                    if isinstance(info, Mapping) and "error" in info:
+                    raw, _, done, raw_info = self._env.step(self.action_space.no_op())
+                    if raw_info is not None and not isinstance(raw_info, Mapping):
+                        raise TypeError("MineRL reset warm-up info must be a mapping")
+                    info = raw_info or {}
+                    if "error" in info:
                         raise RuntimeError(
                             f"MineRL reset warm-up failed: {info['error']}"
                         )
@@ -366,6 +374,7 @@ class MineRLEnvironmentBackend:
             "task_reset"
         ] = time.time()
         self._latest_raw = self._validate_raw_observation(raw)
+        self._latest_environment_info = dict(info)
         self._baseline_grid = self._grid_from_raw(self._latest_raw).copy()
         self._latched["grid_world_anchor"] = self._grid_world_anchor(
             self._latest_raw
@@ -423,6 +432,7 @@ class MineRLEnvironmentBackend:
             raise RuntimeError("MineRL action produced no observation")
         self._step_id += 1
         self._latest_raw = self._validate_raw_observation(raw)
+        self._latest_environment_info = dict(info)
         if accepted_obsidian_placement:
             self._latched["pending_place_block_obsidian"] += 1
         if accepted_cast_kind is not None:
@@ -450,6 +460,33 @@ class MineRLEnvironmentBackend:
             truncated=False,
             info=public_info,
         )
+
+    def get_camera_orientation_truth(self) -> Mapping[str, Any] | None:
+        """Return narrow evaluator-only FullStats orientation truth.
+
+        Values are read only from the latest MineRL environment ``info`` at
+        ``location_stats.yaw/pitch``. They are intentionally not inferred
+        from camera action intent and do not enter public observations.
+        Structural and numeric validation belongs to the P1 E4 contract.
+        """
+
+        task = self._require_task()
+        info = self._latest_environment_info
+        if not isinstance(info, Mapping):
+            return None
+        location = info.get("location_stats")
+        if not isinstance(location, Mapping):
+            return None
+        payload: dict[str, Any] = {
+            "episode_id": task.task_id,
+            "agent_id": "agent_1",
+            "step_id": self._step_id,
+        }
+        if "yaw" in location:
+            payload["yaw"] = location["yaw"]
+        if "pitch" in location:
+            payload["pitch"] = location["pitch"]
+        return payload
 
     def mark_terminated(
         self,
@@ -961,6 +998,7 @@ class MineRLEnvironmentBackend:
             self._env = None
             self._task = None
             self._latest_raw = None
+            self._latest_environment_info = None
             self._baseline_grid = None
             self._latched = self._fresh_latched_state()
             self._step_id = 0
