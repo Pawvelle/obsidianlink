@@ -54,9 +54,9 @@ Benchmark kernel 不依赖某个 solver。模型或 baseline 的输出必须经�
 
 v2 scope、架构边界和 legacy quarantine 已冻结。旧 C1/C2、taxonomy C3/C4/C5、Route A0 及其 deterministic drivers 保留为 `unit_verified` legacy/calibration/regression 资产；它们不再是 active benchmark matrix，也不能支持真实 Minecraft 能力声明。
 
-唯一 active engineering task 是 `P1-REAL-MINERL-ENVIRONMENT-VALIDATION`。E0–E5 offline runtime 为 `unit_verified`，并各有已审查的真实成功证据（E5 第二次为首次 reviewed movement success）。E6 contract / offline runtime / MineRL adapter 为 `unit_verified`，并有一次已审查的真实 `placement_ok`（`p1-e6-live-001`）。E7 contract / offline runtime / MineRL adapter 为 `unit_verified`；water 与 lava calibration 已 offline verified，尚未真实运行。E0–E7 都不是 `integration_verified`（无自动 promotion，P1 Hard Gate 未通过，`process_release_proven=false`）。E8–E12 尚未开始。没有运行 Gradle，没有调用付费模型 API。P1 Hard Gate 未通过，P2 不得开始。E10 原版水熔岩生成黑曜石、E11 portal activation、E12 dimension transition 均未获得 `integration_verified`。
+唯一 active engineering task 是 `P1-REAL-MINERL-ENVIRONMENT-VALIDATION`。E0–E5 offline runtime 为 `unit_verified`，并各有已审查的真实成功证据（E5 第二次为首次 reviewed movement success）。E6 contract / offline runtime / MineRL adapter 为 `unit_verified`，并有一次已审查的真实 `placement_ok`（`p1-e6-live-001`）。E7 contract / offline runtime / MineRL adapter 为 `unit_verified`；WATER 有一次已审查的真实 `bucket_ok`（`p1-e7-water-live-001`）；LAVA 尚未真实运行。E0–E7 都不是 `integration_verified`（无自动 promotion，P1 Hard Gate 未通过，`process_release_proven=false`）。E8–E12 尚未开始。没有运行 Gradle，没有调用付费模型 API。P1 Hard Gate 未通过，P2 不得开始。E10 原版水熔岩生成黑曜石、E11 portal activation、E12 dimension transition 均未获得 `integration_verified`。
 
-下一步不是自动开始 E8，也不是自动执行真实 E7。需要明确授权一次、且仅一次 E7 real MineRL/Minecraft bucket calibration（WATER 或 LAVA 二选一）。每次真实 MineRL 运行仍需单独授权。P1 的 hard gate 是稳定重复成功、`truth_missing=0`、无人工干预；建议至少 20 个 fresh episodes，最终次数在实验冻结阶段确定。
+下一步不是自动开始 E8，也不是重跑 WATER。需要明确授权一次、且仅一次 E7 LAVA real MineRL/Minecraft bucket calibration。每次真实 MineRL 运行仍需单独授权。P1 的 hard gate 是稳定重复成功、`truth_missing=0`、无人工干预；建议至少 20 个 fresh episodes，最终次数在实验冻结阶段确定。
 
 详见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[BENCHMARK_SPEC.md](BENCHMARK_SPEC.md)、[ROADMAP.md](ROADMAP.md) 和 [P1 Environment Validation](docs/architecture/P1_ENVIRONMENT_VALIDATION.md)。
 
