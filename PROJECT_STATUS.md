@@ -64,7 +64,8 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E8 MineRL adapter / live bridge: implemented / offline tested
 - E8 truth parser hardened to reject coordinate coercion and inconsistent truth_missing_count.
 - E8 calibration: 3-cell region world `(0, 4, 1)` / `(1, 4, 1)` / `(-1, 4, 1)` = atSpawn grid `(0, 0, 1)` / `(1, 0, 1)` / `(-1, 0, 1)`; before all `air`; one E6-style `place_block(dirt)` stimulus; after target `dirt`, controls `air`; success is `block_truth_ok`, not placement success
-- E8 real execution: NOT RUN
+- E8 real attempt #1: `p1-e8-live-001` / `runs/p1_e8_block_truth/e8-live-20260815-001`; `real_execution_performed=true`; `reset_completed=false`; `tested_action_count=0`; `outcome=reset_failed`; `failure_stage=reset`; `failure_cause=minecraft_native_crash`; JVM SIGSEGV liblwjgl Sound engine / Malmo EOF; no before/after snapshot; infrastructure failure, not block-truth failure; close returned; `process_release_proven=false`
+- E8 reviewed real success: NO
 - E8 `integration_verified`: NO
 - E9–E12: NOT STARTED
 - P1 Hard Gate: NOT PASSED
@@ -84,7 +85,7 @@ None of E0–E8 is `integration_verified`; `process_release_proven=false`. E0–
 - E0–E5 各有一次审查过的真实 success evidence，但稳定重复性与 OS-level process release 未证明，`integration_verified`: NO；
 - E6: `unit_verified`; one reviewed real success (`p1-e6-live-001`, `placement_ok`); `integration_verified`: NO；
 - E7: `unit_verified`; water/lava calibrations offline verified; adapter/live bridge implemented / offline tested; one reviewed WATER real success (`p1-e7-water-live-001`, `bucket_ok`); one reviewed LAVA real success (`p1-e7-lava-live-001`, `bucket_ok`); real calibration coverage WATER + LAVA complete; `integration_verified`: NO；
-- E8: `unit_verified`; ServerTruthSnapshot block portion implemented / offline verified; generalized target-region block truth offline verified; adapter/live bridge implemented / offline tested; real execution NOT RUN; `integration_verified`: NO；
+- E8: `unit_verified`; one live attempt `p1-e8-live-001` `reset_failed` (JVM SIGSEGV / Malmo EOF, not block-truth failure); reviewed real success: NO; `integration_verified`: NO；
 - E9–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
@@ -95,4 +96,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E8 contract, ServerTruthSnapshot block portion, generalized target-region block truth, and MineRL adapter/live bridge are `unit_verified` / offline verified. E8 real execution: NOT RUN. E8 `integration_verified`: NO. E0–E7 reviewed real success history is preserved. E9–E12: NOT STARTED. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. Request explicit authorization for exactly ONE real E8 MineRL/Minecraft server-side block-truth calibration run. Do not start E9. Do not rerun E6 or E7.
+Review the E8 live failure (`p1-e8-live-001`, `reset_failed` / `minecraft_native_crash`). Do not automatically rerun E8. Do not start E9. Do not rerun E6 or E7. E8 reviewed real success: NO. E8 `integration_verified`: NO. E0–E7 reviewed real success history is preserved. E9–E12: NOT STARTED. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. A new live E8 authorization is required before any second Minecraft run.
