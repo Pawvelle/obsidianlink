@@ -75,9 +75,10 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E9 WATER live attempt #1: episode `p1-e9-water-live-001` / `runs/p1_e9_fluid_truth/water/e9-water-live-20260815-001`; `real_execution_performed=true`; `reset_failed` / `minecraft_native_crash`; `tested_action_count=0`; no before/after fluid snapshots; SAME_FINGERPRINT as E5 #1 and E8 #1 (`liblwjgl_stb` Sound engine STBVorbis); not a fluid-truth capability failure
 - E9 WATER live attempt #2: episode `p1-e9-water-live-002` / `runs/p1_e9_fluid_truth/water/e9-water-live-20260816-002`; `real_execution_performed=true`; `success=true`; `outcome=fluid_truth_ok`; before target world `(0, 4, 1)` / atSpawn grid `(0, 0, 1)` `observed_block=air` `fluid_type=none` `flow_state=none`; one `use_item(water_bucket)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after `observed_block=water` `fluid_type=water` `flow_state=source` (distinct from `flowing_water`); controls world `(0, 5, 1)` / `(0, 5, 0)` remain `air`; `control_cells_unchanged=true`; `source_flowing_match=true`; `truth_missing_count=0`; dimension `minecraft:overworld`; position `(0.5, 4.0, 0.5)`; `anchor_source=expected_spawn_fallback`; close returned; `process_release_proven=false`
 - E9 WATER reviewed real success: YES
-- E9 LAVA real execution: NOT RUN
-- E9 reviewed real success: NO
-- E9 overall coverage: incomplete until LAVA is independently validated
+- E9 LAVA live attempt #1: episode `p1-e9-lava-live-001` / `runs/p1_e9_fluid_truth/lava/e9-lava-live-20260816-001`; `real_execution_performed=true`; `success=true`; `outcome=fluid_truth_ok`; before target world `(0, 4, 1)` / atSpawn grid `(0, 0, 1)` `observed_block=air` `fluid_type=none` `flow_state=none`; one `use_item(lava_bucket)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after `observed_block=lava` `fluid_type=lava` `flow_state=source` (distinct from `flowing_lava`); controls world `(0, 5, 1)` / `(0, 5, 0)` remain `air`; `control_cells_unchanged=true`; `source_flowing_match=true`; `truth_missing_count=0`; dimension `minecraft:overworld`; position `(0.5, 4.0, 0.5)`; `anchor_source=expected_spawn_fallback`; close returned; `process_release_proven=false`
+- E9 LAVA reviewed real success: YES
+- E9 real calibration coverage: WATER + LAVA complete
+- E9 reviewed real success: YES
 - E9 `integration_verified`: NO
 - E10–E12: NOT STARTED
 - P1 Hard Gate: NOT PASSED
@@ -98,7 +99,7 @@ None of E0–E9 is `integration_verified`; `process_release_proven=false`. E0–
 - E6: `unit_verified`; one reviewed real success (`p1-e6-live-001`, `placement_ok`); `integration_verified`: NO；
 - E7: `unit_verified`; water/lava calibrations offline verified; adapter/live bridge implemented / offline tested; one reviewed WATER real success (`p1-e7-water-live-001`, `bucket_ok`); one reviewed LAVA real success (`p1-e7-lava-live-001`, `bucket_ok`); real calibration coverage WATER + LAVA complete; `integration_verified`: NO；
 - E8: `unit_verified`; #1 `p1-e8-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1; #2 `p1-e8-live-002` `block_truth_ok`; reviewed real success: YES; `integration_verified`: NO；
-- E9: `unit_verified`; WATER #1 `p1-e9-water-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1 / E8 #1; WATER #2 `p1-e9-water-live-002` `fluid_truth_ok`; WATER reviewed real success: YES; LAVA NOT RUN; E9 overall coverage incomplete; `integration_verified`: NO；
+- E9: `unit_verified`; WATER #1 `p1-e9-water-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1 / E8 #1; WATER #2 `p1-e9-water-live-002` `fluid_truth_ok`; LAVA #1 `p1-e9-lava-live-001` `fluid_truth_ok`; real calibration coverage WATER + LAVA complete; reviewed real success: YES; `integration_verified`: NO；
 - E10–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
@@ -109,4 +110,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E9 WATER attempt #2 (`p1-e9-water-live-002`) is reviewed `fluid_truth_ok`. E9 WATER reviewed real success: YES. E9 LAVA: NOT RUN. E9 overall coverage is incomplete until LAVA is independently validated. E9 `integration_verified`: NO. Do not rerun WATER automatically. Do not start E10. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. Next step: request explicit authorization for one independent E9 LAVA real MineRL run.
+E9 WATER + LAVA reviewed real successes are complete (`p1-e9-water-live-002` / `p1-e9-lava-live-001`, both `fluid_truth_ok`). E9 reviewed real success: YES. E9 `integration_verified`: NO. Do not rerun E9 automatically. Do not start E10. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. Next step: request explicit authorization for one independent E10 vanilla water-lava → obsidian real MineRL calibration.
