@@ -332,7 +332,19 @@ class MineRLEnvironmentBackend:
         # to slots 1-3.  Preserve that compatibility contract while deriving
         # the casting workflows' slots from their frozen initial inventory.
         if is_legacy_route_a0:
-            self._hotbar_mapping = dict(PORTAL_A0_HOTBAR)
+            params = task.scenario_parameters
+            # E6 dirt-only calibration must map the actual inventory onto
+            # hotbar.1. The historical A0 three-item slot contract stays
+            # unchanged for every other route_a_a0 caller.
+            if (
+                isinstance(params, Mapping)
+                and params.get("p1_validation_id") == "E6"
+            ):
+                self._hotbar_mapping = build_hotbar_mapping(
+                    task.initial_inventories["agent_1"]
+                )
+            else:
+                self._hotbar_mapping = dict(PORTAL_A0_HOTBAR)
         else:
             self._hotbar_mapping = build_hotbar_mapping(
                 task.initial_inventories["agent_1"]
@@ -533,6 +545,49 @@ class MineRLEnvironmentBackend:
             if source in location:
                 payload[target] = location[source]
         return payload
+
+    def get_block_placement_truth(
+        self, cell: tuple[int, int, int]
+    ) -> Mapping[str, Any] | None:
+        """Return narrow evaluator-only single-cell block truth for P1 E6.
+
+        The observed block is read only from the latest ``portal_grid``. It
+        is never inferred from the requested ``place_block`` target, spawn
+        configuration, RGB, or public observations. This is not the future
+        E8 generalized server-truth API.
+        """
+
+        task = self._require_task()
+        raw = self._latest_raw
+        if raw is None:
+            return None
+        if (
+            not isinstance(cell, tuple)
+            or len(cell) != 3
+            or any(type(value) is not int for value in cell)
+        ):
+            raise ValueError("placement truth cell must be an int (x, y, z) tuple")
+        try:
+            grid = self._grid_from_raw(raw)
+        except (TypeError, ValueError):
+            return None
+        index = self._cell_index_in_grid(cell)
+        if index is None:
+            raise ValueError("placement truth cell is outside the evaluator grid")
+        block_id = int(grid[index])
+        if 0 <= block_id < len(PORTAL_GRID_BLOCKS):
+            block = PORTAL_GRID_BLOCKS[block_id]
+        else:
+            block = "missing"
+        return {
+            "episode_id": task.task_id,
+            "agent_id": "agent_1",
+            "step_id": self._step_id,
+            "x": cell[0],
+            "y": cell[1],
+            "z": cell[2],
+            "block": block,
+        }
 
     def mark_terminated(
         self,

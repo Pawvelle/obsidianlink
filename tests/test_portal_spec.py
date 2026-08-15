@@ -62,6 +62,13 @@ class PortalA0EnvSpecTests(unittest.TestCase):
             '<Placement x="0.5" y="4.0" z="0.5" yaw="0.0" pitch="0.0"/>',
             xml,
         )
+
+    def test_optional_start_orientation_is_emitted(self) -> None:
+        xml = PortalA0EnvSpec(initial_yaw=0.0, initial_pitch=60.0).to_xml()
+        self.assertIn(
+            '<Placement x="0.5" y="4.0" z="0.5" yaw="0.0" pitch="60.0"/>',
+            xml,
+        )
         self.assertIn("<AllowSpawning>false</AllowSpawning>", xml)
         self.assertIn("<Weather>clear</Weather>", xml)
         self.assertNotIn("DrawingDecorator", xml)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -334,6 +335,8 @@ class PortalA0EnvSpec(HumanSurvival):
         initial_position: tuple[int, int, int] = (0, 4, 0),
         include_agent_start_placement: bool = True,
         grid_at_spawn: bool = True,
+        initial_yaw: float = 0.0,
+        initial_pitch: float = 0.0,
     ) -> None:
         if type(max_episode_steps) is not int or max_episode_steps < 1:
             raise ValueError("max_episode_steps must be a positive integer")
@@ -367,6 +370,14 @@ class PortalA0EnvSpec(HumanSurvival):
         if type(grid_at_spawn) is not bool:
             raise ValueError("grid_at_spawn must be a boolean")
         self.grid_at_spawn = grid_at_spawn
+        if type(initial_yaw) not in (int, float) or not math.isfinite(initial_yaw):
+            raise ValueError("initial_yaw must be a finite int or float")
+        if type(initial_pitch) not in (int, float) or not math.isfinite(initial_pitch):
+            raise ValueError("initial_pitch must be a finite int or float")
+        if float(initial_pitch) < -90.0 or float(initial_pitch) > 90.0:
+            raise ValueError("initial_pitch must be in [-90, 90]")
+        self.initial_yaw = float(initial_yaw)
+        self.initial_pitch = float(initial_pitch)
         super().__init__(
             name=PORTAL_ENV_NAME,
             max_episode_steps=max_episode_steps,
@@ -401,8 +412,8 @@ class PortalA0EnvSpec(HumanSurvival):
                 x=x + 0.5,
                 y=float(y),
                 z=z + 0.5,
-                yaw=0.0,
-                pitch=0.0,
+                yaw=self.initial_yaw,
+                pitch=self.initial_pitch,
             ))
         return result
 

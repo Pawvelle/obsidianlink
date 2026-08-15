@@ -2,8 +2,9 @@
 
 Executes one validation case in a controlled lifecycle. This phase
 implements E0 lifecycle, E1 RGB, E2 inventory, E3 selected item, E4 camera,
-and E5 movement. E4/E5 consume only narrow evaluator truth from their
-integration adapters; the validation core remains MineRL-independent.
+E5 movement, and E6 block placement. E4/E5/E6 consume only narrow evaluator
+truth from their integration adapters; the validation core remains
+MineRL-independent.
 The runner never uses benchmark evaluator success semantics.
 """
 
@@ -46,6 +47,17 @@ from obsidianlink.env.validation.movement import (
     PlayerPositionSnapshot,
     inspect_movement,
 )
+from obsidianlink.env.validation.placement import (
+    BLOCK_AFTER_MISSING,
+    BLOCK_BEFORE_MISSING,
+    BLOCK_TRUTH_INVALID,
+    BlockPlacementTruthSnapshot,
+    PlacementActionExecution,
+    PlacementInspection,
+    inspect_block_placement,
+    validate_block_name,
+    validate_target_cell,
+)
 from obsidianlink.env.validation.result import (
     E0_SUCCESS_OUTCOME,
     E1_SUCCESS_OUTCOME,
@@ -53,6 +65,7 @@ from obsidianlink.env.validation.result import (
     E3_SUCCESS_OUTCOME,
     E4_SUCCESS_OUTCOME,
     E5_SUCCESS_OUTCOME,
+    E6_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
     SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
@@ -67,7 +80,7 @@ from obsidianlink.env.validation.selected_item import (
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest common backend surface required by E0--E5.
+    """Smallest common backend surface required by E0--E6.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -149,6 +162,14 @@ def _result(
     maximum_lateral_drift: float | None = None,
     maximum_horizontal_distance: float | None = None,
     maximum_vertical_drift: float | None = None,
+    before_block_truth: BlockPlacementTruthSnapshot | None = None,
+    after_block_truth: BlockPlacementTruthSnapshot | None = None,
+    placement_execution: PlacementActionExecution | None = None,
+    placement: PlacementInspection | None = None,
+    placement_agent_id: str | None = None,
+    calibration_block: str | None = None,
+    expected_before_block: str | None = None,
+    target_cell: tuple[int, int, int] | None = None,
     failure_stage: str | None = None,
     original_exception_type: str | None = None,
     reset_attempt_count: int | None = None,
@@ -190,18 +211,42 @@ def _result(
         ),
         expected_selected_item=expected_selected_item,
         selected_item_matches_expected=selected_item_matches_expected,
-        agent_id=(movement_execution.agent_id if movement_execution is not None else movement_agent_id if movement_agent_id is not None else camera_execution.agent_id if camera_execution is not None else camera_agent_id),
-        tested_step_id=(movement_execution.step_id if movement_execution is not None else None if camera_execution is None else camera_execution.step_id),
+        agent_id=(
+            placement_execution.agent_id if placement_execution is not None
+            else placement_agent_id if placement_agent_id is not None
+            else movement_execution.agent_id if movement_execution is not None
+            else movement_agent_id if movement_agent_id is not None
+            else camera_execution.agent_id if camera_execution is not None
+            else camera_agent_id
+        ),
+        tested_step_id=(
+            placement_execution.step_id if placement_execution is not None
+            else movement_execution.step_id if movement_execution is not None
+            else None if camera_execution is None else camera_execution.step_id
+        ),
         action_type=(
-            movement_execution.action_type if movement_execution is not None
+            placement_execution.action_type if placement_execution is not None
+            else "place_block" if calibration_block is not None
+            else movement_execution.action_type if movement_execution is not None
             else "move" if requested_forward is not None
             else "look" if camera_requested_yaw is not None and camera_execution is None
             else None if camera_execution is None else camera_execution.action_type
         ),
         requested_yaw=(camera_requested_yaw if camera_execution is None else camera_execution.requested_yaw),
         requested_pitch=(camera_requested_pitch if camera_execution is None else camera_execution.requested_pitch),
-        translated_action_accepted=(movement_execution.translated_action_accepted if movement_execution is not None else None if camera_execution is None else camera_execution.translated_action_accepted),
-        tested_action_count=(movement_execution.tested_action_count if movement_execution is not None else 0 if requested_forward is not None else 0 if camera_requested_yaw is not None and camera_execution is None else None if camera_execution is None else camera_execution.tested_action_count),
+        translated_action_accepted=(
+            placement_execution.translated_action_accepted if placement_execution is not None
+            else movement_execution.translated_action_accepted if movement_execution is not None
+            else None if camera_execution is None else camera_execution.translated_action_accepted
+        ),
+        tested_action_count=(
+            placement_execution.tested_action_count if placement_execution is not None
+            else 0 if calibration_block is not None
+            else movement_execution.tested_action_count if movement_execution is not None
+            else 0 if requested_forward is not None
+            else 0 if camera_requested_yaw is not None and camera_execution is None
+            else None if camera_execution is None else camera_execution.tested_action_count
+        ),
         before_yaw=None if before_orientation is None else before_orientation.yaw,
         before_pitch=None if before_orientation is None else before_orientation.pitch,
         after_yaw=None if after_orientation is None else after_orientation.yaw,
@@ -214,7 +259,11 @@ def _result(
         requested_strafe=(requested_strafe if movement_execution is None else movement_execution.strafe),
         requested_sprint=(requested_sprint if movement_execution is None else movement_execution.sprint),
         requested_jump=(requested_jump if movement_execution is None else movement_execution.jump),
-        requested_duration_ticks=(requested_duration_ticks if movement_execution is None else movement_execution.duration_ticks),
+        requested_duration_ticks=(
+            placement_execution.duration_ticks if placement_execution is not None
+            else requested_duration_ticks if movement_execution is None
+            else movement_execution.duration_ticks
+        ),
         before_x=None if before_position is None else before_position.x,
         before_y=None if before_position is None else before_position.y,
         before_z=None if before_position is None else before_position.z,
@@ -239,6 +288,18 @@ def _result(
         lateral_drift_ok=None if movement is None else movement.lateral_drift_ok,
         teleport_guard_ok=None if movement is None else movement.teleport_guard_ok,
         vertical_drift_ok=None if movement is None else movement.vertical_drift_ok,
+        requested_target=(
+            placement_execution.target if placement_execution is not None else calibration_block
+        ),
+        calibration_block=calibration_block,
+        expected_before_block=expected_before_block,
+        target_x=None if target_cell is None else target_cell[0],
+        target_y=None if target_cell is None else target_cell[1],
+        target_z=None if target_cell is None else target_cell[2],
+        before_block=None if before_block_truth is None else before_block_truth.block,
+        after_block=None if after_block_truth is None else after_block_truth.block,
+        world_changed=None if placement is None else placement.world_changed,
+        intended_block_present=None if placement is None else placement.intended_block_present,
     )
 
 
@@ -266,6 +327,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E4_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E5:
         return E5_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E6:
+        return E6_SUCCESS_OUTCOME
     return None
 
 
@@ -294,6 +357,9 @@ class EnvironmentValidationRunner:
         maximum_lateral_drift: float = 0.02,
         maximum_horizontal_distance: float = 0.5,
         maximum_vertical_drift: float = 0.25,
+        calibration_block: str = "dirt",
+        expected_before_block: str = "air",
+        target_cell: tuple[int, int, int] = (0, 4, 1),
     ) -> EnvironmentValidationResult:
         if not isinstance(case, EnvironmentValidationCase):
             raise ValueError("case must be EnvironmentValidationCase")
@@ -366,6 +432,33 @@ class EnvironmentValidationRunner:
                     error="invalid expected_selected_item: " + _format_error(exc),
                 )
 
+        placement_calibration_block: str | None = None
+        placement_expected_before: str | None = None
+        placement_target_cell: tuple[int, int, int] | None = None
+        if case.check_id is EnvironmentValidationId.E6:
+            try:
+                placement_calibration_block = validate_block_name(
+                    calibration_block, "calibration_block"
+                )
+                placement_expected_before = validate_block_name(
+                    expected_before_block, "expected_before_block"
+                )
+                placement_target_cell = validate_target_cell(target_cell)
+                if type(requested_duration_ticks) is not int or requested_duration_ticks < 1:
+                    raise ValueError("requested_duration_ticks must be a positive int")
+            except (TypeError, ValueError) as exc:
+                return _result(
+                    case=case,
+                    episode_id=episode_id,
+                    success=False,
+                    outcome="runtime_error",
+                    created=False,
+                    reset_completed=False,
+                    initial_state_present=False,
+                    closed=False,
+                    error="invalid E6 calibration: " + _format_error(exc),
+                )
+
         created = False
         reset_completed = False
         initial_state_present = False
@@ -390,6 +483,11 @@ class EnvironmentValidationRunner:
         movement_execution: MovementActionExecution | None = None
         movement: MovementInspection | None = None
         movement_agent_id: str | None = None
+        before_block_truth: BlockPlacementTruthSnapshot | None = None
+        after_block_truth: BlockPlacementTruthSnapshot | None = None
+        placement_execution: PlacementActionExecution | None = None
+        placement: PlacementInspection | None = None
+        placement_agent_id: str | None = None
         failure_stage: str | None = None
         original_exception_type: str | None = None
         reset_attempt_count: int | None = None
@@ -626,6 +724,80 @@ class EnvironmentValidationRunner:
                                                 )
                                                 outcome = movement.outcome
                                                 error = movement.error
+                        elif case.check_id is EnvironmentValidationId.E6:
+                            if isinstance(reset_result, Mapping) and reset_result:
+                                first_agent = next(iter(reset_result))
+                                if isinstance(first_agent, str) and first_agent.strip():
+                                    placement_agent_id = first_agent.strip()
+                            truth = getattr(backend, "block_placement_truth", None)
+                            execute = getattr(backend, "execute_placement_action", None)
+                            if not callable(truth) or not callable(execute):
+                                outcome = "runtime_error"
+                                error = "E6 backend block-truth/action surface is not callable"
+                            else:
+                                try:
+                                    candidate_before = truth()
+                                except (TypeError, ValueError) as exc:
+                                    outcome = BLOCK_TRUTH_INVALID
+                                    error = _format_error(exc)
+                                else:
+                                    if candidate_before is None:
+                                        outcome = BLOCK_BEFORE_MISSING
+                                        error = "block truth is missing before action"
+                                    elif not isinstance(candidate_before, BlockPlacementTruthSnapshot):
+                                        outcome = BLOCK_TRUTH_INVALID
+                                        error = "before block truth has the wrong type"
+                                    else:
+                                        before_block_truth = candidate_before
+                                if before_block_truth is not None:
+                                    parsed = parse_macro_action(
+                                        json.dumps(
+                                            {
+                                                "action_type": "place_block",
+                                                "target": placement_calibration_block,
+                                                "duration_ticks": requested_duration_ticks,
+                                                "parameters": {},
+                                            },
+                                            allow_nan=False,
+                                            sort_keys=True,
+                                        )
+                                    )
+                                    if not parsed.accepted:
+                                        outcome = "placement_action_rejected"
+                                        error = "placement action protocol rejected: " + (parsed.error or "unknown error")
+                                    else:
+                                        candidate_execution = execute(parsed.action)
+                                        if not isinstance(candidate_execution, PlacementActionExecution):
+                                            raise TypeError("execute_placement_action must return PlacementActionExecution")
+                                        placement_execution = candidate_execution
+                                        try:
+                                            candidate_after = truth()
+                                        except (TypeError, ValueError) as exc:
+                                            outcome = BLOCK_TRUTH_INVALID
+                                            error = _format_error(exc)
+                                        else:
+                                            if candidate_after is None:
+                                                outcome = BLOCK_AFTER_MISSING
+                                                error = "block truth is missing after action"
+                                            elif not isinstance(candidate_after, BlockPlacementTruthSnapshot):
+                                                outcome = BLOCK_TRUTH_INVALID
+                                                error = "after block truth has the wrong type"
+                                            else:
+                                                after_block_truth = candidate_after
+                                                assert placement_calibration_block is not None
+                                                assert placement_expected_before is not None
+                                                assert placement_target_cell is not None
+                                                placement = inspect_block_placement(
+                                                    before_block_truth,
+                                                    after_block_truth,
+                                                    placement_execution,
+                                                    calibration_block=placement_calibration_block,
+                                                    expected_before_block=placement_expected_before,
+                                                    target_cell=placement_target_cell,
+                                                    duration_ticks=requested_duration_ticks,
+                                                )
+                                                outcome = placement.outcome
+                                                error = placement.error
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -637,7 +809,10 @@ class EnvironmentValidationRunner:
                 outcome = "create_failed"
             elif not reset_completed:
                 outcome = "reset_failed"
-                if case.check_id is EnvironmentValidationId.E5:
+                if case.check_id in (
+                    EnvironmentValidationId.E5,
+                    EnvironmentValidationId.E6,
+                ):
                     failure_stage = "reset"
                     original_exception_type = type(_root_exception(exc)).__name__
                     exception_traceback = "".join(
@@ -669,6 +844,13 @@ class EnvironmentValidationRunner:
                         exception_traceback += (
                             "\nReset audit unavailable: surface is not callable\n"
                         )
+            elif case.check_id is EnvironmentValidationId.E6 and before_block_truth is not None:
+                outcome = "action_failed"
+                failure_stage = "action"
+                original_exception_type = type(_root_exception(exc)).__name__
+                exception_traceback = "".join(
+                    traceback.format_exception(type(exc), exc, exc.__traceback__)
+                )
             else:
                 outcome = "runtime_error"
         finally:
@@ -683,6 +865,7 @@ class EnvironmentValidationRunner:
                 E3_SUCCESS_OUTCOME,
                 E4_SUCCESS_OUTCOME,
                 E5_SUCCESS_OUTCOME,
+                E6_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -703,6 +886,7 @@ class EnvironmentValidationRunner:
             E3_SUCCESS_OUTCOME,
             E4_SUCCESS_OUTCOME,
             E5_SUCCESS_OUTCOME,
+            E6_SUCCESS_OUTCOME,
         }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
@@ -761,15 +945,23 @@ class EnvironmentValidationRunner:
             requested_strafe=requested_strafe if case.check_id is EnvironmentValidationId.E5 else None,
             requested_sprint=requested_sprint if case.check_id is EnvironmentValidationId.E5 else None,
             requested_jump=requested_jump if case.check_id is EnvironmentValidationId.E5 else None,
-            requested_duration_ticks=requested_duration_ticks if case.check_id is EnvironmentValidationId.E5 else None,
+            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
             minimum_horizontal_distance=minimum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
             minimum_forward_projection=minimum_forward_projection if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_lateral_drift=maximum_lateral_drift if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_horizontal_distance=maximum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_vertical_drift=maximum_vertical_drift if case.check_id is EnvironmentValidationId.E5 else None,
-            failure_stage=failure_stage if case.check_id is EnvironmentValidationId.E5 else None,
-            original_exception_type=original_exception_type if case.check_id is EnvironmentValidationId.E5 else None,
-            reset_attempt_count=reset_attempt_count if case.check_id is EnvironmentValidationId.E5 else None,
-            environment_launch_count=environment_launch_count if case.check_id is EnvironmentValidationId.E5 else None,
-            exception_traceback=exception_traceback if case.check_id is EnvironmentValidationId.E5 else None,
+            before_block_truth=before_block_truth if case.check_id is EnvironmentValidationId.E6 else None,
+            after_block_truth=after_block_truth if case.check_id is EnvironmentValidationId.E6 else None,
+            placement_execution=placement_execution if case.check_id is EnvironmentValidationId.E6 else None,
+            placement=placement if case.check_id is EnvironmentValidationId.E6 else None,
+            placement_agent_id=placement_agent_id if case.check_id is EnvironmentValidationId.E6 else None,
+            calibration_block=placement_calibration_block if case.check_id is EnvironmentValidationId.E6 else None,
+            expected_before_block=placement_expected_before if case.check_id is EnvironmentValidationId.E6 else None,
+            target_cell=placement_target_cell if case.check_id is EnvironmentValidationId.E6 else None,
+            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
+            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
+            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
+            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
+            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
         )

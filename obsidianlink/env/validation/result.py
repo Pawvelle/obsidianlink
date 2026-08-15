@@ -13,6 +13,12 @@ from typing import Any, Mapping
 from obsidianlink.env.validation.contract import EnvironmentValidationId
 from obsidianlink.env.validation.camera import CAMERA_OK, CAMERA_OUTCOMES, finite_angle
 from obsidianlink.env.validation.movement import MOVEMENT_OK, MOVEMENT_OUTCOMES, finite_number
+from obsidianlink.env.validation.placement import (
+    PLACEMENT_OK,
+    PLACEMENT_OUTCOMES,
+    validate_block_name,
+    validate_cell_coordinate,
+)
 from obsidianlink.env.validation.inventory import (
     INVENTORY_OK,
     INVENTORY_OUTCOMES,
@@ -47,13 +53,14 @@ VALIDATION_OUTCOMES = frozenset(
     }
 ) | INVENTORY_OUTCOMES | SELECTED_ITEM_OUTCOMES | frozenset(
     {INVENTORY_MISMATCH, SELECTED_ITEM_MISMATCH}
-) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | frozenset({"cleanup_failed"})
+) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | PLACEMENT_OUTCOMES | frozenset({"cleanup_failed", "action_failed"})
 E0_SUCCESS_OUTCOME = "lifecycle_ok"
 E1_SUCCESS_OUTCOME = "rgb_ok"
 E2_SUCCESS_OUTCOME = INVENTORY_OK
 E3_SUCCESS_OUTCOME = SELECTED_ITEM_OK
 E4_SUCCESS_OUTCOME = CAMERA_OK
 E5_SUCCESS_OUTCOME = MOVEMENT_OK
+E6_SUCCESS_OUTCOME = PLACEMENT_OK
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -174,6 +181,16 @@ class EnvironmentValidationResult:
     lateral_drift_ok: bool | None = None
     teleport_guard_ok: bool | None = None
     vertical_drift_ok: bool | None = None
+    requested_target: str | None = None
+    calibration_block: str | None = None
+    expected_before_block: str | None = None
+    target_x: int | None = None
+    target_y: int | None = None
+    target_z: int | None = None
+    before_block: str | None = None
+    after_block: str | None = None
+    world_changed: bool | None = None
+    intended_block_present: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.check_id, EnvironmentValidationId):
@@ -263,6 +280,7 @@ class EnvironmentValidationResult:
             "requested_sprint", "requested_jump", "moved",
             "movement_direction_match", "lateral_drift_ok",
             "teleport_guard_ok", "vertical_drift_ok",
+            "world_changed", "intended_block_present",
         ):
             value = getattr(self, field_name)
             if value is not None:
@@ -351,10 +369,14 @@ class EnvironmentValidationResult:
             self.agent_id, self.tested_step_id, self.action_type,
             self.translated_action_accepted, self.tested_action_count,
         )
-        if self.check_id not in (EnvironmentValidationId.E4, EnvironmentValidationId.E5) and any(
+        if self.check_id not in (
+            EnvironmentValidationId.E4,
+            EnvironmentValidationId.E5,
+            EnvironmentValidationId.E6,
+        ) and any(
             value is not None for value in action_fields
         ):
-            raise ValueError("action metadata is only valid for E4/E5 results")
+            raise ValueError("action metadata is only valid for E4/E5/E6 results")
         camera_fields = (
             self.requested_yaw, self.requested_pitch,
             self.before_yaw, self.before_pitch, self.after_yaw, self.after_pitch,
@@ -367,7 +389,7 @@ class EnvironmentValidationResult:
             raise ValueError("camera metadata is only valid for E4 results")
         movement_fields = (
             self.requested_forward, self.requested_strafe, self.requested_sprint,
-            self.requested_jump, self.requested_duration_ticks,
+            self.requested_jump,
             self.before_x, self.before_y, self.before_z, self.movement_before_yaw,
             self.after_x, self.after_y, self.after_z,
             self.delta_x, self.delta_y, self.delta_z, self.horizontal_distance,
@@ -381,6 +403,32 @@ class EnvironmentValidationResult:
             value is not None for value in movement_fields
         ):
             raise ValueError("movement metadata is only valid for E5 results")
+        if self.requested_duration_ticks is not None and self.check_id not in (
+            EnvironmentValidationId.E5,
+            EnvironmentValidationId.E6,
+        ):
+            raise ValueError("requested_duration_ticks is only valid for E5/E6 results")
+        placement_fields = (
+            self.requested_target, self.calibration_block, self.expected_before_block,
+            self.target_x, self.target_y, self.target_z,
+            self.before_block, self.after_block,
+            self.world_changed, self.intended_block_present,
+        )
+        if self.check_id is not EnvironmentValidationId.E6 and any(
+            value is not None for value in placement_fields
+        ):
+            raise ValueError("placement metadata is only valid for E6 results")
+        for field_name in ("target_x", "target_y", "target_z"):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(self, field_name, validate_cell_coordinate(value, field_name))
+        for field_name in (
+            "requested_target", "calibration_block", "expected_before_block",
+            "before_block", "after_block",
+        ):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(self, field_name, validate_block_name(value, field_name))
         reset_failure_fields = (
             self.failure_stage,
             self.original_exception_type,
@@ -388,10 +436,13 @@ class EnvironmentValidationResult:
             self.environment_launch_count,
             self.exception_traceback,
         )
-        if self.check_id is not EnvironmentValidationId.E5 and any(
+        if self.check_id not in (
+            EnvironmentValidationId.E5,
+            EnvironmentValidationId.E6,
+        ) and any(
             value is not None for value in reset_failure_fields
         ):
-            raise ValueError("reset-failure audit metadata is only valid for E5 results")
+            raise ValueError("reset-failure audit metadata is only valid for E5/E6 results")
         if self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E5:
             if not (
                 self.failure_stage == "reset"
@@ -427,8 +478,35 @@ class EnvironmentValidationResult:
                 raise ValueError(
                     "E5 reset_failed requires complete reset audit and zero action evidence"
                 )
+        elif self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E6:
+            if not (
+                self.failure_stage == "reset"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+                and self.tested_action_count == 0
+                and self.translated_action_accepted is None
+                and all(
+                    value is None
+                    for value in (
+                        self.before_block,
+                        self.after_block,
+                        self.world_changed,
+                        self.intended_block_present,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "E6 reset_failed requires complete reset audit and zero placement evidence"
+                )
+        elif self.outcome == "action_failed" and self.check_id is EnvironmentValidationId.E6:
+            if not (
+                self.failure_stage == "action"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+            ):
+                raise ValueError("E6 action_failed requires complete action audit")
         elif any(value is not None for value in reset_failure_fields):
-            raise ValueError("reset-failure audit metadata requires E5 reset_failed")
+            raise ValueError("reset-failure audit metadata requires E5/E6 reset_failed or E6 action_failed")
         movement_thresholds = (
             self.minimum_horizontal_distance,
             self.minimum_forward_projection,
@@ -490,6 +568,9 @@ class EnvironmentValidationResult:
         elif self.check_id is EnvironmentValidationId.E5:
             success_outcome = E5_SUCCESS_OUTCOME
             success_error = "success requires a clean independently observed E5 movement"
+        elif self.check_id is EnvironmentValidationId.E6:
+            success_outcome = E6_SUCCESS_OUTCOME
+            success_error = "success requires a clean independently observed E6 placement"
         else:
             success_outcome = None
             success_error = "success is not defined for this validation case"
@@ -579,6 +660,26 @@ class EnvironmentValidationResult:
                     and self.vertical_drift_ok is True
                 ):
                     raise ValueError("E5 success requires one accepted move and complete position evidence")
+            elif self.check_id is EnvironmentValidationId.E6:
+                if not (
+                    self.agent_id is not None
+                    and self.tested_step_id == 1
+                    and self.action_type == "place_block"
+                    and self.translated_action_accepted is True
+                    and self.tested_action_count == 1
+                    and self.requested_target == self.calibration_block
+                    and self.calibration_block is not None
+                    and self.expected_before_block is not None
+                    and self.requested_duration_ticks == 1
+                    and self.target_x is not None
+                    and self.target_y is not None
+                    and self.target_z is not None
+                    and self.before_block == self.expected_before_block
+                    and self.after_block == self.calibration_block
+                    and self.world_changed is True
+                    and self.intended_block_present is True
+                ):
+                    raise ValueError("E6 success requires one accepted place_block and complete block-truth evidence")
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,
             E1_SUCCESS_OUTCOME,
@@ -586,6 +687,7 @@ class EnvironmentValidationResult:
             E3_SUCCESS_OUTCOME,
             E4_SUCCESS_OUTCOME,
             E5_SUCCESS_OUTCOME,
+            E6_SUCCESS_OUTCOME,
         }:
             raise ValueError(f"{self.outcome} requires success=True")
         if self.outcome == INVENTORY_MISMATCH:
@@ -734,6 +836,32 @@ class EnvironmentValidationResult:
                     "total_distance": self.total_distance,
                     "translated_action_accepted": self.translated_action_accepted,
                     "vertical_drift_ok": self.vertical_drift_ok,
+                }
+            )
+        elif self.check_id is EnvironmentValidationId.E6:
+            payload.update(
+                {
+                    "action_type": self.action_type,
+                    "after_block": self.after_block,
+                    "agent_id": self.agent_id,
+                    "before_block": self.before_block,
+                    "calibration_block": self.calibration_block,
+                    "environment_launch_count": self.environment_launch_count,
+                    "exception_traceback": self.exception_traceback,
+                    "expected_before_block": self.expected_before_block,
+                    "failure_stage": self.failure_stage,
+                    "intended_block_present": self.intended_block_present,
+                    "original_exception_type": self.original_exception_type,
+                    "requested_duration_ticks": self.requested_duration_ticks,
+                    "requested_target": self.requested_target,
+                    "reset_attempt_count": self.reset_attempt_count,
+                    "target_x": self.target_x,
+                    "target_y": self.target_y,
+                    "target_z": self.target_z,
+                    "tested_action_count": self.tested_action_count,
+                    "tested_step_id": self.tested_step_id,
+                    "translated_action_accepted": self.translated_action_accepted,
+                    "world_changed": self.world_changed,
                 }
             )
         return payload

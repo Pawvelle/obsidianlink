@@ -9,6 +9,7 @@ from obsidianlink.env.validation.cases.rgb import E1_RGB_CASE
 from obsidianlink.env.validation.cases.selected_item import E3_SELECTED_ITEM_CASE
 from obsidianlink.env.validation.cases.camera import E4_CAMERA_CASE
 from obsidianlink.env.validation.cases.movement import E5_MOVEMENT_CASE
+from obsidianlink.env.validation.cases.placement import E6_PLACEMENT_CASE
 from obsidianlink.env.validation.camera import (
     CameraActionExecution,
     CameraInspection,
@@ -35,6 +36,12 @@ from obsidianlink.env.validation.movement import (
     PlayerPositionSnapshot,
     inspect_movement,
 )
+from obsidianlink.env.validation.placement import (
+    BlockPlacementTruthSnapshot,
+    PlacementActionExecution,
+    PlacementInspection,
+    inspect_block_placement,
+)
 from obsidianlink.env.validation.recorder import EnvironmentValidationRecorder
 from obsidianlink.env.validation.result import EnvironmentValidationResult
 from obsidianlink.env.validation.runner import EnvironmentValidationRunner
@@ -58,6 +65,7 @@ __all__ = [
     "E3_SELECTED_ITEM_CASE",
     "E4_CAMERA_CASE",
     "E5_MOVEMENT_CASE",
+    "E6_PLACEMENT_CASE",
     "EnvironmentValidationCase",
     "EnvironmentValidationId",
     "EnvironmentValidationRecorder",
@@ -70,6 +78,9 @@ __all__ = [
     "MovementInspection",
     "MovementOrientationSnapshot",
     "PlayerPositionSnapshot",
+    "BlockPlacementTruthSnapshot",
+    "PlacementActionExecution",
+    "PlacementInspection",
     "P1_VALIDATION_CASES",
     "InventoryInspection",
     "PublicInventoryObservation",
@@ -85,6 +96,7 @@ __all__ = [
     "inspect_selected_item",
     "inspect_camera_change",
     "inspect_movement",
+    "inspect_block_placement",
     "normalized_angular_delta",
     "p1_validation_manifest",
 ]
