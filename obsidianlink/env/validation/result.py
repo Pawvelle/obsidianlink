@@ -187,6 +187,9 @@ class EnvironmentValidationResult:
     target_x: int | None = None
     target_y: int | None = None
     target_z: int | None = None
+    target_grid_x: int | None = None
+    target_grid_y: int | None = None
+    target_grid_z: int | None = None
     before_block: str | None = None
     after_block: str | None = None
     world_changed: bool | None = None
@@ -411,6 +414,7 @@ class EnvironmentValidationResult:
         placement_fields = (
             self.requested_target, self.calibration_block, self.expected_before_block,
             self.target_x, self.target_y, self.target_z,
+            self.target_grid_x, self.target_grid_y, self.target_grid_z,
             self.before_block, self.after_block,
             self.world_changed, self.intended_block_present,
         )
@@ -418,7 +422,10 @@ class EnvironmentValidationResult:
             value is not None for value in placement_fields
         ):
             raise ValueError("placement metadata is only valid for E6 results")
-        for field_name in ("target_x", "target_y", "target_z"):
+        for field_name in (
+            "target_x", "target_y", "target_z",
+            "target_grid_x", "target_grid_y", "target_grid_z",
+        ):
             value = getattr(self, field_name)
             if value is not None:
                 object.__setattr__(self, field_name, validate_cell_coordinate(value, field_name))
@@ -674,6 +681,9 @@ class EnvironmentValidationResult:
                     and self.target_x is not None
                     and self.target_y is not None
                     and self.target_z is not None
+                    and self.target_grid_x is not None
+                    and self.target_grid_y is not None
+                    and self.target_grid_z is not None
                     and self.before_block == self.expected_before_block
                     and self.after_block == self.calibration_block
                     and self.world_changed is True
@@ -858,6 +868,20 @@ class EnvironmentValidationResult:
                     "target_x": self.target_x,
                     "target_y": self.target_y,
                     "target_z": self.target_z,
+                    "target_world_cell": (
+                        None
+                        if self.target_x is None
+                        or self.target_y is None
+                        or self.target_z is None
+                        else [self.target_x, self.target_y, self.target_z]
+                    ),
+                    "target_grid_cell": (
+                        None
+                        if self.target_grid_x is None
+                        or self.target_grid_y is None
+                        or self.target_grid_z is None
+                        else [self.target_grid_x, self.target_grid_y, self.target_grid_z]
+                    ),
                     "tested_action_count": self.tested_action_count,
                     "tested_step_id": self.tested_step_id,
                     "translated_action_accepted": self.translated_action_accepted,

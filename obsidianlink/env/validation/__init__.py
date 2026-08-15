@@ -41,6 +41,7 @@ from obsidianlink.env.validation.placement import (
     PlacementActionExecution,
     PlacementInspection,
     inspect_block_placement,
+    spawn_relative_grid_cell,
 )
 from obsidianlink.env.validation.recorder import EnvironmentValidationRecorder
 from obsidianlink.env.validation.result import EnvironmentValidationResult
@@ -97,6 +98,7 @@ __all__ = [
     "inspect_camera_change",
     "inspect_movement",
     "inspect_block_placement",
+    "spawn_relative_grid_cell",
     "normalized_angular_delta",
     "p1_validation_manifest",
 ]

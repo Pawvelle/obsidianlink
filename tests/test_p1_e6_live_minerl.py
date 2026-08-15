@@ -167,6 +167,8 @@ class E6LiveGateTests(unittest.TestCase):
                 production.assert_not_called()
         self.assertEqual(payload["requested_target"], "dirt")
         self.assertEqual(payload["target_cell"], [0, 4, 1])
+        self.assertEqual(payload["target_world_cell"], [0, 4, 1])
+        self.assertEqual(payload["target_grid_cell"], [0, 0, 1])
 
     def test_stub_success_writes_narrow_evidence_and_one_step(self):
         record, output, cls, temporary = self.run_stub()
@@ -176,6 +178,8 @@ class E6LiveGateTests(unittest.TestCase):
             self.assertFalse(record.real_execution_performed)
             payload = json.loads((output / "e6_block_placement.json").read_text())
             self.assertEqual(payload["after_block"], "dirt")
+            self.assertEqual(payload["target_world_cell"], [0, 4, 1])
+            self.assertEqual(payload["target_grid_cell"], [0, 0, 1])
             self.assertEqual(payload["tested_action_count"], 1)
             self.assertFalse(payload["integration_verified"])
             authorization = json.loads((output / "authorization.json").read_text())

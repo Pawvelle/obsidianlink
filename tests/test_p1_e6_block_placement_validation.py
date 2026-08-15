@@ -145,6 +145,8 @@ class PlacementRunnerTests(unittest.TestCase):
         self.assertEqual(payload["before_block"], "air")
         self.assertEqual(payload["after_block"], "dirt")
         self.assertTrue(payload["world_changed"])
+        self.assertEqual(payload["target_world_cell"], [0, 4, 1])
+        self.assertEqual(payload["target_grid_cell"], [0, 0, 1])
 
 
 if __name__ == "__main__":

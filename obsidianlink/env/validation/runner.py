@@ -55,6 +55,7 @@ from obsidianlink.env.validation.placement import (
     PlacementActionExecution,
     PlacementInspection,
     inspect_block_placement,
+    spawn_relative_grid_cell,
     validate_block_name,
     validate_target_cell,
 )
@@ -170,6 +171,7 @@ def _result(
     calibration_block: str | None = None,
     expected_before_block: str | None = None,
     target_cell: tuple[int, int, int] | None = None,
+    target_grid_cell: tuple[int, int, int] | None = None,
     failure_stage: str | None = None,
     original_exception_type: str | None = None,
     reset_attempt_count: int | None = None,
@@ -296,6 +298,9 @@ def _result(
         target_x=None if target_cell is None else target_cell[0],
         target_y=None if target_cell is None else target_cell[1],
         target_z=None if target_cell is None else target_cell[2],
+        target_grid_x=None if target_grid_cell is None else target_grid_cell[0],
+        target_grid_y=None if target_grid_cell is None else target_grid_cell[1],
+        target_grid_z=None if target_grid_cell is None else target_grid_cell[2],
         before_block=None if before_block_truth is None else before_block_truth.block,
         after_block=None if after_block_truth is None else after_block_truth.block,
         world_changed=None if placement is None else placement.world_changed,
@@ -360,6 +365,7 @@ class EnvironmentValidationRunner:
         calibration_block: str = "dirt",
         expected_before_block: str = "air",
         target_cell: tuple[int, int, int] = (0, 4, 1),
+        target_grid_cell: tuple[int, int, int] | None = None,
     ) -> EnvironmentValidationResult:
         if not isinstance(case, EnvironmentValidationCase):
             raise ValueError("case must be EnvironmentValidationCase")
@@ -435,6 +441,7 @@ class EnvironmentValidationRunner:
         placement_calibration_block: str | None = None
         placement_expected_before: str | None = None
         placement_target_cell: tuple[int, int, int] | None = None
+        placement_target_grid_cell: tuple[int, int, int] | None = None
         if case.check_id is EnvironmentValidationId.E6:
             try:
                 placement_calibration_block = validate_block_name(
@@ -443,7 +450,16 @@ class EnvironmentValidationRunner:
                 placement_expected_before = validate_block_name(
                     expected_before_block, "expected_before_block"
                 )
-                placement_target_cell = validate_target_cell(target_cell)
+                placement_target_cell = validate_target_cell(target_cell, "target_world_cell")
+                if target_grid_cell is None:
+                    # Frozen E6 spawn world (0, 4, 0); atSpawn grid = world - spawn.
+                    placement_target_grid_cell = spawn_relative_grid_cell(
+                        placement_target_cell, (0, 4, 0)
+                    )
+                else:
+                    placement_target_grid_cell = validate_target_cell(
+                        target_grid_cell, "target_grid_cell"
+                    )
                 if type(requested_duration_ticks) is not int or requested_duration_ticks < 1:
                     raise ValueError("requested_duration_ticks must be a positive int")
             except (TypeError, ValueError) as exc:
@@ -959,6 +975,7 @@ class EnvironmentValidationRunner:
             calibration_block=placement_calibration_block if case.check_id is EnvironmentValidationId.E6 else None,
             expected_before_block=placement_expected_before if case.check_id is EnvironmentValidationId.E6 else None,
             target_cell=placement_target_cell if case.check_id is EnvironmentValidationId.E6 else None,
+            target_grid_cell=placement_target_grid_cell if case.check_id is EnvironmentValidationId.E6 else None,
             failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
             original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
             reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,

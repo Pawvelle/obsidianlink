@@ -551,11 +551,18 @@ class MineRLEnvironmentBackend:
     ) -> Mapping[str, Any] | None:
         """Return narrow evaluator-only single-cell block truth for P1 E6.
 
+        ``cell`` is a Minecraft **world** coordinate. The evaluator grid is
+        ObservationFromGrid(atSpawn=true), so lookup uses spawn-relative
+        ``world - spawn``. A present ``portal_grid_origin`` that disagrees
+        with spawn fails closed instead of reading the wrong cell.
+
         The observed block is read only from the latest ``portal_grid``. It
         is never inferred from the requested ``place_block`` target, spawn
         configuration, RGB, or public observations. This is not the future
         E8 generalized server-truth API.
         """
+
+        from obsidianlink.env.validation.placement import spawn_relative_grid_cell
 
         task = self._require_task()
         raw = self._latest_raw
@@ -567,11 +574,22 @@ class MineRLEnvironmentBackend:
             or any(type(value) is not int for value in cell)
         ):
             raise ValueError("placement truth cell must be an int (x, y, z) tuple")
+        spawn = task.spawn_positions.get("agent_1")
+        if (
+            not isinstance(spawn, tuple)
+            or len(spawn) != 3
+            or any(type(value) is not int for value in spawn)
+        ):
+            raise ValueError("placement truth spawn is missing or invalid")
+        actual_anchor = self._grid_world_anchor(raw)
+        if actual_anchor is not None and actual_anchor != spawn:
+            raise ValueError("placement truth grid anchor differs from spawn")
+        grid_cell = spawn_relative_grid_cell(cell, spawn)
         try:
             grid = self._grid_from_raw(raw)
         except (TypeError, ValueError):
             return None
-        index = self._cell_index_in_grid(cell)
+        index = self._cell_index_in_grid(grid_cell)
         if index is None:
             raise ValueError("placement truth cell is outside the evaluator grid")
         block_id = int(grid[index])

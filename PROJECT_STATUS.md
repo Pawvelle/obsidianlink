@@ -42,8 +42,8 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E5 one `move(forward=1.0)`, FullStats xpos/ypos/zpos；#1 reset_failed `p1-e5-live-001` / `runs/p1_e5_movement/e5-live-20260814-001`（JVM SIGSEGV / Malmo EOF，不是 movement_failed）；#2 `p1-e5-live-002` / `runs/p1_e5_movement/e5-live-20260815-002`, `movement_ok`, delta z≈0.098
 - E6 contract / offline runtime: complete / `unit_verified`
 - E6 MineRL adapter / live bridge: implemented / offline tested
-- E6 calibration: `dirt`; one `place_block(dirt)`, `duration_ticks=1`; spawn `(0, 4, 0)`, yaw `0`, pitch `60`, target `(0, 4, 1)`; before `air` → after `dirt` from evaluator-only `portal_grid`
-- E6 real MineRL execution: NOT RUN
+- E6 calibration: `dirt`; one `place_block(dirt)`, `duration_ticks=1`; spawn world `(0, 4, 0)`, yaw `0`, pitch `60`; target world `(0, 4, 1)` = atSpawn grid `(0, 0, 1)`; before `air` → after `dirt` from evaluator-only `portal_grid`
+- E6 coordinate audit: ObservationFromGrid(`atSpawn=true`) is spawn-relative; `_cell_index_in_grid` indexes that namespace. Offline fix `unit_verified`. E6 real MineRL execution: NOT RUN
 - E6 `integration_verified`: NO
 - E7–E12: NOT STARTED
 - P1 Hard Gate: NOT PASSED

@@ -18,7 +18,7 @@ from obsidianlink.env.integration.e6_adapter import (
 from obsidianlink.env.integration.e6_config import (
     E6_AGENT_ID,
     E6_CALIBRATION_BLOCK,
-    E6_TARGET_CELL,
+    E6_TARGET_WORLD_CELL,
     build_e6_compatibility_task,
 )
 from obsidianlink.env.minerl_backend import MineRLEnvironmentBackend
@@ -45,6 +45,12 @@ def _flat_index(cell: tuple[int, int, int]) -> int:
     y = cell[1] - PORTAL_GRID_MIN[1]
     z = cell[2] - PORTAL_GRID_MIN[2]
     return x + x_size * z + x_size * z_size * y
+
+
+KNOWN_SPAWN_WORLD = (0, 4, 0)
+KNOWN_TARGET_WORLD = (0, 4, 1)
+KNOWN_TARGET_GRID = (0, 0, 1)
+MISTAKEN_WORLD_AS_GRID = (0, 4, 1)
 
 
 class _Backend:
@@ -113,11 +119,30 @@ class _Backend:
 
 
 class _PlacementEnv(_ControlledMineRLEnv):
-    def __init__(self, *, after_block: str | None = "dirt"):
+    def __init__(
+        self,
+        *,
+        after_block: str | None = "dirt",
+        grid_origin: tuple[int, int, int] | None = KNOWN_SPAWN_WORLD,
+    ):
         super().__init__()
         self.after_block = after_block
+        self._grid_origin = grid_origin
         self.grid = np.zeros(PORTAL_GRID_SIZE, dtype=np.int32)
-        self.grid[_flat_index(E6_TARGET_CELL)] = PORTAL_GRID_BLOCKS.index("air")
+        self.grid[_flat_index(KNOWN_TARGET_GRID)] = PORTAL_GRID_BLOCKS.index("air")
+        self.grid[_flat_index(MISTAKEN_WORLD_AS_GRID)] = PORTAL_GRID_BLOCKS.index(
+            "grass"
+        )
+
+    def _observation(self):
+        observation = super()._observation()
+        if self._grid_origin is None:
+            observation.pop("portal_grid_origin", None)
+        else:
+            observation["portal_grid_origin"] = np.asarray(
+                self._grid_origin, dtype=np.int32
+            )
+        return observation
 
     def step(self, action):
         self.assert_action(action)
@@ -125,7 +150,7 @@ class _PlacementEnv(_ControlledMineRLEnv):
         action_map = action if isinstance(action, dict) else {}
         if int(action_map.get("use", 0)) and int(action_map.get("hotbar.1", 0)):
             if self.after_block is not None:
-                self.grid[_flat_index(E6_TARGET_CELL)] = PORTAL_GRID_BLOCKS.index(
+                self.grid[_flat_index(KNOWN_TARGET_GRID)] = PORTAL_GRID_BLOCKS.index(
                     self.after_block
                 )
         return self._observation(), 0.0, False, {"secret": "not-public"}
@@ -201,12 +226,12 @@ class E6MineRLIntegrationTests(unittest.TestCase):
         backend.open()
         try:
             backend.reset(build_e6_compatibility_task(EPISODE))
-            before = backend.get_block_placement_truth(E6_TARGET_CELL)
+            before = backend.get_block_placement_truth(KNOWN_TARGET_WORLD)
             self.assertEqual(before["block"], "air")
             step = backend.step(
                 {E6_AGENT_ID: MacroAction("place_block", target=E6_CALIBRATION_BLOCK)}
             )
-            after = backend.get_block_placement_truth(E6_TARGET_CELL)
+            after = backend.get_block_placement_truth(KNOWN_TARGET_WORLD)
             self.assertEqual(after["block"], "air")
             self.assertNotIn("block", step.info)
             self.assertNotIn("portal_grid", step.info)
@@ -224,10 +249,63 @@ class E6MineRLIntegrationTests(unittest.TestCase):
             step = backend.step(
                 {E6_AGENT_ID: MacroAction("place_block", target="dirt")}
             )
-            after = backend.get_block_placement_truth(E6_TARGET_CELL)
+            after = backend.get_block_placement_truth(KNOWN_TARGET_WORLD)
             self.assertEqual(after["block"], "dirt")
             self.assertTrue(step.info["translation_accepted"])
             self.assertEqual(backend._hotbar_mapping["dirt"], "hotbar.1")
+        finally:
+            backend.close()
+
+    def test_world_lookup_does_not_read_the_mistaken_y4_grid_cell(self):
+        env = _PlacementEnv(after_block="dirt")
+        backend = MineRLEnvironmentBackend(env_factory=lambda task: env, reset_warmup_steps=0)
+        backend.open()
+        try:
+            backend.reset(build_e6_compatibility_task(EPISODE))
+            self.assertEqual(E6_TARGET_WORLD_CELL, KNOWN_TARGET_WORLD)
+            before_target = backend.get_block_placement_truth(KNOWN_TARGET_WORLD)
+            before_wrong_y = backend.get_block_placement_truth((0, 8, 1))
+            self.assertEqual(before_target["block"], "air")
+            self.assertEqual(before_wrong_y["block"], "grass")
+            backend.step({E6_AGENT_ID: MacroAction("place_block", target="dirt")})
+            after_target = backend.get_block_placement_truth(KNOWN_TARGET_WORLD)
+            after_wrong_y = backend.get_block_placement_truth((0, 8, 1))
+            self.assertEqual(after_target["block"], "dirt")
+            self.assertEqual(after_wrong_y["block"], "grass")
+        finally:
+            backend.close()
+
+    def test_missing_grid_origin_falls_back_to_spawn(self):
+        env = _PlacementEnv(after_block="dirt", grid_origin=None)
+        backend = MineRLEnvironmentBackend(env_factory=lambda task: env, reset_warmup_steps=0)
+        backend.open()
+        try:
+            backend.reset(build_e6_compatibility_task(EPISODE))
+            backend.step({E6_AGENT_ID: MacroAction("place_block", target="dirt")})
+            after = backend.get_block_placement_truth(KNOWN_TARGET_WORLD)
+            self.assertEqual(after["block"], "dirt")
+        finally:
+            backend.close()
+
+    def test_mismatched_grid_origin_fails_closed(self):
+        env = _PlacementEnv(grid_origin=(0, 64, 0))
+        backend = MineRLEnvironmentBackend(env_factory=lambda task: env, reset_warmup_steps=0)
+        backend.open()
+        try:
+            backend.reset(build_e6_compatibility_task(EPISODE))
+            with self.assertRaisesRegex(ValueError, "grid anchor differs from spawn"):
+                backend.get_block_placement_truth(KNOWN_TARGET_WORLD)
+        finally:
+            backend.close()
+
+    def test_world_cell_outside_grid_fails_closed(self):
+        env = _PlacementEnv()
+        backend = MineRLEnvironmentBackend(env_factory=lambda task: env, reset_warmup_steps=0)
+        backend.open()
+        try:
+            backend.reset(build_e6_compatibility_task(EPISODE))
+            with self.assertRaisesRegex(ValueError, "outside the evaluator grid"):
+                backend.get_block_placement_truth((0, 4, 20))
         finally:
             backend.close()
 

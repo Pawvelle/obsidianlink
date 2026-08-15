@@ -2,7 +2,8 @@
 
 Importing this module does not import MineRL or construct a production
 backend. Block truth comes only from the backend-retained evaluator grid
-at the frozen E6 cell; the requested ``place_block`` target is never used
+at the frozen E6 world cell, converted to atSpawn grid-local coordinates
+inside the backend. The requested ``place_block`` target is never used
 as observed world truth.
 """
 
@@ -16,7 +17,7 @@ from obsidianlink.env.integration.e6_config import (
     E6_AGENT_ID,
     E6_CALIBRATION_BLOCK,
     E6_DURATION_TICKS,
-    E6_TARGET_CELL,
+    E6_TARGET_WORLD_CELL,
     build_e6_compatibility_task,
 )
 from obsidianlink.env.validation.placement import (
@@ -39,9 +40,13 @@ def _scalar(value: object) -> object:
 def block_placement_snapshot(
     value: object,
     *,
-    expected_cell: tuple[int, int, int] = E6_TARGET_CELL,
+    expected_cell: tuple[int, int, int] = E6_TARGET_WORLD_CELL,
 ) -> BlockPlacementTruthSnapshot:
-    """Project an exact backend mapping to typed evaluator-only E6 truth."""
+    """Project an exact backend mapping to typed evaluator-only E6 truth.
+
+    Snapshot ``x,y,z`` are the inspected **world** cell. Grid lookup happens
+    inside the backend; this type never stores ObservationFromGrid indices.
+    """
 
     if not isinstance(value, Mapping):
         raise ValueError("block placement truth is missing")
@@ -94,7 +99,7 @@ class MineRLE6PlacementAdapter(MineRLE0LifecycleAdapter):
         getter = getattr(backend, "get_block_placement_truth", None)
         if not callable(getter):
             raise RuntimeError("MineRL backend block-placement truth is not callable")
-        value = getter(E6_TARGET_CELL)
+        value = getter(E6_TARGET_WORLD_CELL)
         return None if value is None else block_placement_snapshot(value)
 
     def reset_failure_audit(self) -> dict[str, int]:

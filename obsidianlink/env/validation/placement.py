@@ -102,6 +102,26 @@ def validate_target_cell(
     )
 
 
+def spawn_relative_grid_cell(
+    world_cell: tuple[int, int, int],
+    spawn_world: tuple[int, int, int],
+) -> tuple[int, int, int]:
+    """Convert a Minecraft world cell to ObservationFromGrid(atSpawn=true) space.
+
+    ``_cell_index_in_grid`` indexes the evaluator array in this spawn-relative
+    namespace, not in world coordinates. The two are equal only when spawn is
+    ``(0, 0, 0)``.
+    """
+
+    world_cell = validate_target_cell(world_cell, "world_cell")
+    spawn_world = validate_target_cell(spawn_world, "spawn_world")
+    return (
+        world_cell[0] - spawn_world[0],
+        world_cell[1] - spawn_world[1],
+        world_cell[2] - spawn_world[2],
+    )
+
+
 @dataclass(frozen=True)
 class BlockPlacementTruthSnapshot:
     """Temporary evaluator-only single-cell block truth."""

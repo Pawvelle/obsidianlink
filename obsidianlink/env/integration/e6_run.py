@@ -29,8 +29,9 @@ from obsidianlink.env.integration.e6_config import (
     E6_EXPECTED_BEFORE_BLOCK,
     E6_INITIAL_PITCH,
     E6_INITIAL_YAW,
-    E6_SPAWN,
-    E6_TARGET_CELL,
+    E6_SPAWN_WORLD,
+    E6_TARGET_GRID_CELL,
+    E6_TARGET_WORLD_CELL,
     build_e6_compatibility_task,
 )
 from obsidianlink.env.validation import E6_PLACEMENT_CASE, EnvironmentValidationRunner
@@ -267,8 +268,9 @@ def _validate_configuration() -> None:
         and E6_PLACEMENT_CASE.calibration_only
         and E6_CALIBRATION_BLOCK == "dirt"
         and E6_EXPECTED_BEFORE_BLOCK == "air"
-        and E6_TARGET_CELL == (0, 4, 1)
-        and E6_SPAWN == (0, 4, 0)
+        and E6_TARGET_WORLD_CELL == (0, 4, 1)
+        and E6_TARGET_GRID_CELL == (0, 0, 1)
+        and E6_SPAWN_WORLD == (0, 4, 0)
         and E6_DURATION_TICKS == 1
         and (E6_INITIAL_YAW, E6_INITIAL_PITCH) == (0.0, 60.0)
     ):
@@ -276,7 +278,7 @@ def _validate_configuration() -> None:
     task = build_e6_compatibility_task("p1-e6-preflight")
     if dict(task.initial_inventories[E6_AGENT_ID]) != E6_COMPATIBILITY_INVENTORY:
         raise E6AuthorizationError("E6 compatibility inventory differs")
-    if task.spawn_positions[E6_AGENT_ID] != E6_SPAWN:
+    if task.spawn_positions[E6_AGENT_ID] != E6_SPAWN_WORLD:
         raise E6AuthorizationError("E6 flat-ground spawn differs")
     if MineRLE6PlacementAdapter(episode_id="p1-e6-preflight")._backend is not None:
         raise E6AuthorizationError("E6 adapter construction created a backend")
@@ -302,7 +304,9 @@ def check_e6_live_runner() -> dict[str, Any]:
         "requested_duration_ticks": E6_DURATION_TICKS,
         "requested_target": E6_CALIBRATION_BLOCK,
         "status": "ok",
-        "target_cell": list(E6_TARGET_CELL),
+        "target_grid_cell": list(E6_TARGET_GRID_CELL),
+        "target_world_cell": list(E6_TARGET_WORLD_CELL),
+        "target_cell": list(E6_TARGET_WORLD_CELL),
         "verification_level": "unit_verified",
     }
 
@@ -417,7 +421,8 @@ def run_authorized_e6_minerl(*, execution_mode: str, authorized_live_run: str, o
         episode_id=episode_id,
         calibration_block=E6_CALIBRATION_BLOCK,
         expected_before_block=E6_EXPECTED_BEFORE_BLOCK,
-        target_cell=E6_TARGET_CELL,
+        target_cell=E6_TARGET_WORLD_CELL,
+        target_grid_cell=E6_TARGET_GRID_CELL,
         requested_duration_ticks=E6_DURATION_TICKS,
     )
     adapter = holder["adapter"]
