@@ -43,7 +43,9 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E6 contract / offline runtime: complete / `unit_verified`
 - E6 MineRL adapter / live bridge: implemented / offline tested
 - E6 calibration: `dirt`; one `place_block(dirt)`, `duration_ticks=1`; spawn world `(0, 4, 0)`, yaw `0`, pitch `60`; target world `(0, 4, 1)` = atSpawn grid `(0, 0, 1)`; before `air` → after `dirt` from evaluator-only `portal_grid`
-- E6 coordinate audit: ObservationFromGrid(`atSpawn=true`) is spawn-relative; `_cell_index_in_grid` indexes that namespace. Offline fix `unit_verified`. E6 real MineRL execution: NOT RUN
+- E6 coordinate audit: ObservationFromGrid(`atSpawn=true`) is spawn-relative; `_cell_index_in_grid` indexes that namespace. Offline fix `unit_verified`
+- E6 real attempt #1: episode `p1-e6-live-001` / `runs/p1_e6_block_placement/e6-live-20260815-001`; `real_execution_performed=true`; `success=true`; `outcome=placement_ok`; before world `(0, 4, 1)=air`; one `place_block(dirt)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after world `(0, 4, 1)=dirt`; `world_changed=true`; `intended_block_present=true`; close returned; `process_release_proven=false`
+- E6 reviewed real success: YES
 - E6 `integration_verified`: NO
 - E7–E12: NOT STARTED
 - P1 Hard Gate: NOT PASSED
@@ -61,7 +63,7 @@ None of E0–E6 is `integration_verified`; `process_release_proven=false`. E0–
 ## 尚未验证
 
 - E0–E5 各有一次审查过的真实 success evidence，但稳定重复性与 OS-level process release 未证明，`integration_verified`: NO；
-- E6: `unit_verified`; real execution NOT RUN; `integration_verified`: NO；
+- E6: `unit_verified`; one reviewed real success (`p1-e6-live-001`, `placement_ok`); `integration_verified`: NO；
 - E7–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
@@ -72,4 +74,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E6 contract, offline runtime, and MineRL adapter/live bridge are `unit_verified`. E6 real MineRL execution: NOT RUN. E6 `integration_verified`: NO. P1 Hard Gate: NOT PASSED. E7–E12: NOT STARTED. P2: NOT STARTED. Do not start E7. Request explicit authorization for exactly one real E6 MineRL/Minecraft block-placement validation run.
+E6 contract, offline runtime, and MineRL adapter/live bridge are `unit_verified`. E6 has one reviewed real success (`p1-e6-live-001`, `placement_ok`). E6 `integration_verified`: NO. P1 Hard Gate: NOT PASSED. E7–E12: NOT STARTED. P2: NOT STARTED. Do not start E7 automatically. Further development requires explicit next-task instruction.

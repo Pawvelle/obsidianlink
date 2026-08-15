@@ -54,9 +54,9 @@ Benchmark kernel 不依赖某个 solver。模型或 baseline 的输出必须经�
 
 v2 scope、架构边界和 legacy quarantine 已冻结。旧 C1/C2、taxonomy C3/C4/C5、Route A0 及其 deterministic drivers 保留为 `unit_verified` legacy/calibration/regression 资产；它们不再是 active benchmark matrix，也不能支持真实 Minecraft 能力声明。
 
-唯一 active engineering task 是 `P1-REAL-MINERL-ENVIRONMENT-VALIDATION`。E0–E5 offline runtime 为 `unit_verified`，并各有已审查的真实成功证据（E5 第二次为首次 reviewed movement success）。E6 contract / offline runtime / MineRL adapter 为 `unit_verified`；E6 真实运行尚未执行。E6 evaluator 检查 atSpawn grid `(0, 0, 1)`，对应 world `(0, 4, 1)`。E0–E6 都不是 `integration_verified`（无自动 promotion，P1 Hard Gate 未通过，`process_release_proven=false`）。E7–E12 尚未实现或尚未运行。没有运行 Gradle，没有调用付费模型 API。P1 Hard Gate 未通过，P2 不得开始。E10 原版水熔岩生成黑曜石、E11 portal activation、E12 dimension transition 均未获得 `integration_verified`。
+唯一 active engineering task 是 `P1-REAL-MINERL-ENVIRONMENT-VALIDATION`。E0–E5 offline runtime 为 `unit_verified`，并各有已审查的真实成功证据（E5 第二次为首次 reviewed movement success）。E6 contract / offline runtime / MineRL adapter 为 `unit_verified`，并有一次已审查的真实 `placement_ok`（`p1-e6-live-001`）。E0–E6 都不是 `integration_verified`（无自动 promotion，P1 Hard Gate 未通过，`process_release_proven=false`）。E7–E12 尚未实现或尚未运行。没有运行 Gradle，没有调用付费模型 API。P1 Hard Gate 未通过，P2 不得开始。E10 原版水熔岩生成黑曜石、E11 portal activation、E12 dimension transition 均未获得 `integration_verified`。
 
-下一步是 **请求单独授权一次真实 E6 MineRL/Minecraft block-placement validation run**，不是现在执行 E6 live run，也不是开始 E7。每次真实 MineRL 运行仍需单独授权。P1 的 hard gate 是稳定重复成功、`truth_missing=0`、无人工干预；建议至少 20 个 fresh episodes，最终次数在实验冻结阶段确定。
+下一步不是自动开始 E7。E6 现有一次 reviewed real success；后续开发需要明确的下一任务指令。每次真实 MineRL 运行仍需单独授权。P1 的 hard gate 是稳定重复成功、`truth_missing=0`、无人工干预；建议至少 20 个 fresh episodes，最终次数在实验冻结阶段确定。
 
 详见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[BENCHMARK_SPEC.md](BENCHMARK_SPEC.md)、[ROADMAP.md](ROADMAP.md) 和 [P1 Environment Validation](docs/architecture/P1_ENVIRONMENT_VALIDATION.md)。
 
