@@ -36,6 +36,11 @@ PUBLIC_SELECTED_ITEM_LEAK_KEYS = frozenset(
         "portal_truth",
         "pov",
         "rgb",
+        "server_truth",
+        "block_truth",
+        "grid_anchor",
+        "evaluator_dimension",
+        "truth_snapshot",
         "visible_inventory",
         "workflow_stage",
     }

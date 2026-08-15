@@ -34,6 +34,11 @@ PUBLIC_RGB_LEAK_KEYS = frozenset(
         "portal_transition",
         "pov",
         "selected_item",
+        "server_truth",
+        "block_truth",
+        "grid_anchor",
+        "evaluator_dimension",
+        "truth_snapshot",
         "visible_inventory",
         "workflow_stage",
     }

@@ -30,6 +30,12 @@ from obsidianlink.env.validation.placement import (
     validate_block_name,
     validate_cell_coordinate,
 )
+from obsidianlink.env.validation.truth import (
+    BLOCK_TRUTH_OK,
+    BLOCK_TRUTH_OUTCOMES,
+    validate_anchor_source,
+    validate_dimension,
+)
 from obsidianlink.env.validation.inventory import (
     INVENTORY_OK,
     INVENTORY_OUTCOMES,
@@ -64,7 +70,7 @@ VALIDATION_OUTCOMES = frozenset(
     }
 ) | INVENTORY_OUTCOMES | SELECTED_ITEM_OUTCOMES | frozenset(
     {INVENTORY_MISMATCH, SELECTED_ITEM_MISMATCH}
-) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | PLACEMENT_OUTCOMES | BUCKET_OUTCOMES | frozenset({"cleanup_failed", "action_failed"})
+) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | PLACEMENT_OUTCOMES | BUCKET_OUTCOMES | BLOCK_TRUTH_OUTCOMES | frozenset({"cleanup_failed", "action_failed"})
 E0_SUCCESS_OUTCOME = "lifecycle_ok"
 E1_SUCCESS_OUTCOME = "rgb_ok"
 E2_SUCCESS_OUTCOME = INVENTORY_OK
@@ -73,6 +79,7 @@ E4_SUCCESS_OUTCOME = CAMERA_OK
 E5_SUCCESS_OUTCOME = MOVEMENT_OK
 E6_SUCCESS_OUTCOME = PLACEMENT_OK
 E7_SUCCESS_OUTCOME = BUCKET_OK
+E8_SUCCESS_OUTCOME = BLOCK_TRUTH_OK
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -102,6 +109,61 @@ def _inventory_snapshot(
         detail = inspection.error or "invalid inventory"
         raise ValueError(f"{field_name} must be a valid inventory Mapping: {detail}")
     return dict(inspection.inventory)
+
+
+def _probe_cell_region(
+    value: object, field_name: str
+) -> tuple[tuple[int, int, int], ...]:
+    if not isinstance(value, tuple) or not value:
+        raise ValueError(f"{field_name} must be a non-empty tuple of cells")
+    cells: list[tuple[int, int, int]] = []
+    for cell in value:
+        if not isinstance(cell, tuple) or len(cell) != 3:
+            raise ValueError(f"{field_name} must contain int (x, y, z) tuples")
+        cells.append(
+            (
+                validate_cell_coordinate(cell[0], f"{field_name}.x"),
+                validate_cell_coordinate(cell[1], f"{field_name}.y"),
+                validate_cell_coordinate(cell[2], f"{field_name}.z"),
+            )
+        )
+    return tuple(cells)
+
+
+def _block_truth_records(
+    value: object, field_name: str
+) -> tuple[dict[str, object], ...]:
+    if not isinstance(value, tuple) or not value:
+        raise ValueError(f"{field_name} must be a non-empty tuple of block-truth records")
+    records: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            raise ValueError(f"{field_name} items must be mappings")
+        required = {"block", "grid_cell", "world_cell"}
+        if set(item) != required:
+            raise ValueError(f"{field_name} fields are missing or unknown")
+        world = item["world_cell"]
+        grid = item["grid_cell"]
+        if not isinstance(world, (list, tuple)) or len(world) != 3:
+            raise ValueError(f"{field_name}.world_cell must be an int triple")
+        if not isinstance(grid, (list, tuple)) or len(grid) != 3:
+            raise ValueError(f"{field_name}.grid_cell must be an int triple")
+        records.append(
+            {
+                "block": validate_block_name(item["block"], f"{field_name}.block"),
+                "grid_cell": [
+                    validate_cell_coordinate(grid[0], f"{field_name}.grid_x"),
+                    validate_cell_coordinate(grid[1], f"{field_name}.grid_y"),
+                    validate_cell_coordinate(grid[2], f"{field_name}.grid_z"),
+                ],
+                "world_cell": [
+                    validate_cell_coordinate(world[0], f"{field_name}.world_x"),
+                    validate_cell_coordinate(world[1], f"{field_name}.world_y"),
+                    validate_cell_coordinate(world[2], f"{field_name}.world_z"),
+                ],
+            }
+        )
+    return tuple(records)
 
 
 @dataclass(frozen=True)
@@ -220,6 +282,29 @@ class EnvironmentValidationResult:
     intended_fluid_present: bool | None = None
     before_selected_item: str | None = None
     after_selected_item: str | None = None
+    before_step_id: int | None = None
+    after_step_id: int | None = None
+    before_position_x: float | None = None
+    before_position_y: float | None = None
+    before_position_z: float | None = None
+    after_position_x: float | None = None
+    after_position_y: float | None = None
+    after_position_z: float | None = None
+    before_dimension: str | None = None
+    after_dimension: str | None = None
+    grid_anchor_x: int | None = None
+    grid_anchor_y: int | None = None
+    grid_anchor_z: int | None = None
+    anchor_source: str | None = None
+    probe_world_cells: tuple[tuple[int, int, int], ...] | None = None
+    probe_grid_cells: tuple[tuple[int, int, int], ...] | None = None
+    before_block_truth: tuple[Mapping[str, object], ...] | None = None
+    after_block_truth: tuple[Mapping[str, object], ...] | None = None
+    truth_missing_count: int | None = None
+    stimulus_target: str | None = None
+    target_changed: bool | None = None
+    target_expected_block_present: bool | None = None
+    control_cells_unchanged: bool | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.check_id, EnvironmentValidationId):
@@ -312,6 +397,8 @@ class EnvironmentValidationResult:
             "world_changed", "intended_block_present",
             "inventory_changed", "bucket_consumed", "empty_bucket_produced",
             "fluid_changed", "intended_fluid_present",
+            "target_changed", "target_expected_block_present",
+            "control_cells_unchanged",
         ):
             value = getattr(self, field_name)
             if value is not None:
@@ -405,10 +492,11 @@ class EnvironmentValidationResult:
             EnvironmentValidationId.E5,
             EnvironmentValidationId.E6,
             EnvironmentValidationId.E7,
+            EnvironmentValidationId.E8,
         ) and any(
             value is not None for value in action_fields
         ):
-            raise ValueError("action metadata is only valid for E4/E5/E6/E7 results")
+            raise ValueError("action metadata is only valid for E4/E5/E6/E7/E8 results")
         camera_fields = (
             self.requested_yaw, self.requested_pitch,
             self.before_yaw, self.before_pitch, self.after_yaw, self.after_pitch,
@@ -439,8 +527,9 @@ class EnvironmentValidationResult:
             EnvironmentValidationId.E5,
             EnvironmentValidationId.E6,
             EnvironmentValidationId.E7,
+            EnvironmentValidationId.E8,
         ):
-            raise ValueError("requested_duration_ticks is only valid for E5/E6/E7 results")
+            raise ValueError("requested_duration_ticks is only valid for E5/E6/E7/E8 results")
         if self.check_id not in (
             EnvironmentValidationId.E6,
             EnvironmentValidationId.E7,
@@ -486,6 +575,22 @@ class EnvironmentValidationResult:
             value is not None for value in bucket_fields
         ):
             raise ValueError("bucket metadata is only valid for E7 results")
+        truth_fields = (
+            self.before_step_id, self.after_step_id,
+            self.before_position_x, self.before_position_y, self.before_position_z,
+            self.after_position_x, self.after_position_y, self.after_position_z,
+            self.before_dimension, self.after_dimension,
+            self.grid_anchor_x, self.grid_anchor_y, self.grid_anchor_z,
+            self.anchor_source, self.probe_world_cells, self.probe_grid_cells,
+            self.before_block_truth, self.after_block_truth,
+            self.truth_missing_count, self.stimulus_target,
+            self.target_changed, self.target_expected_block_present,
+            self.control_cells_unchanged,
+        )
+        if self.check_id is not EnvironmentValidationId.E8 and any(
+            value is not None for value in truth_fields
+        ):
+            raise ValueError("block-truth metadata is only valid for E8 results")
         if self.bucket_variant is not None:
             object.__setattr__(
                 self,
@@ -522,6 +627,52 @@ class EnvironmentValidationResult:
                     field_name,
                     validate_selected_item(value, field_name),
                 )
+        if self.check_id is EnvironmentValidationId.E8:
+            for field_name in ("before_step_id", "after_step_id"):
+                value = getattr(self, field_name)
+                if value is not None and (type(value) is not int or value < 0):
+                    raise ValueError(f"{field_name} must be a non-negative int or None")
+            for field_name in (
+                "before_position_x", "before_position_y", "before_position_z",
+                "after_position_x", "after_position_y", "after_position_z",
+            ):
+                value = getattr(self, field_name)
+                if value is not None:
+                    object.__setattr__(self, field_name, finite_number(value, field_name))
+            for field_name in ("before_dimension", "after_dimension"):
+                value = getattr(self, field_name)
+                if value is not None:
+                    object.__setattr__(self, field_name, validate_dimension(value, field_name))
+            for field_name in ("grid_anchor_x", "grid_anchor_y", "grid_anchor_z"):
+                value = getattr(self, field_name)
+                if value is not None:
+                    object.__setattr__(self, field_name, validate_cell_coordinate(value, field_name))
+            if self.anchor_source is not None:
+                object.__setattr__(self, "anchor_source", validate_anchor_source(self.anchor_source))
+            if self.probe_world_cells is not None:
+                object.__setattr__(
+                    self, "probe_world_cells", _probe_cell_region(self.probe_world_cells, "probe_world_cells")
+                )
+            if self.probe_grid_cells is not None:
+                object.__setattr__(
+                    self, "probe_grid_cells", _probe_cell_region(self.probe_grid_cells, "probe_grid_cells")
+                )
+            if self.before_block_truth is not None:
+                object.__setattr__(
+                    self, "before_block_truth", _block_truth_records(self.before_block_truth, "before_block_truth")
+                )
+            if self.after_block_truth is not None:
+                object.__setattr__(
+                    self, "after_block_truth", _block_truth_records(self.after_block_truth, "after_block_truth")
+                )
+            if self.truth_missing_count is not None and (
+                type(self.truth_missing_count) is not int or self.truth_missing_count < 0
+            ):
+                raise ValueError("truth_missing_count must be a non-negative int or None")
+            if self.stimulus_target is not None:
+                object.__setattr__(
+                    self, "stimulus_target", validate_block_name(self.stimulus_target, "stimulus_target")
+                )
         reset_failure_fields = (
             self.failure_stage,
             self.original_exception_type,
@@ -533,10 +684,11 @@ class EnvironmentValidationResult:
             EnvironmentValidationId.E5,
             EnvironmentValidationId.E6,
             EnvironmentValidationId.E7,
+            EnvironmentValidationId.E8,
         ) and any(
             value is not None for value in reset_failure_fields
         ):
-            raise ValueError("reset-failure audit metadata is only valid for E5/E6/E7 results")
+            raise ValueError("reset-failure audit metadata is only valid for E5/E6/E7/E8 results")
         if self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E5:
             if not (
                 self.failure_stage == "reset"
@@ -631,9 +783,37 @@ class EnvironmentValidationResult:
                 and self.exception_traceback is not None
             ):
                 raise ValueError("E7 action_failed requires complete action audit")
+        elif self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E8:
+            if not (
+                self.failure_stage == "reset"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+                and self.tested_action_count == 0
+                and self.translated_action_accepted is None
+                and all(
+                    value is None
+                    for value in (
+                        self.before_block_truth,
+                        self.after_block_truth,
+                        self.target_changed,
+                        self.target_expected_block_present,
+                        self.control_cells_unchanged,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "E8 reset_failed requires complete reset audit and zero block-truth evidence"
+                )
+        elif self.outcome == "action_failed" and self.check_id is EnvironmentValidationId.E8:
+            if not (
+                self.failure_stage == "action"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+            ):
+                raise ValueError("E8 action_failed requires complete action audit")
         elif any(value is not None for value in reset_failure_fields):
             raise ValueError(
-                "reset-failure audit metadata requires E5/E6/E7 reset_failed or E6/E7 action_failed"
+                "reset-failure audit metadata requires E5/E6/E7/E8 reset_failed or E6/E7/E8 action_failed"
             )
         movement_thresholds = (
             self.minimum_horizontal_distance,
@@ -702,6 +882,9 @@ class EnvironmentValidationResult:
         elif self.check_id is EnvironmentValidationId.E7:
             success_outcome = E7_SUCCESS_OUTCOME
             success_error = "success requires a clean independently observed E7 bucket use"
+        elif self.check_id is EnvironmentValidationId.E8:
+            success_outcome = E8_SUCCESS_OUTCOME
+            success_error = "success requires a clean independently observed E8 block-truth region"
         else:
             success_outcome = None
             success_error = "success is not defined for this validation case"
@@ -854,6 +1037,46 @@ class EnvironmentValidationResult:
                     raise ValueError(
                         "E7 success requires one accepted use_item plus matching inventory and fluid evidence"
                     )
+            elif self.check_id is EnvironmentValidationId.E8:
+                if not (
+                    self.agent_id is not None
+                    and self.tested_step_id == 1
+                    and self.action_type == "place_block"
+                    and self.translated_action_accepted is True
+                    and self.tested_action_count == 1
+                    and self.stimulus_target is not None
+                    and self.requested_duration_ticks == 1
+                    and self.before_step_id == 0
+                    and self.after_step_id == 1
+                    and self.before_dimension == "minecraft:overworld"
+                    and self.after_dimension == "minecraft:overworld"
+                    and all(
+                        value is not None
+                        for value in (
+                            self.before_position_x,
+                            self.before_position_y,
+                            self.before_position_z,
+                            self.after_position_x,
+                            self.after_position_y,
+                            self.after_position_z,
+                            self.grid_anchor_x,
+                            self.grid_anchor_y,
+                            self.grid_anchor_z,
+                            self.anchor_source,
+                            self.probe_world_cells,
+                            self.probe_grid_cells,
+                            self.before_block_truth,
+                            self.after_block_truth,
+                        )
+                    )
+                    and self.truth_missing_count == 0
+                    and self.target_changed is True
+                    and self.target_expected_block_present is True
+                    and self.control_cells_unchanged is True
+                ):
+                    raise ValueError(
+                        "E8 success requires one accepted stimulus plus complete region block-truth evidence"
+                    )
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,
             E1_SUCCESS_OUTCOME,
@@ -863,6 +1086,7 @@ class EnvironmentValidationResult:
             E5_SUCCESS_OUTCOME,
             E6_SUCCESS_OUTCOME,
             E7_SUCCESS_OUTCOME,
+            E8_SUCCESS_OUTCOME,
         }:
             raise ValueError(f"{self.outcome} requires success=True")
         if self.outcome == INVENTORY_MISMATCH:
@@ -1103,6 +1327,89 @@ class EnvironmentValidationResult:
                     "tested_action_count": self.tested_action_count,
                     "tested_step_id": self.tested_step_id,
                     "translated_action_accepted": self.translated_action_accepted,
+                }
+            )
+        elif self.check_id is EnvironmentValidationId.E8:
+            payload.update(
+                {
+                    "action_type": self.action_type,
+                    "after_block_truth": (
+                        None
+                        if self.after_block_truth is None
+                        else [dict(item) for item in self.after_block_truth]
+                    ),
+                    "after_dimension": self.after_dimension,
+                    "after_position": (
+                        None
+                        if self.after_position_x is None
+                        or self.after_position_y is None
+                        or self.after_position_z is None
+                        else [
+                            self.after_position_x,
+                            self.after_position_y,
+                            self.after_position_z,
+                        ]
+                    ),
+                    "after_step_id": self.after_step_id,
+                    "agent_id": self.agent_id,
+                    "anchor_source": self.anchor_source,
+                    "before_block_truth": (
+                        None
+                        if self.before_block_truth is None
+                        else [dict(item) for item in self.before_block_truth]
+                    ),
+                    "before_dimension": self.before_dimension,
+                    "before_position": (
+                        None
+                        if self.before_position_x is None
+                        or self.before_position_y is None
+                        or self.before_position_z is None
+                        else [
+                            self.before_position_x,
+                            self.before_position_y,
+                            self.before_position_z,
+                        ]
+                    ),
+                    "before_step_id": self.before_step_id,
+                    "control_cells_unchanged": self.control_cells_unchanged,
+                    "environment_launch_count": self.environment_launch_count,
+                    "exception_traceback": self.exception_traceback,
+                    "failure_stage": self.failure_stage,
+                    "grid_anchor_world": (
+                        None
+                        if self.grid_anchor_x is None
+                        or self.grid_anchor_y is None
+                        or self.grid_anchor_z is None
+                        else [self.grid_anchor_x, self.grid_anchor_y, self.grid_anchor_z]
+                    ),
+                    "original_exception_type": self.original_exception_type,
+                    "probe_grid_cells": (
+                        None
+                        if self.probe_grid_cells is None
+                        else [list(cell) for cell in self.probe_grid_cells]
+                    ),
+                    "probe_world_cells": (
+                        None
+                        if self.probe_world_cells is None
+                        else [list(cell) for cell in self.probe_world_cells]
+                    ),
+                    "requested_duration_ticks": self.requested_duration_ticks,
+                    "reset_attempt_count": self.reset_attempt_count,
+                    "stimulus_action": (
+                        None
+                        if self.action_type is None
+                        else {
+                            "action_type": self.action_type,
+                            "duration_ticks": self.requested_duration_ticks,
+                            "target": self.stimulus_target,
+                        }
+                    ),
+                    "target_changed": self.target_changed,
+                    "target_expected_block_present": self.target_expected_block_present,
+                    "tested_action_count": self.tested_action_count,
+                    "tested_step_id": self.tested_step_id,
+                    "translated_action_accepted": self.translated_action_accepted,
+                    "truth_missing_count": self.truth_missing_count,
                 }
             )
         return payload

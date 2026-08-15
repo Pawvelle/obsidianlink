@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import Counter
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -333,12 +333,13 @@ class MineRLEnvironmentBackend:
         # the casting workflows' slots from their frozen initial inventory.
         if is_legacy_route_a0:
             params = task.scenario_parameters
-            # E6 dirt-only and E7 bucket-only calibrations must map the
-            # actual inventory onto hotbar.1. The historical A0 three-item
-            # slot contract stays unchanged for every other route_a_a0 caller.
+            # E6 dirt-only, E7 bucket-only, and E8 dirt-stimulus calibrations
+            # must map the actual inventory onto hotbar.1. The historical A0
+            # three-item slot contract stays unchanged for every other
+            # route_a_a0 caller.
             if (
                 isinstance(params, Mapping)
-                and params.get("p1_validation_id") in {"E6", "E7"}
+                and params.get("p1_validation_id") in {"E6", "E7", "E8"}
             ):
                 self._hotbar_mapping = build_hotbar_mapping(
                     task.initial_inventories["agent_1"]
@@ -546,65 +547,50 @@ class MineRLEnvironmentBackend:
                 payload[target] = location[source]
         return payload
 
+    def get_server_truth_snapshot(
+        self, cells: Sequence[tuple[int, int, int]]
+    ) -> Mapping[str, Any] | None:
+        """Return evaluator-only target-region block truth for P1 E8/E9.
+
+        ``cells`` are Minecraft **world** coordinates. Lookup uses the
+        spawn-relative ObservationFromGrid(atSpawn=true) conversion. A
+        present ``portal_grid_origin`` that disagrees with spawn fails
+        closed. Empty, duplicate, or out-of-bounds regions fail closed
+        without silent clipping. Block names come only from the latest
+        ``portal_grid``; action intent is never copied into truth.
+        """
+
+        return self._read_world_cells_block_truth(
+            cells, require_portal_grid=True, include_snapshot_context=True
+        )
+
     def get_block_placement_truth(
         self, cell: tuple[int, int, int]
     ) -> Mapping[str, Any] | None:
-        """Return narrow evaluator-only single-cell block truth for P1 E6.
+        """Return historical P1 E6 single-cell block truth.
 
-        ``cell`` is a Minecraft **world** coordinate. The evaluator grid is
-        ObservationFromGrid(atSpawn=true), so lookup uses spawn-relative
-        ``world - spawn``. A present ``portal_grid_origin`` that disagrees
-        with spawn fails closed instead of reading the wrong cell.
-
-        The observed block is read only from the latest ``portal_grid``. It
-        is never inferred from the requested ``place_block`` target, spawn
-        configuration, RGB, or public observations. This is not the future
-        E8 generalized server-truth API.
+        This is a compatibility wrapper over the generalized E8 region
+        reader. The returned fields remain ``episode_id``, ``agent_id``,
+        ``step_id``, ``x``, ``y``, ``z``, and ``block`` so existing E6
+        evidence and tests stay valid. ``other`` / ``missing`` are still
+        returned as raw names for the E6 adapter to reject.
         """
 
-        from obsidianlink.env.validation.placement import spawn_relative_grid_cell
-
-        task = self._require_task()
-        raw = self._latest_raw
-        if raw is None:
+        payload = self._read_world_cells_block_truth(
+            (cell,), require_portal_grid=False, include_snapshot_context=False
+        )
+        if payload is None:
             return None
-        if (
-            not isinstance(cell, tuple)
-            or len(cell) != 3
-            or any(type(value) is not int for value in cell)
-        ):
-            raise ValueError("placement truth cell must be an int (x, y, z) tuple")
-        spawn = task.spawn_positions.get("agent_1")
-        if (
-            not isinstance(spawn, tuple)
-            or len(spawn) != 3
-            or any(type(value) is not int for value in spawn)
-        ):
-            raise ValueError("placement truth spawn is missing or invalid")
-        actual_anchor = self._grid_world_anchor(raw)
-        if actual_anchor is not None and actual_anchor != spawn:
-            raise ValueError("placement truth grid anchor differs from spawn")
-        grid_cell = spawn_relative_grid_cell(cell, spawn)
-        try:
-            grid = self._grid_from_raw(raw)
-        except (TypeError, ValueError):
-            return None
-        index = self._cell_index_in_grid(grid_cell)
-        if index is None:
-            raise ValueError("placement truth cell is outside the evaluator grid")
-        block_id = int(grid[index])
-        if 0 <= block_id < len(PORTAL_GRID_BLOCKS):
-            block = PORTAL_GRID_BLOCKS[block_id]
-        else:
-            block = "missing"
+        record = payload["block_truth"][0]
+        world = record["world_cell"]
         return {
-            "episode_id": task.task_id,
-            "agent_id": "agent_1",
-            "step_id": self._step_id,
-            "x": cell[0],
-            "y": cell[1],
-            "z": cell[2],
-            "block": block,
+            "episode_id": payload["episode_id"],
+            "agent_id": payload["agent_id"],
+            "step_id": payload["step_id"],
+            "x": world[0],
+            "y": world[1],
+            "z": world[2],
+            "block": record["block"],
         }
 
     def get_bucket_fluid_truth(
@@ -1656,6 +1642,129 @@ class MineRLEnvironmentBackend:
             present=fluid_id in positive_ids,
             evidence_step=step_id,
         )
+
+    def _read_world_cells_block_truth(
+        self,
+        cells: Sequence[tuple[int, int, int]],
+        *,
+        require_portal_grid: bool,
+        include_snapshot_context: bool,
+    ) -> Mapping[str, Any] | None:
+        """Read exact portal-grid names for world cells. Shared by E6/E7/E8."""
+
+        from obsidianlink.env.validation.placement import spawn_relative_grid_cell
+
+        task = self._require_task()
+        raw = self._latest_raw
+        if raw is None:
+            return None
+        if not isinstance(cells, Sequence) or isinstance(cells, (str, bytes)):
+            raise ValueError("placement truth cell must be an int (x, y, z) tuple")
+        if len(cells) == 0:
+            raise ValueError("truth region is empty")
+        normalized: list[tuple[int, int, int]] = []
+        seen_world: set[tuple[int, int, int]] = set()
+        for cell in cells:
+            if (
+                not isinstance(cell, tuple)
+                or len(cell) != 3
+                or any(type(value) is not int for value in cell)
+            ):
+                raise ValueError("placement truth cell must be an int (x, y, z) tuple")
+            if cell in seen_world:
+                raise ValueError("truth region contains a duplicate world cell")
+            seen_world.add(cell)
+            normalized.append(cell)
+        spawn = task.spawn_positions.get("agent_1")
+        if (
+            not isinstance(spawn, tuple)
+            or len(spawn) != 3
+            or any(type(value) is not int for value in spawn)
+        ):
+            raise ValueError("placement truth spawn is missing or invalid")
+        actual_anchor = self._grid_world_anchor(raw)
+        if actual_anchor is not None and actual_anchor != spawn:
+            raise ValueError("placement truth grid anchor differs from spawn")
+        if actual_anchor is not None:
+            anchor = actual_anchor
+            anchor_source = "portal_grid_origin"
+        else:
+            anchor = spawn
+            anchor_source = "expected_spawn_fallback"
+        if require_portal_grid and "portal_grid" not in raw:
+            return None
+        try:
+            grid = self._grid_from_raw(raw)
+        except (TypeError, ValueError):
+            return None
+        seen_grid: set[tuple[int, int, int]] = set()
+        records: list[dict[str, Any]] = []
+        missing_count = 0
+        for world_cell in normalized:
+            grid_cell = spawn_relative_grid_cell(world_cell, anchor)
+            if grid_cell in seen_grid:
+                raise ValueError("truth region contains a duplicate grid cell")
+            seen_grid.add(grid_cell)
+            index = self._cell_index_in_grid(grid_cell)
+            if index is None:
+                raise ValueError("placement truth cell is outside the evaluator grid")
+            block_id = int(grid[index])
+            if 0 <= block_id < len(PORTAL_GRID_BLOCKS):
+                block = PORTAL_GRID_BLOCKS[block_id]
+            else:
+                block = "missing"
+            if block == "missing":
+                missing_count += 1
+            records.append(
+                {
+                    "block": block,
+                    "grid_cell": list(grid_cell),
+                    "world_cell": list(world_cell),
+                }
+            )
+        payload: dict[str, Any] = {
+            "agent_id": "agent_1",
+            "block_truth": records,
+            "episode_id": task.task_id,
+            "step_id": self._step_id,
+            "truth_missing_count": missing_count,
+        }
+        if include_snapshot_context:
+            position = self._server_position_from_latest()
+            if "portal_dimension" not in raw:
+                dimension: str | None = None
+            else:
+                dimension = self._dimension(raw)
+            payload.update(
+                {
+                    "anchor_source": anchor_source,
+                    "dimension": dimension,
+                    "grid_anchor_world": list(anchor),
+                    "position_world": None if position is None else list(position),
+                }
+            )
+        return payload
+
+    def _server_position_from_latest(self) -> tuple[float, float, float] | None:
+        """Read FullStats xpos/ypos/zpos; never infer spawn or action intent."""
+
+        candidates: list[Mapping[str, Any]] = []
+        if isinstance(self._latest_raw, Mapping):
+            candidates.append(self._latest_raw)
+        if isinstance(self._latest_environment_info, Mapping):
+            candidates.append(self._latest_environment_info)
+        for source in candidates:
+            location = source.get("location_stats")
+            if not isinstance(location, Mapping):
+                continue
+            try:
+                x = float(np.asarray(location["xpos"]).item())
+                y = float(np.asarray(location["ypos"]).item())
+                z = float(np.asarray(location["zpos"]).item())
+            except (KeyError, TypeError, ValueError):
+                continue
+            return (x, y, z)
+        return None
 
     @staticmethod
     def _dimension(raw: Mapping[str, Any]) -> str:

@@ -322,9 +322,9 @@ class E0LifecycleValidationTests(unittest.TestCase):
         )
 
     def test_unimplemented_case_fails_closed_without_lifecycle(self) -> None:
-        e8 = P1_VALIDATION_CASES[8]
-        self.assertEqual(e8.check_id, EnvironmentValidationId.E8)
-        result, stub = _run(case=e8)
+        e9 = P1_VALIDATION_CASES[9]
+        self.assertEqual(e9.check_id, EnvironmentValidationId.E9)
+        result, stub = _run(case=e9)
         self.assertIsNone(stub)
         self.assertFalse(result.success)
         self.assertEqual(result.outcome, "runtime_error")

@@ -36,6 +36,11 @@ PUBLIC_INVENTORY_LEAK_KEYS = frozenset(
         "pov",
         "rgb",
         "selected_item",
+        "server_truth",
+        "block_truth",
+        "grid_anchor",
+        "evaluator_dimension",
+        "truth_snapshot",
         "workflow_stage",
     }
 )
