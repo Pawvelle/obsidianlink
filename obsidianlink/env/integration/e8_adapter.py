@@ -21,7 +21,11 @@ from obsidianlink.env.integration.e8_config import (
     build_e8_compatibility_task,
 )
 from obsidianlink.env.validation.movement import finite_number
-from obsidianlink.env.validation.placement import validate_block_name, validate_target_cell
+from obsidianlink.env.validation.placement import (
+    validate_block_name,
+    validate_cell_coordinate,
+    validate_target_cell,
+)
 from obsidianlink.env.validation.truth import (
     EVALUATOR_TRUTH_LEAK_KEYS,
     BlockTruthActionExecution,
@@ -41,10 +45,13 @@ def _scalar(value: object) -> object:
 
 
 def _cell_tuple(value: object, field_name: str) -> tuple[int, int, int]:
+    """Accept only exact integer coordinates; never coerce floats/bools/strings."""
+
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and len(value) == 3:
-        return validate_target_cell(
-            (int(_scalar(value[0])), int(_scalar(value[1])), int(_scalar(value[2]))),
-            field_name,
+        return (
+            validate_cell_coordinate(_scalar(value[0]), f"{field_name}.x"),
+            validate_cell_coordinate(_scalar(value[1]), f"{field_name}.y"),
+            validate_cell_coordinate(_scalar(value[2]), f"{field_name}.z"),
         )
     raise ValueError(f"{field_name} must be an int (x, y, z) sequence")
 
@@ -103,21 +110,20 @@ def server_truth_snapshot(
             continue
         if block == "other":
             raise ValueError("unknown block truth")
+        world_cell = _cell_tuple(record.get("world_cell"), "world_cell")
+        grid_cell = _cell_tuple(record.get("grid_cell"), "grid_cell")
         try:
-            truths.append(
-                ServerBlockTruth(
-                    _cell_tuple(record.get("world_cell"), "world_cell"),
-                    _cell_tuple(record.get("grid_cell"), "grid_cell"),
-                    validate_block_name(block, "block"),
-                )
-            )
+            name = validate_block_name(block, "block")
         except (TypeError, ValueError) as exc:
             raise ValueError("unknown block truth") from exc
-    reported_missing = _scalar(value["truth_missing_count"])
-    if type(reported_missing) is not int or reported_missing < 0:
+        truths.append(ServerBlockTruth(world_cell, grid_cell, name))
+    observed_missing_count = missing_count
+    reported_missing_count = _scalar(value["truth_missing_count"])
+    if type(reported_missing_count) is not int or reported_missing_count < 0:
         raise ValueError("truth_missing_count must be a non-negative int")
-    if missing_count != reported_missing:
-        missing_count = max(missing_count, reported_missing)
+    if observed_missing_count != reported_missing_count:
+        raise ValueError("truth_missing_count does not match block_truth records")
+    missing_count = reported_missing_count
     if tuple(item.world_cell for item in truths) != expected_cells and missing_count == 0:
         raise ValueError("server truth snapshot region differs from frozen E8 probes")
     return ServerTruthSnapshot(

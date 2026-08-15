@@ -30,6 +30,7 @@ from obsidianlink.env.portal_spec import (
     PORTAL_GRID_SIZE,
 )
 from obsidianlink.env.validation import E8_SERVER_BLOCK_TRUTH_CASE, EnvironmentValidationRunner
+from obsidianlink.env.validation.truth import BlockTruthActionExecution, inspect_block_truth
 from tests.helpers import sample_task
 from tests.test_minerl_backend import _ControlledMineRLEnv
 
@@ -266,6 +267,105 @@ class E8MineRLIntegrationTests(unittest.TestCase):
         ):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 server_truth_snapshot(value)
+
+    def test_snapshot_accepts_python_and_numpy_integer_coordinates(self):
+        base = _Backend().get_server_truth_snapshot(E8_PROBE_WORLD_CELLS)
+        python_ints = server_truth_snapshot(
+            {**base, "grid_anchor_world": [0, 4, 0]}
+        )
+        self.assertEqual(python_ints.grid_anchor_world, (0, 4, 0))
+        numpy_anchor = server_truth_snapshot(
+            {
+                **base,
+                "grid_anchor_world": [
+                    np.asarray(0, dtype=np.int32),
+                    np.asarray(4, dtype=np.int64),
+                    np.asarray(0, dtype=np.int32),
+                ],
+            }
+        )
+        self.assertEqual(numpy_anchor.grid_anchor_world, (0, 4, 0))
+        records = [dict(item) for item in base["block_truth"]]
+        records[0]["world_cell"] = [
+            np.asarray(0, dtype=np.int32),
+            np.asarray(4, dtype=np.int64),
+            np.asarray(1, dtype=np.int32),
+        ]
+        records[0]["grid_cell"] = [
+            np.asarray(0, dtype=np.int32),
+            np.asarray(0, dtype=np.int64),
+            np.asarray(1, dtype=np.int32),
+        ]
+        numpy_cells = server_truth_snapshot({**base, "block_truth": records})
+        self.assertEqual(numpy_cells.block_truth[0].world_cell, (0, 4, 1))
+        self.assertEqual(numpy_cells.block_truth[0].grid_cell, (0, 0, 1))
+
+    def test_snapshot_rejects_non_integer_coordinate_coercion(self):
+        base = _Backend().get_server_truth_snapshot(E8_PROBE_WORLD_CELLS)
+        illegal_anchors = (
+            [0.0, 4.0, 0.0],
+            [0.5, 4.0, 0.0],
+            [False, 4, 0],
+            ["0", 4, 0],
+        )
+        for anchor in illegal_anchors:
+            with self.subTest(anchor=anchor), self.assertRaises(ValueError):
+                server_truth_snapshot({**base, "grid_anchor_world": anchor})
+        illegal_world = (
+            [0.0, 4.0, 1.0],
+            [0.5, 4.0, 1.0],
+            [False, 4, 1],
+            ["0", 4, 1],
+        )
+        for world in illegal_world:
+            records = [dict(item) for item in base["block_truth"]]
+            records[0]["world_cell"] = world
+            with self.subTest(world=world), self.assertRaises(ValueError):
+                server_truth_snapshot({**base, "block_truth": records})
+
+    def test_truth_missing_count_must_match_missing_records_exactly(self):
+        base = _Backend().get_server_truth_snapshot(E8_PROBE_WORLD_CELLS)
+        zero = server_truth_snapshot({**base, "truth_missing_count": 0})
+        self.assertEqual(zero.truth_missing_count, 0)
+        records = [dict(item) for item in base["block_truth"]]
+        records[0]["block"] = "missing"
+        consistent = server_truth_snapshot(
+            {**base, "block_truth": records, "truth_missing_count": 1}
+        )
+        self.assertEqual(consistent.truth_missing_count, 1)
+        self.assertEqual(len(consistent.block_truth), 2)
+        after = server_truth_snapshot({**base, "step_id": 1})
+        inspection = inspect_block_truth(
+            consistent,
+            after,
+            BlockTruthActionExecution(
+                EPISODE, E8_AGENT_ID, 1, "place_block", "dirt", 1, True, 1
+            ),
+            probe_world_cells=KNOWN_WORLD,
+            probe_grid_cells=KNOWN_GRID,
+            expected_before_blocks={cell: "air" for cell in KNOWN_WORLD},
+            expected_after_blocks={
+                KNOWN_WORLD[0]: "dirt",
+                KNOWN_WORLD[1]: "air",
+                KNOWN_WORLD[2]: "air",
+            },
+            target_world_cell=KNOWN_WORLD[0],
+            control_world_cells=KNOWN_WORLD[1:],
+            duration_ticks=1,
+            stimulus_target="dirt",
+        )
+        self.assertNotEqual(inspection.outcome, "block_truth_ok")
+        self.assertEqual(inspection.outcome, "truth_block_missing")
+        mismatches = (
+            ({**base, "truth_missing_count": 1},),
+            ({**base, "block_truth": records, "truth_missing_count": 0},),
+            ({**base, "block_truth": records, "truth_missing_count": 2},),
+        )
+        for (payload,) in mismatches:
+            with self.subTest(payload=payload), self.assertRaisesRegex(
+                ValueError, "truth_missing_count does not match block_truth records"
+            ):
+                server_truth_snapshot(payload)
 
     def test_real_backend_truth_comes_from_grid_not_action_target(self):
         env = _TruthEnv(after_target=None)

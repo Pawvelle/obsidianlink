@@ -62,6 +62,7 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E8 ServerTruthSnapshot block portion: implemented / offline verified; fluid portion remains E9
 - E8 generalized target-region block truth: offline verified
 - E8 MineRL adapter / live bridge: implemented / offline tested
+- E8 truth parser hardened to reject coordinate coercion and inconsistent truth_missing_count.
 - E8 calibration: 3-cell region world `(0, 4, 1)` / `(1, 4, 1)` / `(-1, 4, 1)` = atSpawn grid `(0, 0, 1)` / `(1, 0, 1)` / `(-1, 0, 1)`; before all `air`; one E6-style `place_block(dirt)` stimulus; after target `dirt`, controls `air`; success is `block_truth_ok`, not placement success
 - E8 real execution: NOT RUN
 - E8 `integration_verified`: NO

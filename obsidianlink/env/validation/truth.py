@@ -113,6 +113,7 @@ _TRUTH_ERROR_MARKERS = (
     ("dimension is invalid", TRUTH_DIMENSION_INVALID),
     ("wrong dimension", TRUTH_WRONG_DIMENSION),
     ("leaked evaluator truth", TRUTH_LEAK),
+    ("does not match block_truth records", TRUTH_BLOCK_MISSING),
 )
 
 
