@@ -154,4 +154,4 @@ E10 是 calibration，不是 benchmark：可预置合法 support/trench，determ
 
 ## 12. Current implementation statement
 
-当前只能声称 v2 architecture/scope frozen、legacy infrastructure preserved、P1 E0–E7 runtime 离线 `unit_verified`，以及已审查的真实 E0 lifecycle、E1 RGB（360×640×3 uint8）、E2 inventory、E3 selected-item、E4 camera、E5 movement、E6 block-placement 与 E7 WATER bucket-usage success evidence。E0–E7 都不是 `integration_verified`。E7 LAVA 尚未真实运行。E8–E12 尚未实现、没有 end-to-end task implementation、没有 Multi-Agent gameplay、没有 formal dataset 或 benchmark evaluation。P1 Hard Gate 未通过，P2 不得开始。
+当前只能声称 v2 architecture/scope frozen、legacy infrastructure preserved、P1 E0–E7 runtime 离线 `unit_verified`，以及已审查的真实 E0 lifecycle、E1 RGB（360×640×3 uint8）、E2 inventory、E3 selected-item、E4 camera、E5 movement、E6 block-placement 与 E7 WATER/LAVA bucket-usage success evidence。E0–E7 都不是 `integration_verified`。E8–E12 尚未实现、没有 end-to-end task implementation、没有 Multi-Agent gameplay、没有 formal dataset 或 benchmark evaluation。P1 Hard Gate 未通过，P2 不得开始。

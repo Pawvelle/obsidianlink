@@ -54,7 +54,9 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E7 calibration: closed WATER / LAVA variants; each is a fresh episode with exactly one `use_item`; spawn world `(0, 4, 0)`, yaw `0`, pitch `60`; target world `(0, 4, 1)` = atSpawn grid `(0, 0, 1)`; success requires public inventory transition AND evaluator-only fluid effect
 - E7 WATER real attempt #1: episode `p1-e7-water-live-001` / `runs/p1_e7_bucket_usage/water/e7-water-live-20260815-001`; `real_execution_performed=true`; `success=true`; `outcome=bucket_ok`; before inventory `water_bucket=1` `bucket=0`; before fluid `none` at world `(0, 4, 1)` / atSpawn grid `(0, 0, 1)`; one `use_item(water_bucket)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after inventory `water_bucket=0` `bucket=1`; after fluid `water`; `inventory_changed=true`; `bucket_consumed=true`; `empty_bucket_produced=true`; `fluid_changed=true`; `intended_fluid_present=true`; close returned; `process_release_proven=false`
 - E7 WATER reviewed real success: YES
-- E7 LAVA real execution: NOT RUN
+- E7 LAVA real attempt #1: episode `p1-e7-lava-live-001` / `runs/p1_e7_bucket_usage/lava/e7-lava-live-20260815-001`; `real_execution_performed=true`; `success=true`; `outcome=bucket_ok`; before inventory `lava_bucket=1` `bucket=0`; before fluid `none` at world `(0, 4, 1)` / atSpawn grid `(0, 0, 1)`; one `use_item(lava_bucket)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after inventory `lava_bucket=0` `bucket=1`; after fluid `lava`; `inventory_changed=true`; `bucket_consumed=true`; `empty_bucket_produced=true`; `fluid_changed=true`; `intended_fluid_present=true`; close returned; `process_release_proven=false`
+- E7 LAVA reviewed real success: YES
+- E7 real calibration coverage: WATER + LAVA complete
 - E7 `integration_verified`: NO
 - E8–E12: NOT STARTED
 - P1 Hard Gate: NOT PASSED
@@ -73,7 +75,7 @@ None of E0–E7 is `integration_verified`; `process_release_proven=false`. E0–
 
 - E0–E5 各有一次审查过的真实 success evidence，但稳定重复性与 OS-level process release 未证明，`integration_verified`: NO；
 - E6: `unit_verified`; one reviewed real success (`p1-e6-live-001`, `placement_ok`); `integration_verified`: NO；
-- E7: `unit_verified`; water/lava calibrations offline verified; adapter/live bridge implemented / offline tested; one reviewed WATER real success (`p1-e7-water-live-001`, `bucket_ok`); LAVA real execution NOT RUN; `integration_verified`: NO；
+- E7: `unit_verified`; water/lava calibrations offline verified; adapter/live bridge implemented / offline tested; one reviewed WATER real success (`p1-e7-water-live-001`, `bucket_ok`); one reviewed LAVA real success (`p1-e7-lava-live-001`, `bucket_ok`); real calibration coverage WATER + LAVA complete; `integration_verified`: NO；
 - E8–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
@@ -84,4 +86,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E7 contract, offline runtime, and MineRL adapter/live bridge are `unit_verified`. E7 WATER has one reviewed real success (`p1-e7-water-live-001`, `bucket_ok`). E7 LAVA real execution: NOT RUN. E7 `integration_verified`: NO. E0–E6 reviewed real success history is preserved. P1 Hard Gate: NOT PASSED. E8–E12: NOT STARTED. P2: NOT STARTED. Request explicit authorization for exactly ONE E7 LAVA real MineRL/Minecraft bucket calibration run. Do not start E8 automatically. Do not rerun WATER.
+E7 contract, offline runtime, and MineRL adapter/live bridge are `unit_verified`. E7 WATER has one reviewed real success (`p1-e7-water-live-001`, `bucket_ok`). E7 LAVA has one reviewed real success (`p1-e7-lava-live-001`, `bucket_ok`). E7 real calibration coverage: WATER + LAVA complete. E7 `integration_verified`: NO. E0–E6 reviewed real success history is preserved. P1 Hard Gate: NOT PASSED. E8–E12: NOT STARTED. P2: NOT STARTED. Request explicit authorization to start E8. Do not start E8 automatically. Do not rerun WATER or LAVA.
