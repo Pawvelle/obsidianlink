@@ -13,6 +13,17 @@ from typing import Any, Mapping
 from obsidianlink.env.validation.contract import EnvironmentValidationId
 from obsidianlink.env.validation.camera import CAMERA_OK, CAMERA_OUTCOMES, finite_angle
 from obsidianlink.env.validation.movement import MOVEMENT_OK, MOVEMENT_OUTCOMES, finite_number
+from obsidianlink.env.validation.bucket import (
+    BUCKET_OK,
+    BUCKET_OUTCOMES,
+    EMPTY_BUCKET_ITEM,
+    frozen_after_inventory,
+    frozen_before_inventory,
+    frozen_bucket_item,
+    frozen_expected_fluid,
+    validate_bucket_variant,
+    validate_fluid_class,
+)
 from obsidianlink.env.validation.placement import (
     PLACEMENT_OK,
     PLACEMENT_OUTCOMES,
@@ -53,7 +64,7 @@ VALIDATION_OUTCOMES = frozenset(
     }
 ) | INVENTORY_OUTCOMES | SELECTED_ITEM_OUTCOMES | frozenset(
     {INVENTORY_MISMATCH, SELECTED_ITEM_MISMATCH}
-) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | PLACEMENT_OUTCOMES | frozenset({"cleanup_failed", "action_failed"})
+) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | PLACEMENT_OUTCOMES | BUCKET_OUTCOMES | frozenset({"cleanup_failed", "action_failed"})
 E0_SUCCESS_OUTCOME = "lifecycle_ok"
 E1_SUCCESS_OUTCOME = "rgb_ok"
 E2_SUCCESS_OUTCOME = INVENTORY_OK
@@ -61,6 +72,7 @@ E3_SUCCESS_OUTCOME = SELECTED_ITEM_OK
 E4_SUCCESS_OUTCOME = CAMERA_OK
 E5_SUCCESS_OUTCOME = MOVEMENT_OK
 E6_SUCCESS_OUTCOME = PLACEMENT_OK
+E7_SUCCESS_OUTCOME = BUCKET_OK
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -194,6 +206,20 @@ class EnvironmentValidationResult:
     after_block: str | None = None
     world_changed: bool | None = None
     intended_block_present: bool | None = None
+    bucket_variant: str | None = None
+    bucket_item: str | None = None
+    expected_fluid: str | None = None
+    before_inventory: Mapping[str, int] | None = None
+    after_inventory: Mapping[str, int] | None = None
+    inventory_changed: bool | None = None
+    bucket_consumed: bool | None = None
+    empty_bucket_produced: bool | None = None
+    before_fluid: str | None = None
+    after_fluid: str | None = None
+    fluid_changed: bool | None = None
+    intended_fluid_present: bool | None = None
+    before_selected_item: str | None = None
+    after_selected_item: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.check_id, EnvironmentValidationId):
@@ -284,6 +310,8 @@ class EnvironmentValidationResult:
             "movement_direction_match", "lateral_drift_ok",
             "teleport_guard_ok", "vertical_drift_ok",
             "world_changed", "intended_block_present",
+            "inventory_changed", "bucket_consumed", "empty_bucket_produced",
+            "fluid_changed", "intended_fluid_present",
         ):
             value = getattr(self, field_name)
             if value is not None:
@@ -376,10 +404,11 @@ class EnvironmentValidationResult:
             EnvironmentValidationId.E4,
             EnvironmentValidationId.E5,
             EnvironmentValidationId.E6,
+            EnvironmentValidationId.E7,
         ) and any(
             value is not None for value in action_fields
         ):
-            raise ValueError("action metadata is only valid for E4/E5/E6 results")
+            raise ValueError("action metadata is only valid for E4/E5/E6/E7 results")
         camera_fields = (
             self.requested_yaw, self.requested_pitch,
             self.before_yaw, self.before_pitch, self.after_yaw, self.after_pitch,
@@ -409,12 +438,21 @@ class EnvironmentValidationResult:
         if self.requested_duration_ticks is not None and self.check_id not in (
             EnvironmentValidationId.E5,
             EnvironmentValidationId.E6,
+            EnvironmentValidationId.E7,
         ):
-            raise ValueError("requested_duration_ticks is only valid for E5/E6 results")
+            raise ValueError("requested_duration_ticks is only valid for E5/E6/E7 results")
+        if self.check_id not in (
+            EnvironmentValidationId.E6,
+            EnvironmentValidationId.E7,
+        ) and any(
+            value is not None for value in (
+                self.target_x, self.target_y, self.target_z,
+                self.target_grid_x, self.target_grid_y, self.target_grid_z,
+            )
+        ):
+            raise ValueError("target-cell metadata is only valid for E6/E7 results")
         placement_fields = (
             self.requested_target, self.calibration_block, self.expected_before_block,
-            self.target_x, self.target_y, self.target_z,
-            self.target_grid_x, self.target_grid_y, self.target_grid_z,
             self.before_block, self.after_block,
             self.world_changed, self.intended_block_present,
         )
@@ -436,6 +474,54 @@ class EnvironmentValidationResult:
             value = getattr(self, field_name)
             if value is not None:
                 object.__setattr__(self, field_name, validate_block_name(value, field_name))
+        bucket_fields = (
+            self.bucket_variant, self.bucket_item, self.expected_fluid,
+            self.before_inventory, self.after_inventory,
+            self.inventory_changed, self.bucket_consumed, self.empty_bucket_produced,
+            self.before_fluid, self.after_fluid, self.fluid_changed,
+            self.intended_fluid_present, self.before_selected_item,
+            self.after_selected_item,
+        )
+        if self.check_id is not EnvironmentValidationId.E7 and any(
+            value is not None for value in bucket_fields
+        ):
+            raise ValueError("bucket metadata is only valid for E7 results")
+        if self.bucket_variant is not None:
+            object.__setattr__(
+                self,
+                "bucket_variant",
+                validate_bucket_variant(self.bucket_variant).value,
+            )
+        if self.bucket_item is not None:
+            object.__setattr__(
+                self, "bucket_item", _require_identifier(self.bucket_item, "bucket_item")
+            )
+        if self.expected_fluid is not None:
+            object.__setattr__(
+                self,
+                "expected_fluid",
+                validate_fluid_class(self.expected_fluid, "expected_fluid"),
+            )
+        for field_name in ("before_fluid", "after_fluid"):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(
+                    self, field_name, validate_fluid_class(value, field_name)
+                )
+        for field_name in ("before_inventory", "after_inventory"):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(
+                    self, field_name, _inventory_snapshot(value, field_name)
+                )
+        for field_name in ("before_selected_item", "after_selected_item"):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(
+                    self,
+                    field_name,
+                    validate_selected_item(value, field_name),
+                )
         reset_failure_fields = (
             self.failure_stage,
             self.original_exception_type,
@@ -446,10 +532,11 @@ class EnvironmentValidationResult:
         if self.check_id not in (
             EnvironmentValidationId.E5,
             EnvironmentValidationId.E6,
+            EnvironmentValidationId.E7,
         ) and any(
             value is not None for value in reset_failure_fields
         ):
-            raise ValueError("reset-failure audit metadata is only valid for E5/E6 results")
+            raise ValueError("reset-failure audit metadata is only valid for E5/E6/E7 results")
         if self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E5:
             if not (
                 self.failure_stage == "reset"
@@ -512,8 +599,42 @@ class EnvironmentValidationResult:
                 and self.exception_traceback is not None
             ):
                 raise ValueError("E6 action_failed requires complete action audit")
+        elif self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E7:
+            if not (
+                self.failure_stage == "reset"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+                and self.tested_action_count == 0
+                and self.translated_action_accepted is None
+                and all(
+                    value is None
+                    for value in (
+                        self.before_inventory,
+                        self.after_inventory,
+                        self.inventory_changed,
+                        self.bucket_consumed,
+                        self.empty_bucket_produced,
+                        self.before_fluid,
+                        self.after_fluid,
+                        self.fluid_changed,
+                        self.intended_fluid_present,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "E7 reset_failed requires complete reset audit and zero bucket evidence"
+                )
+        elif self.outcome == "action_failed" and self.check_id is EnvironmentValidationId.E7:
+            if not (
+                self.failure_stage == "action"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+            ):
+                raise ValueError("E7 action_failed requires complete action audit")
         elif any(value is not None for value in reset_failure_fields):
-            raise ValueError("reset-failure audit metadata requires E5/E6 reset_failed or E6 action_failed")
+            raise ValueError(
+                "reset-failure audit metadata requires E5/E6/E7 reset_failed or E6/E7 action_failed"
+            )
         movement_thresholds = (
             self.minimum_horizontal_distance,
             self.minimum_forward_projection,
@@ -578,6 +699,9 @@ class EnvironmentValidationResult:
         elif self.check_id is EnvironmentValidationId.E6:
             success_outcome = E6_SUCCESS_OUTCOME
             success_error = "success requires a clean independently observed E6 placement"
+        elif self.check_id is EnvironmentValidationId.E7:
+            success_outcome = E7_SUCCESS_OUTCOME
+            success_error = "success requires a clean independently observed E7 bucket use"
         else:
             success_outcome = None
             success_error = "success is not defined for this validation case"
@@ -690,6 +814,46 @@ class EnvironmentValidationResult:
                     and self.intended_block_present is True
                 ):
                     raise ValueError("E6 success requires one accepted place_block and complete block-truth evidence")
+            elif self.check_id is EnvironmentValidationId.E7:
+                try:
+                    variant = validate_bucket_variant(self.bucket_variant)
+                except ValueError as exc:
+                    raise ValueError(
+                        "E7 success requires a frozen water/lava calibration variant"
+                    ) from exc
+                expected_item = frozen_bucket_item(variant)
+                expected_fluid = frozen_expected_fluid(variant)
+                expected_before = frozen_before_inventory(variant)
+                expected_after = frozen_after_inventory(variant)
+                if not (
+                    self.agent_id is not None
+                    and self.tested_step_id == 1
+                    and self.action_type == "use_item"
+                    and self.translated_action_accepted is True
+                    and self.tested_action_count == 1
+                    and self.bucket_item == expected_item
+                    and self.expected_fluid == expected_fluid
+                    and self.requested_duration_ticks == 1
+                    and self.target_x is not None
+                    and self.target_y is not None
+                    and self.target_z is not None
+                    and self.target_grid_x is not None
+                    and self.target_grid_y is not None
+                    and self.target_grid_z is not None
+                    and self.before_inventory == expected_before
+                    and self.after_inventory == expected_after
+                    and self.inventory_changed is True
+                    and self.bucket_consumed is True
+                    and self.empty_bucket_produced is True
+                    and self.before_fluid == "none"
+                    and self.after_fluid == expected_fluid
+                    and self.fluid_changed is True
+                    and self.intended_fluid_present is True
+                    and EMPTY_BUCKET_ITEM in expected_after
+                ):
+                    raise ValueError(
+                        "E7 success requires one accepted use_item plus matching inventory and fluid evidence"
+                    )
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,
             E1_SUCCESS_OUTCOME,
@@ -698,6 +862,7 @@ class EnvironmentValidationResult:
             E4_SUCCESS_OUTCOME,
             E5_SUCCESS_OUTCOME,
             E6_SUCCESS_OUTCOME,
+            E7_SUCCESS_OUTCOME,
         }:
             raise ValueError(f"{self.outcome} requires success=True")
         if self.outcome == INVENTORY_MISMATCH:
@@ -886,6 +1051,58 @@ class EnvironmentValidationResult:
                     "tested_step_id": self.tested_step_id,
                     "translated_action_accepted": self.translated_action_accepted,
                     "world_changed": self.world_changed,
+                }
+            )
+        elif self.check_id is EnvironmentValidationId.E7:
+            payload.update(
+                {
+                    "action_type": self.action_type,
+                    "after_fluid": self.after_fluid,
+                    "after_inventory": (
+                        None
+                        if self.after_inventory is None
+                        else dict(self.after_inventory)
+                    ),
+                    "after_selected_item": self.after_selected_item,
+                    "agent_id": self.agent_id,
+                    "before_fluid": self.before_fluid,
+                    "before_inventory": (
+                        None
+                        if self.before_inventory is None
+                        else dict(self.before_inventory)
+                    ),
+                    "before_selected_item": self.before_selected_item,
+                    "bucket_consumed": self.bucket_consumed,
+                    "bucket_item": self.bucket_item,
+                    "bucket_variant": self.bucket_variant,
+                    "empty_bucket_produced": self.empty_bucket_produced,
+                    "environment_launch_count": self.environment_launch_count,
+                    "exception_traceback": self.exception_traceback,
+                    "expected_fluid": self.expected_fluid,
+                    "failure_stage": self.failure_stage,
+                    "fluid_changed": self.fluid_changed,
+                    "intended_fluid_present": self.intended_fluid_present,
+                    "inventory_changed": self.inventory_changed,
+                    "original_exception_type": self.original_exception_type,
+                    "requested_duration_ticks": self.requested_duration_ticks,
+                    "reset_attempt_count": self.reset_attempt_count,
+                    "target_grid_cell": (
+                        None
+                        if self.target_grid_x is None
+                        or self.target_grid_y is None
+                        or self.target_grid_z is None
+                        else [self.target_grid_x, self.target_grid_y, self.target_grid_z]
+                    ),
+                    "target_world_cell": (
+                        None
+                        if self.target_x is None
+                        or self.target_y is None
+                        or self.target_z is None
+                        else [self.target_x, self.target_y, self.target_z]
+                    ),
+                    "tested_action_count": self.tested_action_count,
+                    "tested_step_id": self.tested_step_id,
+                    "translated_action_accepted": self.translated_action_accepted,
                 }
             )
         return payload

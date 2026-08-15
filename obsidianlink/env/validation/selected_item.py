@@ -19,9 +19,11 @@ PUBLIC_SELECTED_ITEM_ALLOWED_KEYS = frozenset(
 )
 PUBLIC_SELECTED_ITEM_LEAK_KEYS = frozenset(
     {
+        "bucket_fluid",
         "dimension",
         "equipped_items",
         "evaluator_grid",
+        "fluid",
         "fluid_truth",
         "frame",
         "info",

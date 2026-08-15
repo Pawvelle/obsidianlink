@@ -2,9 +2,9 @@
 
 Executes one validation case in a controlled lifecycle. This phase
 implements E0 lifecycle, E1 RGB, E2 inventory, E3 selected item, E4 camera,
-E5 movement, and E6 block placement. E4/E5/E6 consume only narrow evaluator
-truth from their integration adapters; the validation core remains
-MineRL-independent.
+E5 movement, E6 block placement, and E7 bucket usage. E4/E5/E6/E7 consume
+only narrow evaluator truth from their integration adapters; the validation
+core remains MineRL-independent.
 The runner never uses benchmark evaluator success semantics.
 """
 
@@ -47,6 +47,26 @@ from obsidianlink.env.validation.movement import (
     PlayerPositionSnapshot,
     inspect_movement,
 )
+from obsidianlink.env.validation.bucket import (
+    FLUID_AFTER_MISSING,
+    FLUID_BEFORE_MISSING,
+    FLUID_TRUTH_INVALID,
+    INVENTORY_AFTER_MISSING,
+    INVENTORY_BEFORE_MISSING,
+    INVENTORY_INVALID,
+    BucketActionExecution,
+    BucketCalibrationVariant,
+    BucketFluidTruthSnapshot,
+    BucketInventorySnapshot,
+    BucketUsageInspection,
+    frozen_after_inventory,
+    frozen_before_inventory,
+    frozen_bucket_item,
+    frozen_expected_fluid,
+    inspect_bucket_usage,
+    validate_bucket_variant,
+    validate_fluid_class,
+)
 from obsidianlink.env.validation.placement import (
     BLOCK_AFTER_MISSING,
     BLOCK_BEFORE_MISSING,
@@ -67,6 +87,7 @@ from obsidianlink.env.validation.result import (
     E4_SUCCESS_OUTCOME,
     E5_SUCCESS_OUTCOME,
     E6_SUCCESS_OUTCOME,
+    E7_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
     SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
@@ -81,7 +102,7 @@ from obsidianlink.env.validation.selected_item import (
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest common backend surface required by E0--E6.
+    """Smallest common backend surface required by E0--E7.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -172,6 +193,18 @@ def _result(
     expected_before_block: str | None = None,
     target_cell: tuple[int, int, int] | None = None,
     target_grid_cell: tuple[int, int, int] | None = None,
+    before_inventory_snapshot: BucketInventorySnapshot | None = None,
+    after_inventory_snapshot: BucketInventorySnapshot | None = None,
+    before_fluid_truth: BucketFluidTruthSnapshot | None = None,
+    after_fluid_truth: BucketFluidTruthSnapshot | None = None,
+    bucket_execution: BucketActionExecution | None = None,
+    bucket: BucketUsageInspection | None = None,
+    bucket_agent_id: str | None = None,
+    bucket_variant: str | None = None,
+    bucket_item: str | None = None,
+    expected_fluid: str | None = None,
+    before_selected_item: str | None = None,
+    after_selected_item: str | None = None,
     failure_stage: str | None = None,
     original_exception_type: str | None = None,
     reset_attempt_count: int | None = None,
@@ -214,7 +247,9 @@ def _result(
         expected_selected_item=expected_selected_item,
         selected_item_matches_expected=selected_item_matches_expected,
         agent_id=(
-            placement_execution.agent_id if placement_execution is not None
+            bucket_execution.agent_id if bucket_execution is not None
+            else bucket_agent_id if bucket_agent_id is not None
+            else placement_execution.agent_id if placement_execution is not None
             else placement_agent_id if placement_agent_id is not None
             else movement_execution.agent_id if movement_execution is not None
             else movement_agent_id if movement_agent_id is not None
@@ -222,12 +257,15 @@ def _result(
             else camera_agent_id
         ),
         tested_step_id=(
-            placement_execution.step_id if placement_execution is not None
+            bucket_execution.step_id if bucket_execution is not None
+            else placement_execution.step_id if placement_execution is not None
             else movement_execution.step_id if movement_execution is not None
             else None if camera_execution is None else camera_execution.step_id
         ),
         action_type=(
-            placement_execution.action_type if placement_execution is not None
+            bucket_execution.action_type if bucket_execution is not None
+            else "use_item" if bucket_item is not None
+            else placement_execution.action_type if placement_execution is not None
             else "place_block" if calibration_block is not None
             else movement_execution.action_type if movement_execution is not None
             else "move" if requested_forward is not None
@@ -237,12 +275,15 @@ def _result(
         requested_yaw=(camera_requested_yaw if camera_execution is None else camera_execution.requested_yaw),
         requested_pitch=(camera_requested_pitch if camera_execution is None else camera_execution.requested_pitch),
         translated_action_accepted=(
-            placement_execution.translated_action_accepted if placement_execution is not None
+            bucket_execution.translated_action_accepted if bucket_execution is not None
+            else placement_execution.translated_action_accepted if placement_execution is not None
             else movement_execution.translated_action_accepted if movement_execution is not None
             else None if camera_execution is None else camera_execution.translated_action_accepted
         ),
         tested_action_count=(
-            placement_execution.tested_action_count if placement_execution is not None
+            bucket_execution.tested_action_count if bucket_execution is not None
+            else 0 if bucket_item is not None
+            else placement_execution.tested_action_count if placement_execution is not None
             else 0 if calibration_block is not None
             else movement_execution.tested_action_count if movement_execution is not None
             else 0 if requested_forward is not None
@@ -262,7 +303,8 @@ def _result(
         requested_sprint=(requested_sprint if movement_execution is None else movement_execution.sprint),
         requested_jump=(requested_jump if movement_execution is None else movement_execution.jump),
         requested_duration_ticks=(
-            placement_execution.duration_ticks if placement_execution is not None
+            bucket_execution.duration_ticks if bucket_execution is not None
+            else placement_execution.duration_ticks if placement_execution is not None
             else requested_duration_ticks if movement_execution is None
             else movement_execution.duration_ticks
         ),
@@ -305,6 +347,26 @@ def _result(
         after_block=None if after_block_truth is None else after_block_truth.block,
         world_changed=None if placement is None else placement.world_changed,
         intended_block_present=None if placement is None else placement.intended_block_present,
+        bucket_variant=bucket_variant,
+        bucket_item=(
+            bucket_execution.target if bucket_execution is not None else bucket_item
+        ),
+        expected_fluid=expected_fluid,
+        before_inventory=(
+            None if before_inventory_snapshot is None else before_inventory_snapshot.inventory
+        ),
+        after_inventory=(
+            None if after_inventory_snapshot is None else after_inventory_snapshot.inventory
+        ),
+        inventory_changed=None if bucket is None else bucket.inventory_changed,
+        bucket_consumed=None if bucket is None else bucket.bucket_consumed,
+        empty_bucket_produced=None if bucket is None else bucket.empty_bucket_produced,
+        before_fluid=None if before_fluid_truth is None else before_fluid_truth.fluid,
+        after_fluid=None if after_fluid_truth is None else after_fluid_truth.fluid,
+        fluid_changed=None if bucket is None else bucket.fluid_changed,
+        intended_fluid_present=None if bucket is None else bucket.intended_fluid_present,
+        before_selected_item=before_selected_item,
+        after_selected_item=after_selected_item,
     )
 
 
@@ -334,6 +396,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E5_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E6:
         return E6_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E7:
+        return E7_SUCCESS_OUTCOME
     return None
 
 
@@ -366,6 +430,7 @@ class EnvironmentValidationRunner:
         expected_before_block: str = "air",
         target_cell: tuple[int, int, int] = (0, 4, 1),
         target_grid_cell: tuple[int, int, int] | None = None,
+        bucket_variant: str = "water",
     ) -> EnvironmentValidationResult:
         if not isinstance(case, EnvironmentValidationCase):
             raise ValueError("case must be EnvironmentValidationCase")
@@ -475,6 +540,49 @@ class EnvironmentValidationRunner:
                     error="invalid E6 calibration: " + _format_error(exc),
                 )
 
+        e7_variant: BucketCalibrationVariant | None = None
+        e7_bucket_item: str | None = None
+        e7_expected_fluid: str | None = None
+        e7_before_inventory: dict[str, int] | None = None
+        e7_after_inventory: dict[str, int] | None = None
+        e7_target_world: tuple[int, int, int] | None = None
+        e7_target_grid: tuple[int, int, int] | None = None
+        if case.check_id is EnvironmentValidationId.E7:
+            try:
+                e7_variant = validate_bucket_variant(bucket_variant)
+                e7_bucket_item = frozen_bucket_item(e7_variant)
+                e7_expected_fluid = frozen_expected_fluid(e7_variant)
+                e7_before_inventory = frozen_before_inventory(e7_variant)
+                e7_after_inventory = frozen_after_inventory(e7_variant)
+                e7_target_world = validate_target_cell(target_cell, "target_world_cell")
+                if target_grid_cell is None:
+                    e7_target_grid = spawn_relative_grid_cell(
+                        e7_target_world, (0, 4, 0)
+                    )
+                else:
+                    e7_target_grid = validate_target_cell(
+                        target_grid_cell, "target_grid_cell"
+                    )
+                if spawn_relative_grid_cell(e7_target_world, (0, 4, 0)) != e7_target_grid:
+                    raise ValueError(
+                        "E7 target_grid_cell does not match spawn-relative world conversion"
+                    )
+                if type(requested_duration_ticks) is not int or requested_duration_ticks < 1:
+                    raise ValueError("requested_duration_ticks must be a positive int")
+                validate_fluid_class(e7_expected_fluid, "expected_fluid")
+            except (TypeError, ValueError) as exc:
+                return _result(
+                    case=case,
+                    episode_id=episode_id,
+                    success=False,
+                    outcome="runtime_error",
+                    created=False,
+                    reset_completed=False,
+                    initial_state_present=False,
+                    closed=False,
+                    error="invalid E7 calibration: " + _format_error(exc),
+                )
+
         created = False
         reset_completed = False
         initial_state_present = False
@@ -504,6 +612,15 @@ class EnvironmentValidationRunner:
         placement_execution: PlacementActionExecution | None = None
         placement: PlacementInspection | None = None
         placement_agent_id: str | None = None
+        before_inventory_snapshot: BucketInventorySnapshot | None = None
+        after_inventory_snapshot: BucketInventorySnapshot | None = None
+        before_fluid_truth: BucketFluidTruthSnapshot | None = None
+        after_fluid_truth: BucketFluidTruthSnapshot | None = None
+        bucket_execution: BucketActionExecution | None = None
+        bucket: BucketUsageInspection | None = None
+        bucket_agent_id: str | None = None
+        before_selected_item: str | None = None
+        after_selected_item: str | None = None
         failure_stage: str | None = None
         original_exception_type: str | None = None
         reset_attempt_count: int | None = None
@@ -814,6 +931,134 @@ class EnvironmentValidationRunner:
                                                 )
                                                 outcome = placement.outcome
                                                 error = placement.error
+                        elif case.check_id is EnvironmentValidationId.E7:
+                            if isinstance(reset_result, Mapping) and reset_result:
+                                first_agent = next(iter(reset_result))
+                                if isinstance(first_agent, str) and first_agent.strip():
+                                    bucket_agent_id = first_agent.strip()
+                            inventory_truth = getattr(backend, "public_bucket_inventory", None)
+                            fluid_truth = getattr(backend, "bucket_fluid_truth", None)
+                            execute = getattr(backend, "execute_bucket_action", None)
+                            selected = getattr(backend, "public_bucket_selected_item", None)
+                            if not callable(inventory_truth) or not callable(fluid_truth) or not callable(execute):
+                                outcome = "runtime_error"
+                                error = "E7 backend inventory/fluid/action surface is not callable"
+                            else:
+                                try:
+                                    candidate_before_inventory = inventory_truth()
+                                    candidate_before_fluid = fluid_truth()
+                                except (TypeError, ValueError) as exc:
+                                    message = _format_error(exc)
+                                    if "inventory" in message.lower():
+                                        outcome = INVENTORY_INVALID
+                                    else:
+                                        outcome = FLUID_TRUTH_INVALID
+                                    error = message
+                                else:
+                                    if candidate_before_inventory is None:
+                                        outcome = INVENTORY_BEFORE_MISSING
+                                        error = "public inventory is missing before action"
+                                    elif not isinstance(candidate_before_inventory, BucketInventorySnapshot):
+                                        outcome = INVENTORY_INVALID
+                                        error = "before inventory has the wrong type"
+                                    else:
+                                        before_inventory_snapshot = candidate_before_inventory
+                                    if before_inventory_snapshot is not None:
+                                        if candidate_before_fluid is None:
+                                            outcome = FLUID_BEFORE_MISSING
+                                            error = "fluid truth is missing before action"
+                                        elif not isinstance(candidate_before_fluid, BucketFluidTruthSnapshot):
+                                            outcome = FLUID_TRUTH_INVALID
+                                            error = "before fluid truth has the wrong type"
+                                        else:
+                                            before_fluid_truth = candidate_before_fluid
+                                if before_inventory_snapshot is not None and before_fluid_truth is not None:
+                                    if callable(selected):
+                                        try:
+                                            candidate_selected = selected()
+                                        except (TypeError, ValueError):
+                                            candidate_selected = None
+                                        if isinstance(candidate_selected, str) and candidate_selected.strip():
+                                            before_selected_item = candidate_selected.strip()
+                                    parsed = parse_macro_action(
+                                        json.dumps(
+                                            {
+                                                "action_type": "use_item",
+                                                "target": e7_bucket_item,
+                                                "duration_ticks": requested_duration_ticks,
+                                                "parameters": {},
+                                            },
+                                            allow_nan=False,
+                                            sort_keys=True,
+                                        )
+                                    )
+                                    if not parsed.accepted:
+                                        outcome = "bucket_action_rejected"
+                                        error = "bucket action protocol rejected: " + (parsed.error or "unknown error")
+                                    else:
+                                        candidate_execution = execute(parsed.action)
+                                        if not isinstance(candidate_execution, BucketActionExecution):
+                                            raise TypeError("execute_bucket_action must return BucketActionExecution")
+                                        bucket_execution = candidate_execution
+                                        try:
+                                            candidate_after_inventory = inventory_truth()
+                                            candidate_after_fluid = fluid_truth()
+                                        except (TypeError, ValueError) as exc:
+                                            message = _format_error(exc)
+                                            if "inventory" in message.lower():
+                                                outcome = INVENTORY_INVALID
+                                            else:
+                                                outcome = FLUID_TRUTH_INVALID
+                                            error = message
+                                        else:
+                                            if candidate_after_inventory is None:
+                                                outcome = INVENTORY_AFTER_MISSING
+                                                error = "public inventory is missing after action"
+                                            elif not isinstance(candidate_after_inventory, BucketInventorySnapshot):
+                                                outcome = INVENTORY_INVALID
+                                                error = "after inventory has the wrong type"
+                                            else:
+                                                after_inventory_snapshot = candidate_after_inventory
+                                            if after_inventory_snapshot is not None:
+                                                if candidate_after_fluid is None:
+                                                    outcome = FLUID_AFTER_MISSING
+                                                    error = "fluid truth is missing after action"
+                                                elif not isinstance(candidate_after_fluid, BucketFluidTruthSnapshot):
+                                                    outcome = FLUID_TRUTH_INVALID
+                                                    error = "after fluid truth has the wrong type"
+                                                else:
+                                                    after_fluid_truth = candidate_after_fluid
+                                                    if callable(selected):
+                                                        try:
+                                                            candidate_selected = selected()
+                                                        except (TypeError, ValueError):
+                                                            candidate_selected = None
+                                                        if isinstance(candidate_selected, str) and candidate_selected.strip():
+                                                            after_selected_item = candidate_selected.strip()
+                                                    assert e7_variant is not None
+                                                    assert e7_bucket_item is not None
+                                                    assert e7_expected_fluid is not None
+                                                    assert e7_before_inventory is not None
+                                                    assert e7_after_inventory is not None
+                                                    assert e7_target_world is not None
+                                                    assert e7_target_grid is not None
+                                                    bucket = inspect_bucket_usage(
+                                                        before_inventory_snapshot,
+                                                        after_inventory_snapshot,
+                                                        before_fluid_truth,
+                                                        after_fluid_truth,
+                                                        bucket_execution,
+                                                        variant=e7_variant,
+                                                        bucket_item=e7_bucket_item,
+                                                        expected_fluid=e7_expected_fluid,
+                                                        expected_before_inventory=e7_before_inventory,
+                                                        expected_after_inventory=e7_after_inventory,
+                                                        target_world_cell=e7_target_world,
+                                                        target_grid_cell=e7_target_grid,
+                                                        duration_ticks=requested_duration_ticks,
+                                                    )
+                                                    outcome = bucket.outcome
+                                                    error = bucket.error
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -828,6 +1073,7 @@ class EnvironmentValidationRunner:
                 if case.check_id in (
                     EnvironmentValidationId.E5,
                     EnvironmentValidationId.E6,
+                    EnvironmentValidationId.E7,
                 ):
                     failure_stage = "reset"
                     original_exception_type = type(_root_exception(exc)).__name__
@@ -867,6 +1113,17 @@ class EnvironmentValidationRunner:
                 exception_traceback = "".join(
                     traceback.format_exception(type(exc), exc, exc.__traceback__)
                 )
+            elif (
+                case.check_id is EnvironmentValidationId.E7
+                and before_inventory_snapshot is not None
+                and before_fluid_truth is not None
+            ):
+                outcome = "action_failed"
+                failure_stage = "action"
+                original_exception_type = type(_root_exception(exc)).__name__
+                exception_traceback = "".join(
+                    traceback.format_exception(type(exc), exc, exc.__traceback__)
+                )
             else:
                 outcome = "runtime_error"
         finally:
@@ -882,6 +1139,7 @@ class EnvironmentValidationRunner:
                 E4_SUCCESS_OUTCOME,
                 E5_SUCCESS_OUTCOME,
                 E6_SUCCESS_OUTCOME,
+                E7_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -903,6 +1161,7 @@ class EnvironmentValidationRunner:
             E4_SUCCESS_OUTCOME,
             E5_SUCCESS_OUTCOME,
             E6_SUCCESS_OUTCOME,
+            E7_SUCCESS_OUTCOME,
         }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
@@ -961,7 +1220,7 @@ class EnvironmentValidationRunner:
             requested_strafe=requested_strafe if case.check_id is EnvironmentValidationId.E5 else None,
             requested_sprint=requested_sprint if case.check_id is EnvironmentValidationId.E5 else None,
             requested_jump=requested_jump if case.check_id is EnvironmentValidationId.E5 else None,
-            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
+            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7) else None,
             minimum_horizontal_distance=minimum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
             minimum_forward_projection=minimum_forward_projection if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_lateral_drift=maximum_lateral_drift if case.check_id is EnvironmentValidationId.E5 else None,
@@ -974,11 +1233,31 @@ class EnvironmentValidationRunner:
             placement_agent_id=placement_agent_id if case.check_id is EnvironmentValidationId.E6 else None,
             calibration_block=placement_calibration_block if case.check_id is EnvironmentValidationId.E6 else None,
             expected_before_block=placement_expected_before if case.check_id is EnvironmentValidationId.E6 else None,
-            target_cell=placement_target_cell if case.check_id is EnvironmentValidationId.E6 else None,
-            target_grid_cell=placement_target_grid_cell if case.check_id is EnvironmentValidationId.E6 else None,
-            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
-            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
-            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
-            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
-            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6) else None,
+            target_cell=(
+                placement_target_cell if case.check_id is EnvironmentValidationId.E6
+                else e7_target_world if case.check_id is EnvironmentValidationId.E7
+                else None
+            ),
+            target_grid_cell=(
+                placement_target_grid_cell if case.check_id is EnvironmentValidationId.E6
+                else e7_target_grid if case.check_id is EnvironmentValidationId.E7
+                else None
+            ),
+            before_inventory_snapshot=before_inventory_snapshot if case.check_id is EnvironmentValidationId.E7 else None,
+            after_inventory_snapshot=after_inventory_snapshot if case.check_id is EnvironmentValidationId.E7 else None,
+            before_fluid_truth=before_fluid_truth if case.check_id is EnvironmentValidationId.E7 else None,
+            after_fluid_truth=after_fluid_truth if case.check_id is EnvironmentValidationId.E7 else None,
+            bucket_execution=bucket_execution if case.check_id is EnvironmentValidationId.E7 else None,
+            bucket=bucket if case.check_id is EnvironmentValidationId.E7 else None,
+            bucket_agent_id=bucket_agent_id if case.check_id is EnvironmentValidationId.E7 else None,
+            bucket_variant=None if e7_variant is None or case.check_id is not EnvironmentValidationId.E7 else e7_variant.value,
+            bucket_item=e7_bucket_item if case.check_id is EnvironmentValidationId.E7 else None,
+            expected_fluid=e7_expected_fluid if case.check_id is EnvironmentValidationId.E7 else None,
+            before_selected_item=before_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
+            after_selected_item=after_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
+            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7) else None,
+            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7) else None,
+            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7) else None,
+            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7) else None,
+            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7) else None,
         )

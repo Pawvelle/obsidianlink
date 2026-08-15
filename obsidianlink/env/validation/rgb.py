@@ -20,7 +20,10 @@ from obsidianlink.env.validation.cases.lifecycle import initial_state_exists
 PUBLIC_RGB_ALLOWED_KEYS = frozenset({"agent_id", "episode_id", "rgb", "step_id"})
 PUBLIC_RGB_LEAK_KEYS = frozenset(
     {
+        "bucket_fluid",
         "equipped_items",
+        "fluid",
+        "fluid_truth",
         "frame",
         "info",
         "inventory",

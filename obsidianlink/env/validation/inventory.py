@@ -22,7 +22,10 @@ PUBLIC_INVENTORY_ALLOWED_KEYS = frozenset(
 )
 PUBLIC_INVENTORY_LEAK_KEYS = frozenset(
     {
+        "bucket_fluid",
         "equipped_items",
+        "fluid",
+        "fluid_truth",
         "frame",
         "info",
         "messages",

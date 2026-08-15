@@ -333,12 +333,12 @@ class MineRLEnvironmentBackend:
         # the casting workflows' slots from their frozen initial inventory.
         if is_legacy_route_a0:
             params = task.scenario_parameters
-            # E6 dirt-only calibration must map the actual inventory onto
-            # hotbar.1. The historical A0 three-item slot contract stays
-            # unchanged for every other route_a_a0 caller.
+            # E6 dirt-only and E7 bucket-only calibrations must map the
+            # actual inventory onto hotbar.1. The historical A0 three-item
+            # slot contract stays unchanged for every other route_a_a0 caller.
             if (
                 isinstance(params, Mapping)
-                and params.get("p1_validation_id") == "E6"
+                and params.get("p1_validation_id") in {"E6", "E7"}
             ):
                 self._hotbar_mapping = build_hotbar_mapping(
                     task.initial_inventories["agent_1"]
@@ -605,6 +605,44 @@ class MineRLEnvironmentBackend:
             "y": cell[1],
             "z": cell[2],
             "block": block,
+        }
+
+    def get_bucket_fluid_truth(
+        self, cell: tuple[int, int, int]
+    ) -> Mapping[str, Any] | None:
+        """Return narrow evaluator-only single-cell fluid truth for P1 E7.
+
+        ``cell`` is a Minecraft **world** coordinate. Lookup uses the same
+        spawn-relative ObservationFromGrid(atSpawn=true) conversion as E6.
+        A present ``portal_grid_origin`` that disagrees with spawn fails
+        closed. The fluid class is classified only from the latest
+        ``portal_grid`` as ``none`` / ``water`` / ``lava``. Action intent,
+        inventory, and RGB are never used. This is not the future E9
+        generalized fluid-truth API.
+        """
+
+        from obsidianlink.env.validation.bucket import classify_bucket_fluid
+        from obsidianlink.env.validation.placement import spawn_relative_grid_cell
+
+        placement = self.get_block_placement_truth(cell)
+        if placement is None:
+            return None
+        fluid = classify_bucket_fluid(placement["block"])
+        task = self._require_task()
+        spawn = task.spawn_positions["agent_1"]
+        grid_cell = spawn_relative_grid_cell(cell, spawn)
+        return {
+            "episode_id": placement["episode_id"],
+            "agent_id": placement["agent_id"],
+            "step_id": placement["step_id"],
+            "world_x": cell[0],
+            "world_y": cell[1],
+            "world_z": cell[2],
+            "grid_x": grid_cell[0],
+            "grid_y": grid_cell[1],
+            "grid_z": grid_cell[2],
+            "fluid": fluid,
+            "fluid_present": fluid != "none",
         }
 
     def mark_terminated(
