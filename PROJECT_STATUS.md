@@ -72,7 +72,9 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E9 generalized fluid truth: implemented; `ServerTruthSnapshot.fluid_truth` plus typed `ServerFluidTruth`; source/flowing remain distinct (`water`/`flowing_water`, `lava`/`flowing_lava`)
 - E9 MineRL adapter / live bridge: implemented / offline tested
 - E9 verification level: `unit_verified`
-- E9 real MineRL execution: NOT RUN
+- E9 WATER live attempt #1: episode `p1-e9-water-live-001` / `runs/p1_e9_fluid_truth/water/e9-water-live-20260815-001`; `real_execution_performed=true`; `reset_failed` / `minecraft_native_crash`; `tested_action_count=0`; no before/after fluid snapshots; SAME_FINGERPRINT as E5 #1 and E8 #1 (`liblwjgl_stb` Sound engine STBVorbis); not a fluid-truth capability failure
+- E9 WATER reviewed real success: NO
+- E9 LAVA real execution: NOT RUN
 - E9 reviewed real success: NO
 - E9 `integration_verified`: NO
 - E10–E12: NOT STARTED
@@ -94,7 +96,7 @@ None of E0–E9 is `integration_verified`; `process_release_proven=false`. E0–
 - E6: `unit_verified`; one reviewed real success (`p1-e6-live-001`, `placement_ok`); `integration_verified`: NO；
 - E7: `unit_verified`; water/lava calibrations offline verified; adapter/live bridge implemented / offline tested; one reviewed WATER real success (`p1-e7-water-live-001`, `bucket_ok`); one reviewed LAVA real success (`p1-e7-lava-live-001`, `bucket_ok`); real calibration coverage WATER + LAVA complete; `integration_verified`: NO；
 - E8: `unit_verified`; #1 `p1-e8-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1; #2 `p1-e8-live-002` `block_truth_ok`; reviewed real success: YES; `integration_verified`: NO；
-- E9: `unit_verified`; generalized fluid truth / adapter / live bridge implemented and offline tested; real MineRL execution NOT RUN; reviewed real success: NO; `integration_verified`: NO；
+- E9: `unit_verified`; WATER attempt #1 `p1-e9-water-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1 / E8 #1; no fluid snapshots; not a fluid-truth failure; LAVA NOT RUN; reviewed real success: NO; `integration_verified`: NO；
 - E10–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
@@ -105,4 +107,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E9 contract / offline runtime / MineRL adapter / live bridge 为 `unit_verified`。E9 real MineRL execution: NOT RUN. E9 reviewed real success: NO. E9 `integration_verified`: NO. Do not start E10. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. Next step: request explicit authorization for one controlled E9 real MineRL validation run.
+E9 WATER attempt #1 (`p1-e9-water-live-001`) is `reset_failed` / SAME_FINGERPRINT native crash as E5 #1 and E8 #1. No fluid truth was observed. E9 WATER reviewed real success: NO. E9 LAVA: NOT RUN. E9 `integration_verified`: NO. Do not rerun automatically. Do not start E10. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. Next step: request explicit authorization for one independent E9 WATER real MineRL retry.
