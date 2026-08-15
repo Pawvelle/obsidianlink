@@ -198,20 +198,11 @@ class ServerTruthSnapshotContractTests(unittest.TestCase):
             self.assertEqual(inspect_public_selected_item(selected, episode_id="episode").outcome, "selected_item_leak")
             self.assertTrue(public_payload_leaks_evaluator_truth({key: "secret"}))
 
-    def test_e8_does_not_provide_e9_fluid_capabilities(self):
-        import obsidianlink.env.validation.truth as truth
-
-        for name in (
-            "classify_general_fluid",
-            "fluid_source",
-            "flowing_water_truth",
-            "flowing_lava_truth",
-        ):
-            self.assertFalse(hasattr(truth, name))
-        self.assertFalse(hasattr(ServerTruthSnapshot, "fluid_truth"))
+    def test_e8_snapshots_remain_valid_without_fluid_records(self):
         snapshot = _snapshot()
-        self.assertNotIn("fluid_truth", snapshot.as_dict())
-        self.assertNotIn("fluid", snapshot.as_dict())
+        self.assertEqual(snapshot.fluid_truth, ())
+        self.assertEqual(snapshot.as_dict()["fluid_truth"], [])
+        self.assertEqual(_inspect().outcome, BLOCK_TRUTH_OK)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""P1 E0--E8 MineRL integration boundary.
+"""P1 E0--E9 MineRL integration boundary.
 
 This package may depend on the validation core and on the MineRL backend.
 The solver-independent validation core must not import this package.
@@ -89,6 +89,17 @@ from obsidianlink.env.integration.e8_run import (
     preflight_authorized_e8,
     run_authorized_e8_minerl,
 )
+from obsidianlink.env.integration.e9_adapter import MineRLE9FluidTruthAdapter
+from obsidianlink.env.integration.e9_run import (
+    AUTHORIZED_LIVE_E9_LAVA_RUN_VALUE,
+    AUTHORIZED_LIVE_E9_WATER_RUN_VALUE,
+    EXECUTION_MODE_AUTHORIZED_LIVE_E9_LAVA,
+    EXECUTION_MODE_AUTHORIZED_LIVE_E9_WATER,
+    E9AuthorizationError,
+    E9MineRLRunRecord,
+    preflight_authorized_e9,
+    run_authorized_e9_minerl,
+)
 
 __all__ = [
     "AUTHORIZED_LIVE_E1_RUN_VALUE",
@@ -100,6 +111,8 @@ __all__ = [
     "AUTHORIZED_LIVE_E7_LAVA_RUN_VALUE",
     "AUTHORIZED_LIVE_E7_WATER_RUN_VALUE",
     "AUTHORIZED_LIVE_E8_RUN_VALUE",
+    "AUTHORIZED_LIVE_E9_LAVA_RUN_VALUE",
+    "AUTHORIZED_LIVE_E9_WATER_RUN_VALUE",
     "AUTHORIZED_LIVE_RUN_VALUE",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E0",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E1",
@@ -111,6 +124,8 @@ __all__ = [
     "EXECUTION_MODE_AUTHORIZED_LIVE_E7_LAVA",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E7_WATER",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E8",
+    "EXECUTION_MODE_AUTHORIZED_LIVE_E9_LAVA",
+    "EXECUTION_MODE_AUTHORIZED_LIVE_E9_WATER",
     "E0AuthorizationError",
     "E0CleanupStatus",
     "E0MineRLRunRecord",
@@ -130,6 +145,8 @@ __all__ = [
     "E7MineRLRunRecord",
     "E8AuthorizationError",
     "E8MineRLRunRecord",
+    "E9AuthorizationError",
+    "E9MineRLRunRecord",
     "MineRLE0LifecycleAdapter",
     "MineRLE1RGBAdapter",
     "MineRLE2InventoryAdapter",
@@ -139,6 +156,7 @@ __all__ = [
     "MineRLE6PlacementAdapter",
     "MineRLE7BucketAdapter",
     "MineRLE8BlockTruthAdapter",
+    "MineRLE9FluidTruthAdapter",
     "preflight_authorized_e0",
     "preflight_authorized_e1",
     "preflight_authorized_e2",
@@ -148,6 +166,7 @@ __all__ = [
     "preflight_authorized_e6",
     "preflight_authorized_e7",
     "preflight_authorized_e8",
+    "preflight_authorized_e9",
     "run_authorized_e0_minerl",
     "run_authorized_e1_minerl",
     "run_authorized_e2_minerl",
@@ -157,4 +176,5 @@ __all__ = [
     "run_authorized_e6_minerl",
     "run_authorized_e7_minerl",
     "run_authorized_e8_minerl",
+    "run_authorized_e9_minerl",
 ]

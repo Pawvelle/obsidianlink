@@ -2,9 +2,10 @@
 
 Executes one validation case in a controlled lifecycle. This phase
 implements E0 lifecycle, E1 RGB, E2 inventory, E3 selected item, E4 camera,
-E5 movement, E6 block placement, E7 bucket usage, and E8 server-side block
-truth. E4/E5/E6/E7/E8 consume only narrow evaluator truth from their
-integration adapters; the validation core remains MineRL-independent.
+E5 movement, E6 block placement, E7 bucket usage, E8 server-side block
+truth, and E9 server-side fluid truth. E4/E5/E6/E7/E8/E9 consume only
+narrow evaluator truth from their integration adapters; the validation
+core remains MineRL-independent.
 The runner never uses benchmark evaluator success semantics.
 """
 
@@ -89,6 +90,7 @@ from obsidianlink.env.validation.result import (
     E6_SUCCESS_OUTCOME,
     E7_SUCCESS_OUTCOME,
     E8_SUCCESS_OUTCOME,
+    E9_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
     SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
@@ -103,15 +105,23 @@ from obsidianlink.env.validation.truth import (
     TRUTH_SNAPSHOT_MISSING,
     BlockTruthActionExecution,
     BlockTruthInspection,
+    FluidCalibrationVariant,
+    FluidTruthActionExecution,
+    FluidTruthInspection,
     ServerTruthSnapshot,
+    frozen_expected_flow_state,
+    frozen_expected_fluid_type,
+    frozen_fluid_bucket_item,
     inspect_block_truth,
+    inspect_fluid_truth,
     truth_error_outcome,
+    validate_fluid_variant,
 )
 
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest common backend surface required by E0--E8.
+    """Smallest common backend surface required by E0--E9.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -222,6 +232,11 @@ def _result(
     stimulus_target: str | None = None,
     probe_world_cells: tuple[tuple[int, int, int], ...] | None = None,
     probe_grid_cells: tuple[tuple[int, int, int], ...] | None = None,
+    fluid_execution: FluidTruthActionExecution | None = None,
+    fluid_inspection: FluidTruthInspection | None = None,
+    fluid_variant_name: str | None = None,
+    expected_target_fluid_type: str | None = None,
+    expected_target_flow_state: str | None = None,
     failure_stage: str | None = None,
     original_exception_type: str | None = None,
     reset_attempt_count: int | None = None,
@@ -264,7 +279,8 @@ def _result(
         expected_selected_item=expected_selected_item,
         selected_item_matches_expected=selected_item_matches_expected,
         agent_id=(
-            truth_execution.agent_id if truth_execution is not None
+            fluid_execution.agent_id if fluid_execution is not None
+            else truth_execution.agent_id if truth_execution is not None
             else truth_agent_id if truth_agent_id is not None
             else bucket_execution.agent_id if bucket_execution is not None
             else bucket_agent_id if bucket_agent_id is not None
@@ -276,14 +292,17 @@ def _result(
             else camera_agent_id
         ),
         tested_step_id=(
-            truth_execution.step_id if truth_execution is not None
+            fluid_execution.step_id if fluid_execution is not None
+            else truth_execution.step_id if truth_execution is not None
             else bucket_execution.step_id if bucket_execution is not None
             else placement_execution.step_id if placement_execution is not None
             else movement_execution.step_id if movement_execution is not None
             else None if camera_execution is None else camera_execution.step_id
         ),
         action_type=(
-            truth_execution.action_type if truth_execution is not None
+            fluid_execution.action_type if fluid_execution is not None
+            else "use_item" if fluid_variant_name is not None
+            else truth_execution.action_type if truth_execution is not None
             else "place_block" if stimulus_target is not None
             else bucket_execution.action_type if bucket_execution is not None
             else "use_item" if bucket_item is not None
@@ -297,14 +316,17 @@ def _result(
         requested_yaw=(camera_requested_yaw if camera_execution is None else camera_execution.requested_yaw),
         requested_pitch=(camera_requested_pitch if camera_execution is None else camera_execution.requested_pitch),
         translated_action_accepted=(
-            truth_execution.translated_action_accepted if truth_execution is not None
+            fluid_execution.translated_action_accepted if fluid_execution is not None
+            else truth_execution.translated_action_accepted if truth_execution is not None
             else bucket_execution.translated_action_accepted if bucket_execution is not None
             else placement_execution.translated_action_accepted if placement_execution is not None
             else movement_execution.translated_action_accepted if movement_execution is not None
             else None if camera_execution is None else camera_execution.translated_action_accepted
         ),
         tested_action_count=(
-            truth_execution.tested_action_count if truth_execution is not None
+            fluid_execution.tested_action_count if fluid_execution is not None
+            else 0 if fluid_variant_name is not None
+            else truth_execution.tested_action_count if truth_execution is not None
             else 0 if stimulus_target is not None
             else bucket_execution.tested_action_count if bucket_execution is not None
             else 0 if bucket_item is not None
@@ -328,7 +350,8 @@ def _result(
         requested_sprint=(requested_sprint if movement_execution is None else movement_execution.sprint),
         requested_jump=(requested_jump if movement_execution is None else movement_execution.jump),
         requested_duration_ticks=(
-            truth_execution.duration_ticks if truth_execution is not None
+            fluid_execution.duration_ticks if fluid_execution is not None
+            else truth_execution.duration_ticks if truth_execution is not None
             else bucket_execution.duration_ticks if bucket_execution is not None
             else placement_execution.duration_ticks if placement_execution is not None
             else requested_duration_ticks if movement_execution is None
@@ -422,16 +445,16 @@ def _result(
         probe_world_cells=probe_world_cells,
         probe_grid_cells=probe_grid_cells,
         before_block_truth=(
-            None if before_truth_snapshot is None
+            None if block_truth is None or before_truth_snapshot is None
             else tuple(item.as_dict() for item in before_truth_snapshot.block_truth)
         ),
         after_block_truth=(
-            None if after_truth_snapshot is None
+            None if block_truth is None or after_truth_snapshot is None
             else tuple(item.as_dict() for item in after_truth_snapshot.block_truth)
         ),
         truth_missing_count=(
-            None if block_truth is None else block_truth.truth_missing_count
-            if block_truth.truth_missing_count is not None
+            fluid_inspection.truth_missing_count if fluid_inspection is not None
+            else block_truth.truth_missing_count if block_truth is not None
             else (
                 None if before_truth_snapshot is None or after_truth_snapshot is None
                 else before_truth_snapshot.truth_missing_count
@@ -439,14 +462,45 @@ def _result(
             )
         ),
         stimulus_target=(
-            truth_execution.target if truth_execution is not None else stimulus_target
+            fluid_execution.target if fluid_execution is not None
+            else truth_execution.target if truth_execution is not None
+            else stimulus_target
         ),
-        target_changed=None if block_truth is None else block_truth.target_changed,
+        target_changed=(
+            None if fluid_inspection is None and block_truth is None
+            else fluid_inspection.target_changed if fluid_inspection is not None
+            else block_truth.target_changed
+        ),
         target_expected_block_present=(
             None if block_truth is None else block_truth.target_expected_block_present
         ),
         control_cells_unchanged=(
-            None if block_truth is None else block_truth.control_cells_unchanged
+            None if fluid_inspection is None and block_truth is None
+            else fluid_inspection.control_cells_unchanged if fluid_inspection is not None
+            else block_truth.control_cells_unchanged
+        ),
+        before_server_fluid_truth=(
+            None
+            if fluid_inspection is None
+            or before_truth_snapshot is None
+            or not before_truth_snapshot.fluid_truth
+            else tuple(item.as_dict() for item in before_truth_snapshot.fluid_truth)
+        ),
+        after_server_fluid_truth=(
+            None
+            if fluid_inspection is None
+            or after_truth_snapshot is None
+            or not after_truth_snapshot.fluid_truth
+            else tuple(item.as_dict() for item in after_truth_snapshot.fluid_truth)
+        ),
+        fluid_variant=fluid_variant_name,
+        expected_target_fluid_type=expected_target_fluid_type,
+        expected_target_flow_state=expected_target_flow_state,
+        target_expected_fluid_present=(
+            None if fluid_inspection is None else fluid_inspection.target_expected_fluid_present
+        ),
+        source_flowing_match=(
+            None if fluid_inspection is None else fluid_inspection.source_flowing_match
         ),
     )
 
@@ -481,6 +535,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E7_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E8:
         return E8_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E9:
+        return E9_SUCCESS_OUTCOME
     return None
 
 
@@ -514,6 +570,7 @@ class EnvironmentValidationRunner:
         target_cell: tuple[int, int, int] = (0, 4, 1),
         target_grid_cell: tuple[int, int, int] | None = None,
         bucket_variant: str = "water",
+        fluid_variant: str = "water",
     ) -> EnvironmentValidationResult:
         if not isinstance(case, EnvironmentValidationCase):
             raise ValueError("case must be EnvironmentValidationCase")
@@ -715,6 +772,61 @@ class EnvironmentValidationRunner:
                     error="invalid E8 calibration: " + _format_error(exc),
                 )
 
+        e9_variant: FluidCalibrationVariant | None = None
+        e9_probe_world: tuple[tuple[int, int, int], ...] | None = None
+        e9_probe_grid: tuple[tuple[int, int, int], ...] | None = None
+        e9_expected_before: dict[tuple[int, int, int], tuple[str, str]] | None = None
+        e9_expected_after: dict[tuple[int, int, int], tuple[str, str]] | None = None
+        e9_target_world: tuple[int, int, int] | None = None
+        e9_controls: tuple[tuple[int, int, int], ...] | None = None
+        e9_stimulus_target: str | None = None
+        e9_expected_type: str | None = None
+        e9_expected_flow: str | None = None
+        e9_position_min: tuple[float, float, float] | None = None
+        e9_position_max: tuple[float, float, float] | None = None
+        if case.check_id is EnvironmentValidationId.E9:
+            try:
+                e9_variant = validate_fluid_variant(fluid_variant)
+                e9_stimulus_target = frozen_fluid_bucket_item(e9_variant)
+                e9_expected_type = frozen_expected_fluid_type(e9_variant)
+                e9_expected_flow = frozen_expected_flow_state(e9_variant)
+                e9_target_world = validate_target_cell((0, 4, 1), "target_world_cell")
+                e9_probe_world = (
+                    e9_target_world,
+                    validate_target_cell((0, 5, 1), "control_above_target"),
+                    validate_target_cell((0, 5, 0), "control_above_spawn"),
+                )
+                e9_probe_grid = (
+                    spawn_relative_grid_cell(e9_probe_world[0], (0, 4, 0)),
+                    spawn_relative_grid_cell(e9_probe_world[1], (0, 4, 0)),
+                    spawn_relative_grid_cell(e9_probe_world[2], (0, 4, 0)),
+                )
+                e9_controls = e9_probe_world[1:]
+                e9_expected_before = {cell: ("none", "none") for cell in e9_probe_world}
+                e9_expected_after = {
+                    e9_probe_world[0]: (e9_expected_type, e9_expected_flow),
+                    e9_probe_world[1]: ("none", "none"),
+                    e9_probe_world[2]: ("none", "none"),
+                }
+                e9_position_min = (-2.0, 2.0, -2.0)
+                e9_position_max = (3.0, 7.0, 3.0)
+                if type(requested_duration_ticks) is not int or requested_duration_ticks < 1:
+                    raise ValueError("requested_duration_ticks must be a positive int")
+                if e9_probe_grid != ((0, 0, 1), (0, 1, 1), (0, 1, 0)):
+                    raise ValueError("E9 probe grid conversion is not the frozen atSpawn mapping")
+            except (TypeError, ValueError) as exc:
+                return _result(
+                    case=case,
+                    episode_id=episode_id,
+                    success=False,
+                    outcome="runtime_error",
+                    created=False,
+                    reset_completed=False,
+                    initial_state_present=False,
+                    closed=False,
+                    error="invalid E9 calibration: " + _format_error(exc),
+                )
+
         created = False
         reset_completed = False
         initial_state_present = False
@@ -758,6 +870,8 @@ class EnvironmentValidationRunner:
         truth_execution: BlockTruthActionExecution | None = None
         block_truth: BlockTruthInspection | None = None
         truth_agent_id: str | None = None
+        fluid_execution: FluidTruthActionExecution | None = None
+        fluid_inspection: FluidTruthInspection | None = None
         failure_stage: str | None = None
         original_exception_type: str | None = None
         reset_attempt_count: int | None = None
@@ -1293,6 +1407,105 @@ class EnvironmentValidationRunner:
                                                     )
                                                     outcome = block_truth.outcome
                                                     error = block_truth.error
+                        elif case.check_id is EnvironmentValidationId.E9:
+                            if isinstance(reset_result, Mapping) and reset_result:
+                                first_agent = next(iter(reset_result))
+                                if isinstance(first_agent, str) and first_agent.strip():
+                                    truth_agent_id = first_agent.strip()
+                            snapshot = getattr(backend, "server_truth_snapshot", None)
+                            execute = getattr(backend, "execute_fluid_stimulus", None)
+                            if not callable(snapshot) or not callable(execute):
+                                outcome = "runtime_error"
+                                error = "E9 backend snapshot/stimulus surface is not callable"
+                            else:
+                                try:
+                                    candidate_before = snapshot()
+                                except (TypeError, ValueError) as exc:
+                                    outcome = truth_error_outcome(exc)
+                                    error = _format_error(exc)
+                                else:
+                                    if candidate_before is None:
+                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                        error = "server truth snapshot is missing before stimulus"
+                                    elif not isinstance(candidate_before, ServerTruthSnapshot):
+                                        outcome = truth_error_outcome(
+                                            TypeError("before snapshot has the wrong type")
+                                        )
+                                        error = "before snapshot has the wrong type"
+                                    else:
+                                        before_truth_snapshot = candidate_before
+                                if before_truth_snapshot is not None:
+                                    parsed = parse_macro_action(
+                                        json.dumps(
+                                            {
+                                                "action_type": "use_item",
+                                                "target": e9_stimulus_target,
+                                                "duration_ticks": requested_duration_ticks,
+                                                "parameters": {},
+                                            },
+                                            allow_nan=False,
+                                            sort_keys=True,
+                                        )
+                                    )
+                                    if not parsed.accepted:
+                                        outcome = "truth_stimulus_rejected"
+                                        error = "E9 stimulus protocol rejected: " + (
+                                            parsed.error or "unknown error"
+                                        )
+                                    else:
+                                        try:
+                                            candidate_execution = execute(parsed.action)
+                                        except (TypeError, ValueError) as exc:
+                                            outcome = truth_error_outcome(exc)
+                                            error = _format_error(exc)
+                                        else:
+                                            if not isinstance(candidate_execution, FluidTruthActionExecution):
+                                                raise TypeError(
+                                                    "execute_fluid_stimulus must return FluidTruthActionExecution"
+                                                )
+                                            fluid_execution = candidate_execution
+                                            try:
+                                                candidate_after = snapshot()
+                                            except (TypeError, ValueError) as exc:
+                                                outcome = truth_error_outcome(exc)
+                                                error = _format_error(exc)
+                                            else:
+                                                if candidate_after is None:
+                                                    outcome = TRUTH_SNAPSHOT_MISSING
+                                                    error = "server truth snapshot is missing after stimulus"
+                                                elif not isinstance(candidate_after, ServerTruthSnapshot):
+                                                    outcome = truth_error_outcome(
+                                                        TypeError("after snapshot has the wrong type")
+                                                    )
+                                                    error = "after snapshot has the wrong type"
+                                                else:
+                                                    after_truth_snapshot = candidate_after
+                                                    assert e9_variant is not None
+                                                    assert e9_probe_world is not None
+                                                    assert e9_probe_grid is not None
+                                                    assert e9_expected_before is not None
+                                                    assert e9_expected_after is not None
+                                                    assert e9_target_world is not None
+                                                    assert e9_controls is not None
+                                                    assert e9_stimulus_target is not None
+                                                    fluid_inspection = inspect_fluid_truth(
+                                                        before_truth_snapshot,
+                                                        after_truth_snapshot,
+                                                        fluid_execution,
+                                                        probe_world_cells=e9_probe_world,
+                                                        probe_grid_cells=e9_probe_grid,
+                                                        expected_before_fluids=e9_expected_before,
+                                                        expected_after_fluids=e9_expected_after,
+                                                        target_world_cell=e9_target_world,
+                                                        control_world_cells=e9_controls,
+                                                        duration_ticks=requested_duration_ticks,
+                                                        stimulus_target=e9_stimulus_target,
+                                                        variant=e9_variant,
+                                                        position_min=e9_position_min,
+                                                        position_max=e9_position_max,
+                                                    )
+                                                    outcome = fluid_inspection.outcome
+                                                    error = fluid_inspection.error
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -1309,6 +1522,7 @@ class EnvironmentValidationRunner:
                     EnvironmentValidationId.E6,
                     EnvironmentValidationId.E7,
                     EnvironmentValidationId.E8,
+                    EnvironmentValidationId.E9,
                 ):
                     failure_stage = "reset"
                     original_exception_type = type(_root_exception(exc)).__name__
@@ -1366,6 +1580,13 @@ class EnvironmentValidationRunner:
                 exception_traceback = "".join(
                     traceback.format_exception(type(exc), exc, exc.__traceback__)
                 )
+            elif case.check_id is EnvironmentValidationId.E9 and before_truth_snapshot is not None:
+                outcome = "action_failed"
+                failure_stage = "action"
+                original_exception_type = type(_root_exception(exc)).__name__
+                exception_traceback = "".join(
+                    traceback.format_exception(type(exc), exc, exc.__traceback__)
+                )
             else:
                 outcome = "runtime_error"
         finally:
@@ -1383,6 +1604,7 @@ class EnvironmentValidationRunner:
                 E6_SUCCESS_OUTCOME,
                 E7_SUCCESS_OUTCOME,
                 E8_SUCCESS_OUTCOME,
+                E9_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -1406,6 +1628,7 @@ class EnvironmentValidationRunner:
             E6_SUCCESS_OUTCOME,
             E7_SUCCESS_OUTCOME,
             E8_SUCCESS_OUTCOME,
+            E9_SUCCESS_OUTCOME,
         }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
@@ -1464,7 +1687,7 @@ class EnvironmentValidationRunner:
             requested_strafe=requested_strafe if case.check_id is EnvironmentValidationId.E5 else None,
             requested_sprint=requested_sprint if case.check_id is EnvironmentValidationId.E5 else None,
             requested_jump=requested_jump if case.check_id is EnvironmentValidationId.E5 else None,
-            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8) else None,
+            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
             minimum_horizontal_distance=minimum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
             minimum_forward_projection=minimum_forward_projection if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_lateral_drift=maximum_lateral_drift if case.check_id is EnvironmentValidationId.E5 else None,
@@ -1499,17 +1722,34 @@ class EnvironmentValidationRunner:
             expected_fluid=e7_expected_fluid if case.check_id is EnvironmentValidationId.E7 else None,
             before_selected_item=before_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
             after_selected_item=after_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
-            before_truth_snapshot=before_truth_snapshot if case.check_id is EnvironmentValidationId.E8 else None,
-            after_truth_snapshot=after_truth_snapshot if case.check_id is EnvironmentValidationId.E8 else None,
+            before_truth_snapshot=before_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            after_truth_snapshot=after_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
             truth_execution=truth_execution if case.check_id is EnvironmentValidationId.E8 else None,
             block_truth=block_truth if case.check_id is EnvironmentValidationId.E8 else None,
-            truth_agent_id=truth_agent_id if case.check_id is EnvironmentValidationId.E8 else None,
-            stimulus_target=e8_stimulus_target if case.check_id is EnvironmentValidationId.E8 else None,
-            probe_world_cells=e8_probe_world if case.check_id is EnvironmentValidationId.E8 else None,
-            probe_grid_cells=e8_probe_grid if case.check_id is EnvironmentValidationId.E8 else None,
-            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8) else None,
-            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8) else None,
-            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8) else None,
-            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8) else None,
-            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8) else None,
+            truth_agent_id=truth_agent_id if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            stimulus_target=(
+                e9_stimulus_target if case.check_id is EnvironmentValidationId.E9
+                else e8_stimulus_target if case.check_id is EnvironmentValidationId.E8
+                else None
+            ),
+            probe_world_cells=(
+                e9_probe_world if case.check_id is EnvironmentValidationId.E9
+                else e8_probe_world if case.check_id is EnvironmentValidationId.E8
+                else None
+            ),
+            probe_grid_cells=(
+                e9_probe_grid if case.check_id is EnvironmentValidationId.E9
+                else e8_probe_grid if case.check_id is EnvironmentValidationId.E8
+                else None
+            ),
+            fluid_execution=fluid_execution if case.check_id is EnvironmentValidationId.E9 else None,
+            fluid_inspection=fluid_inspection if case.check_id is EnvironmentValidationId.E9 else None,
+            fluid_variant_name=None if e9_variant is None or case.check_id is not EnvironmentValidationId.E9 else e9_variant.value,
+            expected_target_fluid_type=e9_expected_type if case.check_id is EnvironmentValidationId.E9 else None,
+            expected_target_flow_state=e9_expected_flow if case.check_id is EnvironmentValidationId.E9 else None,
+            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
         )

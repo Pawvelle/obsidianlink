@@ -30,9 +30,13 @@ from obsidianlink.env.validation.truth import (
     EVALUATOR_TRUTH_LEAK_KEYS,
     BlockTruthActionExecution,
     ServerBlockTruth,
+    ServerFluidTruth,
     ServerTruthSnapshot,
+    classify_server_fluid,
     validate_anchor_source,
     validate_dimension,
+    validate_flow_state,
+    validate_fluid_type,
 )
 
 
@@ -76,7 +80,9 @@ def server_truth_snapshot(
         "block_truth",
         "truth_missing_count",
     }
-    if set(value) != required:
+    optional = {"fluid_truth"}
+    extra = set(value) - required - optional
+    if extra or not required.issubset(value):
         raise ValueError("server truth snapshot fields are missing or unknown")
     if value["position_world"] is None:
         raise ValueError("position truth is missing")
@@ -125,7 +131,62 @@ def server_truth_snapshot(
         raise ValueError("truth_missing_count does not match block_truth records")
     missing_count = reported_missing_count
     if tuple(item.world_cell for item in truths) != expected_cells and missing_count == 0:
-        raise ValueError("server truth snapshot region differs from frozen E8 probes")
+        raise ValueError("server truth snapshot region differs from requested probes")
+    fluids: list[ServerFluidTruth] = []
+    if "fluid_truth" in value:
+        fluid_records = value["fluid_truth"]
+        if not isinstance(fluid_records, Sequence) or isinstance(fluid_records, (str, bytes)):
+            raise ValueError("fluid_truth must be a sequence")
+        required_fluid = {
+            "world_cell",
+            "grid_cell",
+            "observed_block",
+            "fluid_present",
+            "fluid_type",
+            "flow_state",
+        }
+        for record in fluid_records:
+            if not isinstance(record, Mapping):
+                raise ValueError("fluid_truth items must be mappings")
+            if set(record) != required_fluid:
+                raise ValueError("fluid_truth fields are missing or unknown")
+            observed = _scalar(record.get("observed_block"))
+            if observed == "missing":
+                continue
+            if observed == "other":
+                raise ValueError("unknown fluid truth")
+            world_cell = _cell_tuple(record.get("world_cell"), "world_cell")
+            grid_cell = _cell_tuple(record.get("grid_cell"), "grid_cell")
+            try:
+                present, fluid_type, flow_state = classify_server_fluid(observed)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("unknown fluid truth") from exc
+            reported_present = _scalar(record.get("fluid_present"))
+            if type(reported_present) is not bool:
+                raise ValueError("malformed fluid state")
+            try:
+                reported_type = validate_fluid_type(_scalar(record.get("fluid_type")))
+                reported_flow = validate_flow_state(_scalar(record.get("flow_state")))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("malformed fluid state") from exc
+            if (
+                reported_present != present
+                or reported_type != fluid_type
+                or reported_flow != flow_state
+            ):
+                raise ValueError("malformed fluid state")
+            fluids.append(
+                ServerFluidTruth(
+                    world_cell,
+                    grid_cell,
+                    str(observed),
+                    present,
+                    fluid_type,
+                    flow_state,
+                )
+            )
+        if tuple(item.world_cell for item in fluids) != expected_cells and missing_count == 0:
+            raise ValueError("server truth snapshot region differs from requested probes")
     return ServerTruthSnapshot(
         value["episode_id"],
         value["agent_id"],
@@ -136,6 +197,7 @@ def server_truth_snapshot(
         validate_anchor_source(_scalar(value["anchor_source"])),
         tuple(truths),
         missing_count,
+        tuple(fluids),
     )
 
 

@@ -32,7 +32,7 @@ P1 real MineRL environment validation remains the only active phase.
 
 E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 server-side `air/lava/... -> obsidian`。
 
-## P1-E0 / E1 / E2 / E3 / E4 / E5 / E6 / E7 / E8 status
+## P1-E0 / E1 / E2 / E3 / E4 / E5 / E6 / E7 / E8 / E9 status
 
 - E0–E5 contract / offline runtime / MineRL adapter：`unit_verified`；各有一次已审查真实成功；均 `integration_verified`: NO
 - E0 RGB/lifecycle evidence: `runs/p1_e0_reset_close/e0-live-20260813-130313`；E1 RGB 360×640×3 uint8: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`
@@ -59,7 +59,7 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E7 real calibration coverage: WATER + LAVA complete
 - E7 `integration_verified`: NO
 - E8 contract / offline runtime: complete / `unit_verified`
-- E8 ServerTruthSnapshot block portion: implemented / offline verified; fluid portion remains E9
+- E8 ServerTruthSnapshot block portion: implemented / offline verified; fluid portion is E9
 - E8 generalized target-region block truth: offline verified
 - E8 MineRL adapter / live bridge: implemented / offline tested
 - E8 truth parser hardened to reject coordinate coercion and inconsistent truth_missing_count.
@@ -68,15 +68,22 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 serve
 - E8 live attempt #2: `p1-e8-live-002` / `runs/p1_e8_block_truth/e8-live-20260815-002`; `real_execution_performed=true`; `success=true`; `outcome=block_truth_ok`; before (0,4,1)/(1,4,1)/(-1,4,1)=air/air/air; one `place_block(dirt)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after dirt/air/air; `target_changed=true`; `target_expected_block_present=true`; `control_cells_unchanged=true`; `truth_missing_count=0`; dimension `minecraft:overworld`; position (0.5, 4.0, 0.5); `anchor_source=expected_spawn_fallback`; close returned; `process_release_proven=false`
 - E8 reviewed real success: YES
 - E8 `integration_verified`: NO
-- E9–E12: NOT STARTED
+- E9 contract / offline runtime: complete / `unit_verified`
+- E9 generalized fluid truth: implemented; `ServerTruthSnapshot.fluid_truth` plus typed `ServerFluidTruth`; source/flowing remain distinct (`water`/`flowing_water`, `lava`/`flowing_lava`)
+- E9 MineRL adapter / live bridge: implemented / offline tested
+- E9 verification level: `unit_verified`
+- E9 real MineRL execution: NOT RUN
+- E9 reviewed real success: NO
+- E9 `integration_verified`: NO
+- E10–E12: NOT STARTED
 - P1 Hard Gate: NOT PASSED
 - P2: NOT STARTED
 
-None of E0–E8 is `integration_verified`; `process_release_proven=false`. E0–E8 remain solver-independent. Typed evaluator truth never enters Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
+None of E0–E9 is `integration_verified`; `process_release_proven=false`. E0–E9 remain solver-independent. Typed evaluator truth never enters Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
 
 ## 本次 v2 refactor 已完成
 
-- `unit_verified`：v2 taxonomy、verification vocabulary、P1 manifest、E0–E8 contracts/offline runtimes/MineRL bridges、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
+- `unit_verified`：v2 taxonomy、verification vocabulary、P1 manifest、E0–E9 contracts/offline runtimes/MineRL bridges、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
 - legacy infrastructure 保持原 import，可继续运行离线 regression；
 - active catalog 不包含旧 C1–C5 正式 benchmark entries；
 - `python -m obsidianlink --check` 与 `scripts/check_environment.py` 使用 v2/P1 语义，不把离线结果提升为真实 integration。标准本地运行时为 `environment.yml` 的 `mc-agent`。
@@ -87,7 +94,8 @@ None of E0–E8 is `integration_verified`; `process_release_proven=false`. E0–
 - E6: `unit_verified`; one reviewed real success (`p1-e6-live-001`, `placement_ok`); `integration_verified`: NO；
 - E7: `unit_verified`; water/lava calibrations offline verified; adapter/live bridge implemented / offline tested; one reviewed WATER real success (`p1-e7-water-live-001`, `bucket_ok`); one reviewed LAVA real success (`p1-e7-lava-live-001`, `bucket_ok`); real calibration coverage WATER + LAVA complete; `integration_verified`: NO；
 - E8: `unit_verified`; #1 `p1-e8-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1; #2 `p1-e8-live-002` `block_truth_ok`; reviewed real success: YES; `integration_verified`: NO；
-- E9–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
+- E9: `unit_verified`; generalized fluid truth / adapter / live bridge implemented and offline tested; real MineRL execution NOT RUN; reviewed real success: NO; `integration_verified`: NO；
+- E10–E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - E10、portal activation、dimension transition 尚未真实验证；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
 
@@ -97,4 +105,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 ## 下一精确任务
 
-E8 has one reviewed real success (`p1-e8-live-002`, `block_truth_ok`). Attempt #1 remains `reset_failed` / SAME_FINGERPRINT native crash as E5 #1. E8 `integration_verified`: NO. Do not start E9. Do not rerun E6 or E7. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. E9 requires explicit authorization.
+E9 contract / offline runtime / MineRL adapter / live bridge 为 `unit_verified`。E9 real MineRL execution: NOT RUN. E9 reviewed real success: NO. E9 `integration_verified`: NO. Do not start E10. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. Next step: request explicit authorization for one controlled E9 real MineRL validation run.

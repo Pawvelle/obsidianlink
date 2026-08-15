@@ -12,6 +12,7 @@ from obsidianlink.env.validation.cases.movement import E5_MOVEMENT_CASE
 from obsidianlink.env.validation.cases.placement import E6_PLACEMENT_CASE
 from obsidianlink.env.validation.cases.bucket import E7_BUCKET_CASE
 from obsidianlink.env.validation.cases.truth import E8_SERVER_BLOCK_TRUTH_CASE
+from obsidianlink.env.validation.cases.fluid import E9_SERVER_FLUID_TRUTH_CASE
 from obsidianlink.env.validation.camera import (
     CameraActionExecution,
     CameraInspection,
@@ -56,9 +57,14 @@ from obsidianlink.env.validation.placement import (
 from obsidianlink.env.validation.truth import (
     BlockTruthActionExecution,
     BlockTruthInspection,
+    FluidCalibrationVariant,
+    FluidTruthActionExecution,
+    FluidTruthInspection,
     ServerBlockTruth,
+    ServerFluidTruth,
     ServerTruthSnapshot,
     inspect_block_truth,
+    inspect_fluid_truth,
 )
 from obsidianlink.env.validation.recorder import EnvironmentValidationRecorder
 from obsidianlink.env.validation.result import EnvironmentValidationResult
@@ -86,6 +92,7 @@ __all__ = [
     "E6_PLACEMENT_CASE",
     "E7_BUCKET_CASE",
     "E8_SERVER_BLOCK_TRUTH_CASE",
+    "E9_SERVER_FLUID_TRUTH_CASE",
     "EnvironmentValidationCase",
     "EnvironmentValidationId",
     "EnvironmentValidationRecorder",
@@ -108,7 +115,11 @@ __all__ = [
     "PlacementInspection",
     "BlockTruthActionExecution",
     "BlockTruthInspection",
+    "FluidCalibrationVariant",
+    "FluidTruthActionExecution",
+    "FluidTruthInspection",
     "ServerBlockTruth",
+    "ServerFluidTruth",
     "ServerTruthSnapshot",
     "P1_VALIDATION_CASES",
     "InventoryInspection",
@@ -128,6 +139,7 @@ __all__ = [
     "inspect_block_placement",
     "inspect_bucket_usage",
     "inspect_block_truth",
+    "inspect_fluid_truth",
     "spawn_relative_grid_cell",
     "normalized_angular_delta",
     "p1_validation_manifest",
