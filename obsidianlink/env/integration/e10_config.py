@@ -81,6 +81,16 @@ E10_CONTROL_WORLD_CELLS = (
 E10_NONE_FLUID = ("none", "none")
 E10_LAVA_SOURCE = (E10_EXPECTED_BEFORE_FLUID_TYPE, E10_EXPECTED_BEFORE_FLOW_STATE)
 E10_WATER_SOURCE = ("water", "source")
+E10_EXPECTED_AFTER_WATER_BLOCK = "water"
+E10_EXPECTED_AFTER_WATER_FLUID_TYPE = "water"
+E10_EXPECTED_AFTER_WATER_FLOW_STATE = "source"
+# Deployed P1 platform already places grass_block at feetY-1. That cell is
+# not a control, not pre-placed obsidian, and is not emitted in Mission XML.
+E10_EXISTING_PLATFORM_SUPPORT_CELL = (0, 3, 2)
+# E10-only Mission XML DrawBlocks. Default PortalA0EnvSpec stays empty.
+E10_INITIAL_DRAW_BLOCKS: tuple[tuple[int, int, int, str], ...] = (
+    (E10_TARGET_WORLD_CELL[0], E10_TARGET_WORLD_CELL[1], E10_TARGET_WORLD_CELL[2], "lava"),
+)
 E10_EXPECTED_BEFORE_BLOCKS = {
     E10_TARGET_WORLD_CELL: E10_EXPECTED_BEFORE_BLOCK,
     E10_WATER_WORLD_CELL: "air",
@@ -110,6 +120,53 @@ E10_POSITION_MIN = (-2.0, 2.0, -2.0)
 E10_POSITION_MAX = (3.0, 7.0, 4.0)
 
 
+def validate_e10_initial_geometry(
+    blocks: tuple[tuple[int, int, int, str], ...],
+) -> tuple[tuple[int, int, int, str], ...]:
+    """Fail closed unless E10 XML geometry is exactly the frozen lava target."""
+
+    if not isinstance(blocks, tuple):
+        raise ValueError("E10 initial geometry must be a tuple of DrawBlocks")
+    reserved = {
+        E10_SPAWN_WORLD,
+        E10_WATER_WORLD_CELL,
+        *E10_CONTROL_WORLD_CELLS,
+    }
+    lava_target = False
+    seen: set[tuple[int, int, int]] = set()
+    normalized: list[tuple[int, int, int, str]] = []
+    for index, item in enumerate(blocks):
+        if not isinstance(item, tuple) or len(item) != 4:
+            raise ValueError(f"E10 initial geometry[{index}] must be (x, y, z, block)")
+        x, y, z, block = item
+        if any(type(coordinate) is not int for coordinate in (x, y, z)):
+            raise ValueError(f"E10 initial geometry[{index}] coordinates must be ints")
+        if not isinstance(block, str) or not block.strip():
+            raise ValueError(f"E10 initial geometry[{index}] block must be a non-empty string")
+        block = block.strip()
+        cell = (x, y, z)
+        if cell in seen:
+            raise ValueError(f"E10 initial geometry has a duplicate cell {cell}")
+        seen.add(cell)
+        if block == "obsidian":
+            raise ValueError("E10 initial geometry must not pre-place obsidian")
+        if cell in reserved:
+            raise ValueError(f"E10 initial geometry must not occupy reserved cell {cell}")
+        if cell == E10_TARGET_WORLD_CELL:
+            if block != "lava":
+                raise ValueError("E10 target DrawBlock must be lava")
+            lava_target = True
+        elif block == "lava":
+            raise ValueError("E10 may pre-place lava only at the frozen target cell")
+        normalized.append((x, y, z, block))
+    if not lava_target:
+        raise ValueError("E10 initial geometry must include lava at (0, 4, 2)")
+    frozen = tuple(normalized)
+    if frozen != E10_INITIAL_DRAW_BLOCKS:
+        raise ValueError("E10 initial geometry is frozen to the lava target DrawBlock")
+    return frozen
+
+
 @dataclass(frozen=True)
 class E10ObsidianCalibration:
     stimulus_item: str
@@ -130,6 +187,7 @@ class E10ObsidianCalibration:
     expected_after_blocks: Mapping[tuple[int, int, int], str]
     expected_before_fluids: Mapping[tuple[int, int, int], tuple[str, str]]
     expected_after_fluids: Mapping[tuple[int, int, int], tuple[str, str]]
+    initial_draw_blocks: tuple[tuple[int, int, int, str], ...]
     initial_yaw: float
     initial_pitch: float
     duration_ticks: int
@@ -164,6 +222,9 @@ class E10ObsidianCalibration:
             raise ValueError("E10 probe_grid_cells are frozen")
         if self.control_world_cells != E10_CONTROL_WORLD_CELLS:
             raise ValueError("E10 control_world_cells are frozen")
+        if self.initial_draw_blocks != E10_INITIAL_DRAW_BLOCKS:
+            raise ValueError("E10 initial_draw_blocks are frozen to the lava target DrawBlock")
+        validate_e10_initial_geometry(self.initial_draw_blocks)
         if (self.initial_yaw, self.initial_pitch) != (E10_INITIAL_YAW, E10_INITIAL_PITCH):
             raise ValueError("E10 yaw/pitch are frozen to the proven E7 pose")
         if self.duration_ticks != E10_DURATION_TICKS:
@@ -215,6 +276,7 @@ def e10_calibration() -> E10ObsidianCalibration:
         expected_after_blocks=E10_EXPECTED_AFTER_BLOCKS,
         expected_before_fluids=E10_EXPECTED_BEFORE_FLUIDS,
         expected_after_fluids=E10_EXPECTED_AFTER_FLUIDS,
+        initial_draw_blocks=E10_INITIAL_DRAW_BLOCKS,
         initial_yaw=E10_INITIAL_YAW,
         initial_pitch=E10_INITIAL_PITCH,
         duration_ticks=E10_DURATION_TICKS,
@@ -223,6 +285,12 @@ def e10_calibration() -> E10ObsidianCalibration:
 
 
 E10_CALIBRATION = e10_calibration()
+
+
+def e10_initial_blocks() -> tuple[tuple[int, int, int, str], ...]:
+    """Return the frozen E10-only Mission XML DrawBlock list."""
+
+    return validate_e10_initial_geometry(E10_INITIAL_DRAW_BLOCKS)
 
 
 def build_e10_compatibility_task(episode_id: str) -> TaskInstance:
@@ -268,6 +336,12 @@ def build_e10_compatibility_task(episode_id: str) -> TaskInstance:
                 "expected_after_block": calibration.expected_after_block,
                 "expected_before_fluid_type": calibration.expected_before_fluid_type,
                 "expected_before_flow_state": calibration.expected_before_flow_state,
+                "expected_water_after": {
+                    "block": E10_EXPECTED_AFTER_WATER_BLOCK,
+                    "fluid_type": E10_EXPECTED_AFTER_WATER_FLUID_TYPE,
+                    "flow_state": E10_EXPECTED_AFTER_WATER_FLOW_STATE,
+                },
+                "expected_target_after": calibration.expected_after_block,
                 "target_world_cell": list(calibration.target_world_cell),
                 "target_grid_cell": list(calibration.target_grid_cell),
                 "water_world_cell": list(calibration.water_world_cell),
@@ -276,9 +350,16 @@ def build_e10_compatibility_task(episode_id: str) -> TaskInstance:
                 "expected_dimension": E10_EXPECTED_DIMENSION,
                 "initial_yaw": calibration.initial_yaw,
                 "initial_pitch": calibration.initial_pitch,
+                "controlled_initial_geometry": True,
                 "lava_preplaced": True,
+                "lava_target_world_cell": list(calibration.target_world_cell),
                 "obsidian_preplaced": False,
                 "flat_ground_spawn": True,
+                "initial_draw_blocks": [
+                    {"x": x, "y": y, "z": z, "block": block}
+                    for x, y, z, block in calibration.initial_draw_blocks
+                ],
+                "runtime_applies_drawing_decorator": False,
             },
         }
     )

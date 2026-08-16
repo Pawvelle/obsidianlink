@@ -555,6 +555,27 @@ def _result(
         after_target_block=(
             None if obsidian_inspection is None else obsidian_inspection.after_target_block
         ),
+        before_water_block=(
+            None if obsidian_inspection is None else obsidian_inspection.before_water_block
+        ),
+        after_water_block=(
+            None if obsidian_inspection is None else obsidian_inspection.after_water_block
+        ),
+        before_water_fluid_type=(
+            None if obsidian_inspection is None else obsidian_inspection.before_water_fluid_type
+        ),
+        before_water_flow_state=(
+            None if obsidian_inspection is None else obsidian_inspection.before_water_flow_state
+        ),
+        after_water_fluid_type=(
+            None if obsidian_inspection is None else obsidian_inspection.after_water_fluid_type
+        ),
+        after_water_flow_state=(
+            None if obsidian_inspection is None else obsidian_inspection.after_water_flow_state
+        ),
+        water_placement_observed=(
+            None if obsidian_inspection is None else obsidian_inspection.water_placement_observed
+        ),
         obsidian_present=(
             None if obsidian_inspection is None else obsidian_inspection.obsidian_present
         ),

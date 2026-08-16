@@ -109,6 +109,13 @@ class ObsidianConversionContractTests(unittest.TestCase):
         self.assertEqual(inspection.conversion_observed_at_step, 1)
         self.assertTrue(inspection.control_cells_unchanged)
         self.assertTrue(inspection.source_flowing_match)
+        self.assertEqual(inspection.before_water_block, "air")
+        self.assertEqual(inspection.after_water_block, "water")
+        self.assertEqual(inspection.before_water_fluid_type, "none")
+        self.assertEqual(inspection.before_water_flow_state, "none")
+        self.assertEqual(inspection.after_water_fluid_type, "water")
+        self.assertEqual(inspection.after_water_flow_state, "source")
+        self.assertTrue(inspection.water_placement_observed)
         self.assertEqual(inspection.truth_missing_count, 0)
 
     def test_fail_closed_taxonomy(self):
@@ -117,12 +124,24 @@ class ObsidianConversionContractTests(unittest.TestCase):
             "invalid_initial_state",
         )
         self.assertEqual(
+            _inspect(after=_snapshot(1, ("obsidian", "air", "air", "air"))).outcome,
+            "water_placement_not_observed",
+        )
+        self.assertEqual(
+            _inspect(after=_snapshot(1, ("obsidian", "flowing_water", "air", "air"))).outcome,
+            "water_placement_not_observed",
+        )
+        self.assertEqual(
             _inspect(after=_snapshot(1, ("lava", "water", "air", "air"))).outcome,
             "conversion_not_observed",
         )
         self.assertEqual(
             _inspect(after=_snapshot(1, ("dirt", "water", "air", "air"))).outcome,
             "unexpected_block_transition",
+        )
+        self.assertEqual(
+            _inspect(before=_snapshot(0, ("lava", "water", "air", "air"))).outcome,
+            "invalid_initial_state",
         )
         self.assertEqual(
             _inspect(before=_snapshot(0, ("air", "air", "air", "air"))).outcome,
@@ -199,6 +218,9 @@ class ObsidianConversionContractTests(unittest.TestCase):
             "conversion_observed",
             "before_target_block",
             "after_target_block",
+            "before_water_block",
+            "after_water_block",
+            "water_placement_observed",
             "block_truth",
             "fluid_truth",
         ):
@@ -220,6 +242,24 @@ class ObsidianConversionContractTests(unittest.TestCase):
         self.assertEqual(manifest[10]["name"], "vanilla_water_lava_to_obsidian")
         self.assertEqual(manifest[11]["check_id"], EnvironmentValidationId.E11.value)
         self.assertEqual(manifest[12]["check_id"], EnvironmentValidationId.E12.value)
+
+    def test_e10_initial_geometry_is_frozen_and_rejects_obsidian(self):
+        from obsidianlink.env.integration.e10_config import (
+            E10_INITIAL_DRAW_BLOCKS,
+            e10_initial_blocks,
+            validate_e10_initial_geometry,
+        )
+
+        self.assertEqual(e10_initial_blocks(), ((0, 4, 2, "lava"),))
+        self.assertEqual(validate_e10_initial_geometry(E10_INITIAL_DRAW_BLOCKS), E10_INITIAL_DRAW_BLOCKS)
+        with self.assertRaisesRegex(ValueError, "obsidian"):
+            validate_e10_initial_geometry(((0, 4, 2, "obsidian"),))
+        with self.assertRaisesRegex(ValueError, "duplicate cell"):
+            validate_e10_initial_geometry(((0, 4, 2, "lava"), (0, 4, 2, "lava")))
+        with self.assertRaisesRegex(ValueError, "reserved cell"):
+            validate_e10_initial_geometry(((0, 4, 1, "lava"),))
+        with self.assertRaisesRegex(ValueError, "frozen"):
+            validate_e10_initial_geometry(((0, 4, 2, "lava"), (1, 4, 2, "cobblestone")))
 
 
 if __name__ == "__main__":

@@ -29,12 +29,17 @@ E10 验证 MineRL `use_item(water_bucket)` → Minecraft 1.16.5 vanilla water/la
 冻结几何（spawn-relative / `ObservationFromGrid(atSpawn=true)`）：
 
 - spawn `(0, 4, 0)`，yaw `0.0`，pitch `60.0`（复用已验证的 E7 姿态）
-- water-pour cell `(0, 4, 1)` / grid `(0, 0, 1)`
+- water-pour cell `(0, 4, 1)` / grid `(0, 0, 1)`；before 必须是 `air` / no fluid
 - target lava-source cell `(0, 4, 2)` / grid `(0, 0, 2)`；禁止预置目标 obsidian
 - control cells `(0, 5, 1)`、`(0, 5, 2)`
+- E10-only Mission XML `DrawBlock`：world `(0, 4, 2)` = `lava`；默认 `PortalA0EnvSpec` 仍无 DrawingDecorator
+- 平台支撑 `(0, 3, 2)` 来自已部署 `prepareControlledBuildArea` 的 grass_block，不是 XML、不是 control
 - 恰好 1 次 stimulus：`use_item(water_bucket)`，`duration_ticks=1`
 - bounded observation window：最多 5 个 `wait` tick
-- 成功 outcome：`obsidian_conversion_ok`，必须看到 server-side obsidian
+- 成功必须同时证明：after water-pour cell = water/source，after target = obsidian，controls unchanged，`truth_missing_count=0`
+- 成功 outcome：`obsidian_conversion_ok`
+- 水桶已 accepted 但 after water cell 不是 water/source：`water_placement_not_observed`
+- water 已出现但 lava 未变 obsidian：`conversion_not_observed`
 
 ```text
 MineRL Action
@@ -44,7 +49,9 @@ MineRL Action
   -> Verdict
 ```
 
-离线 Fake/test doubles 可在 reset 时预置合法 lava source。生产 flat platform 当前没有 DrawingDecorator；真实运行若目标格不是 lava source，必须 fail-closed（例如 `fluid_precondition_failed`），不能为此改 Java runtime。
+E10 controlled initial geometry：Mission XML `DrawingDecorator` **implemented / offline verified**。当前已部署 EnvServer **不应用** DrawingDecorator；`prepareControlledBuildArea` 还会把 feetY 及以上填成 air。因此 live lava 仍需 `NEEDS_E10_RUNTIME_GEOMETRY_AUTHORIZATION`，未经授权不得改 Java / Gradle / vendor。真实运行若目标格不是 lava source，必须 fail-closed。
+
+E10 vanilla causality：water placement + lava-source conversion **both required**。FakeBackend success 不能证明真实 Minecraft 能力。
 
 E10 通过不表示正式 portal task 成功。当前 verification：contract/offline runtime/MineRL bridge = `unit_verified`；Real E10 calibration = **NOT RUN**；`integration_verified` = **NO**。
 

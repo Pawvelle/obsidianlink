@@ -173,6 +173,16 @@ class E10LiveGateTests(unittest.TestCase):
         self.assertEqual(payload["name"], "vanilla_water_lava_to_obsidian")
         self.assertEqual(payload["probe_count"], 4)
         self.assertFalse(payload["obsidian_preplaced"])
+        self.assertTrue(payload["controlled_initial_geometry"])
+        self.assertTrue(payload["lava_preplaced"])
+        self.assertEqual(payload["lava_target_world_cell"], [0, 4, 2])
+        self.assertEqual(payload["expected_target_after"], "obsidian")
+        self.assertEqual(
+            payload["expected_water_after"],
+            {"block": "water", "flow_state": "source", "fluid_type": "water"},
+        )
+        self.assertFalse(payload["runtime_applies_drawing_decorator"])
+        self.assertTrue(payload["needs_e10_runtime_geometry_authorization"])
         self.assertEqual(payload["stimulus"]["target"], "water_bucket")
         self.assertEqual(payload["verification_level"], "unit_verified")
 
@@ -240,6 +250,7 @@ class E10LiveGateTests(unittest.TestCase):
 
     def test_failures_cleanup_and_only_one_attempt(self):
         for kwargs, outcome in (
+            ({"after_blocks": ("obsidian", "air", "air", "air")}, "water_placement_not_observed"),
             ({"after_blocks": ("lava", "water", "air", "air")}, "conversion_not_observed"),
             ({"before_blocks": ("obsidian", "air", "air", "air")}, "invalid_initial_state"),
             ({"missing_after": True}, "truth_snapshot_missing"),

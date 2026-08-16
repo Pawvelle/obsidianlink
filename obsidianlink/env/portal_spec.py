@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
+from xml.etree import ElementTree
 
 import numpy as np
 
@@ -75,6 +76,93 @@ PORTAL_INVENTORY = (
     {"type": "flint_and_steel", "quantity": 1},
     {"type": "dirt", "quantity": 2},
 )
+#: Opt-in Mission XML DrawBlock types. Default PortalA0EnvSpec still emits
+#: no DrawingDecorator. Obsidian, portals, fire, and water are rejected so
+#: a reset cannot pre-place the E10 success block or a conversion stimulus.
+ALLOWED_INITIAL_DRAW_BLOCK_TYPES = frozenset(
+    {
+        "air",
+        "bedrock",
+        "dirt",
+        "grass",
+        "grass_block",
+        "lava",
+        "cobblestone",
+    }
+)
+FORBIDDEN_INITIAL_DRAW_BLOCK_TYPES = frozenset(
+    {
+        "obsidian",
+        "fire",
+        "portal",
+        "nether_portal",
+        "water",
+        "flowing_water",
+        "flowing_lava",
+    }
+)
+
+
+def _xml_local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def parse_mission_draw_blocks(xml: str) -> tuple[tuple[int, int, int, str], ...]:
+    """Return ``(x, y, z, type)`` DrawBlock entries from a Mission XML string."""
+
+    if not isinstance(xml, str) or not xml.strip():
+        raise ValueError("mission XML must be a non-empty string")
+    root = ElementTree.fromstring(xml)
+    blocks: list[tuple[int, int, int, str]] = []
+    for element in root.iter():
+        if _xml_local_name(element.tag) != "DrawBlock":
+            continue
+        try:
+            x = int(element.attrib["x"])
+            y = int(element.attrib["y"])
+            z = int(element.attrib["z"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("DrawBlock must include integer x, y, and z") from exc
+        block_type = element.attrib.get("type")
+        if not isinstance(block_type, str) or not block_type.strip():
+            raise ValueError("DrawBlock type must be a non-empty string")
+        blocks.append((x, y, z, block_type.strip()))
+    return tuple(blocks)
+
+
+def validate_initial_draw_blocks(
+    value: object,
+    *,
+    field_name: str = "initial_blocks",
+) -> tuple[tuple[int, int, int, str], ...]:
+    """Fail closed on duplicate cells, obsidian, or unknown DrawBlock types."""
+
+    if value is None:
+        return ()
+    if not isinstance(value, tuple):
+        raise ValueError(f"{field_name} must be a tuple of (x, y, z, block) entries")
+    blocks: list[tuple[int, int, int, str]] = []
+    seen: set[tuple[int, int, int]] = set()
+    for index, item in enumerate(value):
+        prefix = f"{field_name}[{index}]"
+        if not isinstance(item, tuple) or len(item) != 4:
+            raise ValueError(f"{prefix} must be an (x, y, z, block) tuple")
+        x, y, z, block = item
+        if any(type(coordinate) is not int for coordinate in (x, y, z)):
+            raise ValueError(f"{prefix} coordinates must be ints")
+        if not isinstance(block, str) or not block.strip():
+            raise ValueError(f"{prefix} block must be a non-empty string")
+        block = block.strip()
+        cell = (x, y, z)
+        if cell in seen:
+            raise ValueError(f"{field_name} has a duplicate cell {cell}")
+        seen.add(cell)
+        if block in FORBIDDEN_INITIAL_DRAW_BLOCK_TYPES:
+            raise ValueError(f"{prefix} must not pre-place {block}")
+        if block not in ALLOWED_INITIAL_DRAW_BLOCK_TYPES:
+            raise ValueError(f"{prefix} block {block!r} is not an allowed initial DrawBlock")
+        blocks.append((x, y, z, block))
+    return tuple(blocks)
 
 
 class PortalGridObservation(KeymapTranslationHandler):
@@ -323,6 +411,18 @@ class PortalTransitionObservation(KeymapTranslationHandler):
         return ""
 
 
+class PortalDrawingDecorator(handlers.DrawingDecorator):
+    """E10-opt-in DrawingDecorator that does not HTML-escape DrawBlock XML.
+
+    MineRL 1.0.2 renders handler templates with ``autoescape=True``. The
+    stock ``DrawingDecorator`` would emit ``&lt;DrawBlock .../&gt;`` as
+    text, which is not a real Mission XML decorator.
+    """
+
+    def xml_template(self) -> str:
+        return "<DrawingDecorator>{{ to_draw | safe }}</DrawingDecorator>"
+
+
 class PortalA0EnvSpec(HumanSurvival):
     """Controlled single-agent environment for the first portal task slice."""
 
@@ -337,6 +437,7 @@ class PortalA0EnvSpec(HumanSurvival):
         grid_at_spawn: bool = True,
         initial_yaw: float = 0.0,
         initial_pitch: float = 0.0,
+        initial_blocks: tuple[tuple[int, int, int, str], ...] = (),
     ) -> None:
         if type(max_episode_steps) is not int or max_episode_steps < 1:
             raise ValueError("max_episode_steps must be a positive integer")
@@ -378,6 +479,7 @@ class PortalA0EnvSpec(HumanSurvival):
             raise ValueError("initial_pitch must be in [-90, 90]")
         self.initial_yaw = float(initial_yaw)
         self.initial_pitch = float(initial_pitch)
+        self.initial_blocks = validate_initial_draw_blocks(initial_blocks)
         super().__init__(
             name=PORTAL_ENV_NAME,
             max_episode_steps=max_episode_steps,
@@ -421,7 +523,13 @@ class PortalA0EnvSpec(HumanSurvival):
         return [handlers.FlatWorldGenerator(force_reset=True, generatorString="")]
 
     def create_server_decorators(self):
-        return []
+        if not self.initial_blocks:
+            return []
+        drawn = "".join(
+            f'<DrawBlock type="{block}" x="{x}" y="{y}" z="{z}"/>'
+            for x, y, z, block in self.initial_blocks
+        )
+        return [PortalDrawingDecorator(drawn)]
 
     def create_server_initial_conditions(self):
         return [

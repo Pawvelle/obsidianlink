@@ -29,7 +29,11 @@ from obsidianlink.env.integration.e10_config import (
     E10_CONTROL_WORLD_CELLS,
     E10_DURATION_TICKS,
     E10_EXPECTED_AFTER_BLOCK,
+    E10_EXPECTED_AFTER_WATER_BLOCK,
+    E10_EXPECTED_AFTER_WATER_FLOW_STATE,
+    E10_EXPECTED_AFTER_WATER_FLUID_TYPE,
     E10_EXPECTED_BEFORE_BLOCK,
+    E10_INITIAL_DRAW_BLOCKS,
     E10_INITIAL_PITCH,
     E10_INITIAL_YAW,
     E10_OBSERVATION_WINDOW_TICKS,
@@ -40,6 +44,7 @@ from obsidianlink.env.integration.e10_config import (
     E10_TARGET_WORLD_CELL,
     E10_WATER_WORLD_CELL,
     build_e10_compatibility_task,
+    e10_initial_blocks,
 )
 from obsidianlink.env.validation import E10_OBSIDIAN_CONVERSION_CASE, EnvironmentValidationRunner
 from obsidianlink.env.validation.contract import EnvironmentValidationId
@@ -283,6 +288,8 @@ def _validate_configuration() -> None:
         and E10_OBSERVATION_WINDOW_TICKS == 5
         and (E10_INITIAL_YAW, E10_INITIAL_PITCH) == (0.0, 60.0)
         and E10_CALIBRATION.expected_before_fluids[E10_TARGET_WORLD_CELL] == ("lava", "source")
+        and E10_CALIBRATION.initial_draw_blocks == E10_INITIAL_DRAW_BLOCKS
+        and E10_INITIAL_DRAW_BLOCKS == ((0, 4, 2, "lava"),)
     ):
         raise E10AuthorizationError("frozen E10 calibration differs")
     task = build_e10_compatibility_task("p1-e10-preflight")
@@ -292,6 +299,28 @@ def _validate_configuration() -> None:
         raise E10AuthorizationError("E10 flat-ground spawn differs")
     if task.scenario_parameters.get("obsidian_preplaced") is not False:
         raise E10AuthorizationError("E10 must not pre-place target obsidian")
+    if task.scenario_parameters.get("controlled_initial_geometry") is not True:
+        raise E10AuthorizationError("E10 must request controlled initial geometry")
+    if task.scenario_parameters.get("lava_preplaced") is not True:
+        raise E10AuthorizationError("E10 must request lava preplacement")
+    from obsidianlink.env.portal_spec import PortalA0EnvSpec, parse_mission_draw_blocks
+
+    xml = PortalA0EnvSpec(
+        max_episode_steps=12,
+        max_game_time_seconds=30,
+        initial_inventory=({"type": E10_STIMULUS_ITEM_NAME, "quantity": 1},),
+        initial_position=E10_SPAWN_WORLD,
+        include_agent_start_placement=True,
+        grid_at_spawn=True,
+        initial_yaw=E10_INITIAL_YAW,
+        initial_pitch=E10_INITIAL_PITCH,
+        initial_blocks=e10_initial_blocks(),
+    ).to_xml()
+    draw_blocks = parse_mission_draw_blocks(xml)
+    if (0, 4, 2, "lava") not in draw_blocks:
+        raise E10AuthorizationError("E10 Mission XML is missing lava at (0, 4, 2)")
+    if any(block == "obsidian" for _, _, _, block in draw_blocks):
+        raise E10AuthorizationError("E10 Mission XML must not pre-place obsidian")
     if MineRLE10ObsidianAdapter(episode_id="p1-e10-preflight")._backend is not None:
         raise E10AuthorizationError("E10 adapter construction created a backend")
 
@@ -310,9 +339,17 @@ def check_e10_live_runner() -> dict[str, Any]:
             "flow_state": "source",
             "fluid_type": "lava",
         },
+        "expected_target_after": E10_EXPECTED_AFTER_BLOCK,
+        "expected_water_after": {
+            "block": E10_EXPECTED_AFTER_WATER_BLOCK,
+            "flow_state": E10_EXPECTED_AFTER_WATER_FLOW_STATE,
+            "fluid_type": E10_EXPECTED_AFTER_WATER_FLUID_TYPE,
+        },
         "gradle_authorized": False,
         "integration_verified": False,
+        "controlled_initial_geometry": True,
         "lava_preplaced": True,
+        "lava_target_world_cell": list(E10_TARGET_WORLD_CELL),
         "name": "vanilla_water_lava_to_obsidian",
         "observation_window_ticks": E10_OBSERVATION_WINDOW_TICKS,
         "obsidian_preplaced": False,
@@ -331,6 +368,8 @@ def check_e10_live_runner() -> dict[str, Any]:
         "truth_missing_required": 0,
         "verification_level": "unit_verified",
         "water_world_cell": list(E10_WATER_WORLD_CELL),
+        "runtime_applies_drawing_decorator": False,
+        "needs_e10_runtime_geometry_authorization": True,
     }
 
 
@@ -366,6 +405,7 @@ def _e10_env_factory(task: TaskInstance) -> Any:
         grid_at_spawn=True,
         initial_yaw=E10_INITIAL_YAW,
         initial_pitch=E10_INITIAL_PITCH,
+        initial_blocks=e10_initial_blocks(),
     )
     return specification.make()
 
@@ -401,6 +441,14 @@ def _write_evidence(record: E10MineRLRunRecord, output_dir: Path) -> Path:
                 "duration_ticks": E10_DURATION_TICKS,
                 "expected_after_block": E10_EXPECTED_AFTER_BLOCK,
                 "expected_before_block": E10_EXPECTED_BEFORE_BLOCK,
+                "expected_water_after": {
+                    "block": E10_EXPECTED_AFTER_WATER_BLOCK,
+                    "flow_state": E10_EXPECTED_AFTER_WATER_FLOW_STATE,
+                    "fluid_type": E10_EXPECTED_AFTER_WATER_FLUID_TYPE,
+                },
+                "controlled_initial_geometry": True,
+                "lava_preplaced": True,
+                "lava_target_world_cell": list(E10_TARGET_WORLD_CELL),
                 "observation_window_ticks": E10_OBSERVATION_WINDOW_TICKS,
                 "probe_grid_cells": [list(cell) for cell in E10_PROBE_GRID_CELLS],
                 "probe_world_cells": [list(cell) for cell in E10_PROBE_WORLD_CELLS],
@@ -424,6 +472,7 @@ def _write_evidence(record: E10MineRLRunRecord, output_dir: Path) -> Path:
                 "integration_verified": False,
                 "model_api_authorized": False,
                 "obsidian_preplaced": False,
+                "runtime_applies_drawing_decorator": False,
                 "planned_tested_stimulus_count": 1,
             },
             indent=2,

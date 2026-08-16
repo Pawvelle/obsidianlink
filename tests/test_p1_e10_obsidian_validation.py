@@ -171,6 +171,11 @@ class ObsidianConversionRunnerTests(unittest.TestCase):
         self.assertEqual(result.observation_window_ticks, 5)
         self.assertEqual(result.before_target_block, "lava")
         self.assertEqual(result.after_target_block, "obsidian")
+        self.assertEqual(result.before_water_block, "air")
+        self.assertEqual(result.after_water_block, "water")
+        self.assertEqual(result.after_water_fluid_type, "water")
+        self.assertEqual(result.after_water_flow_state, "source")
+        self.assertTrue(result.water_placement_observed)
         self.assertTrue(result.conversion_observed)
         self.assertTrue(result.obsidian_present)
         self.assertTrue(result.control_cells_unchanged)
@@ -190,8 +195,10 @@ class ObsidianConversionRunnerTests(unittest.TestCase):
 
     def test_region_and_action_failures_fail_closed(self):
         cases = (
+            (FakeObsidianBackend(after=("obsidian", "air", "air", "air")), "water_placement_not_observed"),
             (FakeObsidianBackend(after=("lava", "water", "air", "air"), convert_after_waits=0), "conversion_not_observed"),
             (FakeObsidianBackend(after=("dirt", "water", "air", "air")), "unexpected_block_transition"),
+            (FakeObsidianBackend(before=("lava", "water", "air", "air"), after=("obsidian", "water", "air", "air")), "invalid_initial_state"),
             (FakeObsidianBackend(before=("air", "air", "air", "air"), after=("air", "water", "air", "air")), "fluid_precondition_failed"),
             (FakeObsidianBackend(before=("flowing_lava", "air", "air", "air"), after=("obsidian", "water", "air", "air")), "truth_source_flowing_mismatch"),
             (FakeObsidianBackend(after=("obsidian", "water", "water", "air")), "truth_control_cell_changed"),
@@ -223,7 +230,7 @@ class ObsidianConversionRunnerTests(unittest.TestCase):
     def test_bounded_window_expires_without_hidden_action(self):
         backend = FakeObsidianBackend(convert_after_waits=99, after=BEFORE)
         result = self.run_backend(backend)
-        self.assertEqual(result.outcome, "conversion_not_observed")
+        self.assertEqual(result.outcome, "water_placement_not_observed")
         self.assertEqual(len(backend.actions), 1)
         self.assertEqual(backend.waits, 5)
         self.assertEqual(result.observation_wait_count, 5)
@@ -246,7 +253,7 @@ class ObsidianConversionRunnerTests(unittest.TestCase):
         )
         result = self.run_backend(backend)
         self.assertFalse(result.success)
-        self.assertEqual(result.outcome, "conversion_not_observed")
+        self.assertEqual(result.outcome, "water_placement_not_observed")
         self.assertIsNone(result.rgb_present)
 
     def test_reset_failure_audit_has_no_conversion_verdict(self):
@@ -267,6 +274,9 @@ class ObsidianConversionRunnerTests(unittest.TestCase):
         self.assertEqual(payload["stimulus_action"]["target"], "water_bucket")
         self.assertEqual(payload["before_target_block"], "lava")
         self.assertEqual(payload["after_target_block"], "obsidian")
+        self.assertEqual(payload["before_water_block"], "air")
+        self.assertEqual(payload["after_water_block"], "water")
+        self.assertTrue(payload["water_placement_observed"])
         self.assertEqual(payload["after_fluid_truth"][0]["fluid_type"], "none")
         self.assertEqual(payload["before_fluid_truth"][0]["flow_state"], "source")
         self.assertFalse(payload["integration_verified"])

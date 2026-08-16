@@ -34,6 +34,9 @@ from obsidianlink.env.validation.truth import (
     BLOCK_TRUTH_OK,
     BLOCK_TRUTH_OUTCOMES,
     E10_EXPECTED_AFTER_BLOCK,
+    E10_EXPECTED_AFTER_WATER_BLOCK,
+    E10_EXPECTED_AFTER_WATER_FLOW_STATE,
+    E10_EXPECTED_AFTER_WATER_FLUID_TYPE,
     E10_EXPECTED_BEFORE_BLOCK,
     E10_STIMULUS_ITEM,
     FLUID_TRUTH_OK,
@@ -379,6 +382,13 @@ class EnvironmentValidationResult:
     source_flowing_match: bool | None = None
     before_target_block: str | None = None
     after_target_block: str | None = None
+    before_water_block: str | None = None
+    after_water_block: str | None = None
+    before_water_fluid_type: str | None = None
+    before_water_flow_state: str | None = None
+    after_water_fluid_type: str | None = None
+    after_water_flow_state: str | None = None
+    water_placement_observed: bool | None = None
     obsidian_present: bool | None = None
     conversion_observed: bool | None = None
     conversion_observed_at_step: int | None = None
@@ -480,6 +490,7 @@ class EnvironmentValidationResult:
             "control_cells_unchanged",
             "target_expected_fluid_present", "source_flowing_match",
             "obsidian_present", "conversion_observed",
+            "water_placement_observed",
         ):
             value = getattr(self, field_name)
             if value is not None:
@@ -682,6 +693,10 @@ class EnvironmentValidationResult:
         )
         e10_only_fields = (
             self.before_target_block, self.after_target_block,
+            self.before_water_block, self.after_water_block,
+            self.before_water_fluid_type, self.before_water_flow_state,
+            self.after_water_fluid_type, self.after_water_flow_state,
+            self.water_placement_observed,
             self.obsidian_present, self.conversion_observed,
             self.conversion_observed_at_step, self.observation_window_ticks,
             self.observation_wait_count,
@@ -828,11 +843,28 @@ class EnvironmentValidationResult:
                     _fluid_truth_records(self.after_server_fluid_truth, "after_server_fluid_truth"),
                 )
         if self.check_id is EnvironmentValidationId.E10:
-            for field_name in ("before_target_block", "after_target_block"):
+            for field_name in (
+                "before_target_block",
+                "after_target_block",
+                "before_water_block",
+                "after_water_block",
+            ):
                 value = getattr(self, field_name)
                 if value is not None:
                     object.__setattr__(
                         self, field_name, validate_block_name(value, field_name)
+                    )
+            for field_name in ("before_water_fluid_type", "after_water_fluid_type"):
+                value = getattr(self, field_name)
+                if value is not None:
+                    object.__setattr__(
+                        self, field_name, validate_fluid_type(value, field_name)
+                    )
+            for field_name in ("before_water_flow_state", "after_water_flow_state"):
+                value = getattr(self, field_name)
+                if value is not None:
+                    object.__setattr__(
+                        self, field_name, validate_flow_state(value, field_name)
                     )
             for field_name in (
                 "conversion_observed_at_step",
@@ -1031,6 +1063,9 @@ class EnvironmentValidationResult:
                         self.obsidian_present,
                         self.conversion_observed,
                         self.control_cells_unchanged,
+                        self.before_water_block,
+                        self.after_water_block,
+                        self.water_placement_observed,
                     )
                 )
             ):
@@ -1407,12 +1442,25 @@ class EnvironmentValidationResult:
                             self.after_server_fluid_truth,
                             self.before_target_block,
                             self.after_target_block,
+                            self.before_water_block,
+                            self.after_water_block,
+                            self.before_water_fluid_type,
+                            self.before_water_flow_state,
+                            self.after_water_fluid_type,
+                            self.after_water_flow_state,
                             self.conversion_observed_at_step,
                         )
                     )
                     and self.before_target_block == E10_EXPECTED_BEFORE_BLOCK
                     and self.before_target_block != E10_EXPECTED_AFTER_BLOCK
                     and self.after_target_block == E10_EXPECTED_AFTER_BLOCK
+                    and self.before_water_block == "air"
+                    and self.after_water_block == E10_EXPECTED_AFTER_WATER_BLOCK
+                    and self.before_water_fluid_type == "none"
+                    and self.before_water_flow_state == "none"
+                    and self.after_water_fluid_type == E10_EXPECTED_AFTER_WATER_FLUID_TYPE
+                    and self.after_water_flow_state == E10_EXPECTED_AFTER_WATER_FLOW_STATE
+                    and self.water_placement_observed is True
                     and self.truth_missing_count == 0
                     and self.target_changed is True
                     and self.obsidian_present is True
@@ -1421,7 +1469,7 @@ class EnvironmentValidationResult:
                     and self.conversion_observed_at_step >= 1
                 ):
                     raise ValueError(
-                        "E10 success requires one accepted water stimulus plus server-side obsidian conversion"
+                        "E10 success requires accepted water placement plus lava-source conversion"
                     )
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,
@@ -1875,6 +1923,9 @@ class EnvironmentValidationResult:
                     ),
                     "after_step_id": self.after_step_id,
                     "after_target_block": self.after_target_block,
+                    "after_water_block": self.after_water_block,
+                    "after_water_flow_state": self.after_water_flow_state,
+                    "after_water_fluid_type": self.after_water_fluid_type,
                     "agent_id": self.agent_id,
                     "anchor_source": self.anchor_source,
                     "before_block_truth": (
@@ -1901,6 +1952,9 @@ class EnvironmentValidationResult:
                     ),
                     "before_step_id": self.before_step_id,
                     "before_target_block": self.before_target_block,
+                    "before_water_block": self.before_water_block,
+                    "before_water_flow_state": self.before_water_flow_state,
+                    "before_water_fluid_type": self.before_water_fluid_type,
                     "control_cells_unchanged": self.control_cells_unchanged,
                     "conversion_observed": self.conversion_observed,
                     "conversion_observed_at_step": self.conversion_observed_at_step,
@@ -1945,6 +1999,7 @@ class EnvironmentValidationResult:
                     "tested_step_id": self.tested_step_id,
                     "translated_action_accepted": self.translated_action_accepted,
                     "truth_missing_count": self.truth_missing_count,
+                    "water_placement_observed": self.water_placement_observed,
                 }
             )
         return payload

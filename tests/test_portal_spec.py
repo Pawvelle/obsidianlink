@@ -15,6 +15,7 @@ from obsidianlink.env.portal_spec import (
     PortalGridObservation,
     PortalGridOriginObservation,
     PortalTransitionObservation,
+    parse_mission_draw_blocks,
 )
 
 
@@ -173,6 +174,32 @@ class PortalA0EnvSpecTests(unittest.TestCase):
         self.assertIn('atSpawn="false"', xml)
         with self.assertRaisesRegex(ValueError, "grid_at_spawn"):
             PortalA0EnvSpec(grid_at_spawn=0)
+
+    def test_default_env_has_no_drawing_decorator_or_e10_lava(self) -> None:
+        xml = PortalA0EnvSpec().to_xml()
+        self.assertNotIn("DrawingDecorator", xml)
+        self.assertEqual(parse_mission_draw_blocks(xml), ())
+
+    def test_opt_in_initial_blocks_emit_exact_drawblocks(self) -> None:
+        xml = PortalA0EnvSpec(
+            initial_blocks=((0, 4, 2, "lava"),),
+        ).to_xml()
+        self.assertEqual(parse_mission_draw_blocks(xml), ((0, 4, 2, "lava"),))
+        self.assertIn("<DrawBlock", xml)
+        self.assertNotIn("&lt;DrawBlock", xml)
+        self.assertFalse(any(block == "obsidian" for _, _, _, block in parse_mission_draw_blocks(xml)))
+
+    def test_invalid_initial_blocks_fail_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate cell"):
+            PortalA0EnvSpec(initial_blocks=((0, 4, 2, "lava"), (0, 4, 2, "air")))
+        with self.assertRaisesRegex(ValueError, "must not pre-place obsidian"):
+            PortalA0EnvSpec(initial_blocks=((0, 4, 2, "obsidian"),))
+        with self.assertRaisesRegex(ValueError, "must not pre-place water"):
+            PortalA0EnvSpec(initial_blocks=((0, 4, 1, "water"),))
+        with self.assertRaisesRegex(ValueError, "not an allowed initial DrawBlock"):
+            PortalA0EnvSpec(initial_blocks=((0, 4, 2, "diamond_block"),))
+        with self.assertRaisesRegex(ValueError, "coordinates must be ints"):
+            PortalA0EnvSpec(initial_blocks=((0.0, 4, 2, "lava"),))  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

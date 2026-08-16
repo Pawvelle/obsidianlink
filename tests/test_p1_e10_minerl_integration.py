@@ -158,10 +158,11 @@ class _Backend:
 
 
 class _ConversionEnv(_ControlledMineRLEnv):
-    def __init__(self, *, convert: bool = True, flowing_before: bool = False):
+    def __init__(self, *, convert: bool = True, flowing_before: bool = False, place_water: bool = True):
         super().__init__()
         self.convert = convert
         self.flowing_before = flowing_before
+        self.place_water = place_water
         self.inventory = {"water_bucket": 1}
         self.grid = np.zeros(PORTAL_GRID_SIZE, dtype=np.int32)
         for cell in KNOWN_GRID:
@@ -185,7 +186,8 @@ class _ConversionEnv(_ControlledMineRLEnv):
         self.steps += 1
         action_map = action if isinstance(action, dict) else {}
         if int(action_map.get("use", 0)) and int(action_map.get("hotbar.1", 0)):
-            self.grid[_flat_index(KNOWN_GRID[1])] = PORTAL_GRID_BLOCKS.index("water")
+            if self.place_water:
+                self.grid[_flat_index(KNOWN_GRID[1])] = PORTAL_GRID_BLOCKS.index("water")
             if self.convert:
                 self.grid[_flat_index(KNOWN_GRID[0])] = PORTAL_GRID_BLOCKS.index("obsidian")
         observation = self._observation()
@@ -205,10 +207,36 @@ class E10MineRLIntegrationTests(unittest.TestCase):
         self.assertTrue(task.scenario_parameters["not_a_benchmark_task"])
         self.assertTrue(task.scenario_parameters["calibration_only"])
         self.assertIs(task.scenario_parameters["obsidian_preplaced"], False)
+        self.assertIs(task.scenario_parameters["controlled_initial_geometry"], True)
+        self.assertIs(task.scenario_parameters["lava_preplaced"], True)
+        self.assertEqual(task.scenario_parameters["lava_target_world_cell"], (0, 4, 2))
+        self.assertEqual(task.scenario_parameters["expected_target_after"], "obsidian")
+        self.assertEqual(
+            task.scenario_parameters["expected_water_after"],
+            {"block": "water", "fluid_type": "water", "flow_state": "source"},
+        )
         self.assertEqual(E10_CALIBRATION.target_world_cell, (0, 4, 2))
         self.assertEqual(E10_CALIBRATION.water_world_cell, (0, 4, 1))
         self.assertEqual(E10_CALIBRATION.probe_grid_cells, KNOWN_GRID)
         self.assertEqual(E10_CALIBRATION.observation_window_ticks, 5)
+
+    def test_e10_envspec_xml_places_lava_source_without_obsidian(self):
+        from obsidianlink.env.integration.e10_config import e10_initial_blocks
+        from obsidianlink.env.portal_spec import PortalA0EnvSpec, parse_mission_draw_blocks
+
+        xml = PortalA0EnvSpec(
+            max_episode_steps=12,
+            max_game_time_seconds=30,
+            initial_inventory=({"type": "water_bucket", "quantity": 1},),
+            initial_position=(0, 4, 0),
+            initial_yaw=0.0,
+            initial_pitch=60.0,
+            initial_blocks=e10_initial_blocks(),
+        ).to_xml()
+        self.assertEqual(parse_mission_draw_blocks(xml), ((0, 4, 2, "lava"),))
+        self.assertFalse(any(block == "obsidian" for _, _, _, block in parse_mission_draw_blocks(xml)))
+        default_xml = PortalA0EnvSpec().to_xml()
+        self.assertEqual(parse_mission_draw_blocks(default_xml), ())
 
     def test_adapter_executes_one_action_and_does_not_leak_truth(self):
         result = EnvironmentValidationRunner().run(
@@ -287,6 +315,7 @@ class E10MineRLIntegrationTests(unittest.TestCase):
             self.assertEqual(parsed.fluid_truth[0].fluid_type, "none")
             self.assertEqual(parsed.fluid_truth[1].observed_block, "water")
             self.assertEqual(parsed.fluid_truth[1].flow_state, "source")
+            self.assertEqual(parsed_before.block_truth[1].block, "air")
             self.assertNotIn("obsidian_present", step.info)
             self.assertNotIn("portal_grid", step.info)
             self.assertFalse(hasattr(step.observations[E10_AGENT_ID], "block_truth"))
@@ -319,6 +348,49 @@ class E10MineRLIntegrationTests(unittest.TestCase):
             self.assertNotEqual(after["block_truth"][0]["block"], "obsidian")
         finally:
             backend.close()
+
+    def test_real_backend_obsidian_without_water_is_not_success(self):
+        env = _ConversionEnv(convert=True, place_water=False)
+        backend = MineRLEnvironmentBackend(env_factory=lambda task: env, reset_warmup_steps=0)
+        backend.open()
+        try:
+            backend.reset(build_e10_compatibility_task(EPISODE))
+            backend.step({E10_AGENT_ID: MacroAction("use_item", target="water_bucket")})
+            after = backend.get_server_truth_snapshot(E10_PROBE_WORLD_CELLS)
+            parsed = server_truth_snapshot(after, expected_cells=E10_PROBE_WORLD_CELLS)
+            self.assertEqual(parsed.block_truth[0].block, "obsidian")
+            self.assertEqual(parsed.block_truth[1].block, "air")
+        finally:
+            backend.close()
+
+        class NoWater(_Backend):
+            def step(self, actions):
+                self.calls.append("step")
+                self.step_id += 1
+                self.blocks = ["obsidian", "air", "air", "air"]
+                obs = Observation(EPISODE, E10_AGENT_ID, self.step_id, 0.0, frame="not-used")
+                return BackendStep(
+                    EPISODE,
+                    self.step_id,
+                    {E10_AGENT_ID: obs},
+                    {E10_AGENT_ID: 0.0},
+                    False,
+                    False,
+                    {"translation_accepted": True},
+                )
+
+        result = EnvironmentValidationRunner().run(
+            E10_OBSIDIAN_CONVERSION_CASE,
+            MineRLE10ObsidianAdapter.lifecycle_factory(
+                episode_id=EPISODE, backend_cls=NoWater
+            ),
+            episode_id=EPISODE,
+        )
+        self.assertFalse(result.success)
+        self.assertEqual(result.outcome, "water_placement_not_observed")
+        self.assertEqual(result.after_target_block, "obsidian")
+        self.assertEqual(result.after_water_block, "air")
+        self.assertFalse(result.water_placement_observed)
 
     def test_protocol_translator_path_and_import_is_lazy(self):
         env = _ControlledMineRLEnv()

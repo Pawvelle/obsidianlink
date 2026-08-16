@@ -30,7 +30,7 @@ P1 real MineRL environment validation remains the only active phase.
 
 目标：建立并真实验证最小、可重复、可审计的 MineRL/Minecraft 实验仪器。冻结清单：E0 reset/close、E1 RGB、E2 inventory、E3 selected item、E4 camera、E5 movement、E6 block placement、E7 bucket、E8 block truth、E9 fluid truth、E10 vanilla water-lava -> obsidian、E11 portal activation、E12 dimension transition。
 
-E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 server-side `air/lava/... -> obsidian`。
+E10 是 calibration，不是正式 benchmark task。Evaluator 必须同时观察 water-pour cell 出现 water/source，以及相邻 lava source 变为 obsidian。
 
 ## P1 E0–E10 active status
 
@@ -44,7 +44,7 @@ All E0–E9 contracts, offline runtimes, and MineRL adapters are `unit_verified`
 - E8 block truth: historical attempt `p1-e8-live-001` failed before validation with the E5 `liblwjgl_stb` / Sound engine / `STBVorbis` fingerprint; `p1-e8-live-002` produced `block_truth_ok` with `truth_missing_count=0`.
 - E9 fluid truth: historical WATER attempt `p1-e9-water-live-001` failed before validation with the same native fingerprint; `p1-e9-water-live-002` and `p1-e9-lava-live-001` produced `fluid_truth_ok`, preserving source/flowing distinction with `truth_missing_count=0`.
 - Detailed calibration fields remain in the referenced run evidence and [P1 Environment Validation](docs/architecture/P1_ENVIRONMENT_VALIDATION.md); startup failure diagnosis is preserved in [P1 startup reliability root cause](docs/architecture/P1_STARTUP_RELIABILITY_ROOT_CAUSE.md).
-- E10: contract/offline runtime/MineRL bridge implemented / `unit_verified`; Real E10 calibration: NOT RUN; reviewed real success: NO; `integration_verified`: NO.
+- E10: contract/offline runtime/MineRL bridge implemented / `unit_verified`；controlled initial geometry XML implemented / offline verified；vanilla causality requires water placement + lava-source conversion；Real E10 calibration: NOT RUN；reviewed real success: NO；`integration_verified`: NO. Live DrawingDecorator application: NOT in deployed runtime (`NEEDS_E10_RUNTIME_GEOMETRY_AUTHORIZATION`).
 - E11/E12: NOT STARTED; P1 Hard Gate: NOT PASSED; P2: NOT STARTED.
 
 None of E0–E10 is `integration_verified`; `process_release_proven=false`. E0–E10 remain solver-independent. Typed evaluator truth never enters Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
@@ -63,7 +63,7 @@ None of E0–E10 is `integration_verified`; `process_release_proven=false`. E0�
 - E7: `unit_verified`; water/lava calibrations offline verified; adapter/live bridge implemented / offline tested; one reviewed WATER real success (`p1-e7-water-live-001`, `bucket_ok`); one reviewed LAVA real success (`p1-e7-lava-live-001`, `bucket_ok`); real calibration coverage WATER + LAVA complete; `integration_verified`: NO；
 - E8: `unit_verified`; #1 `p1-e8-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1; #2 `p1-e8-live-002` `block_truth_ok`; reviewed real success: YES; `integration_verified`: NO；
 - E9: `unit_verified`; WATER #1 `p1-e9-water-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1 / E8 #1; WATER #2 `p1-e9-water-live-002` `fluid_truth_ok`; LAVA #1 `p1-e9-lava-live-001` `fluid_truth_ok`; real calibration coverage WATER + LAVA complete; reviewed real success: YES; `integration_verified`: NO；
-- E10: `unit_verified`; Real E10 calibration: NOT RUN; reviewed real success: NO; `integration_verified`: NO；
+- E10: `unit_verified`；controlled initial geometry XML offline verified；vanilla causality tightened；Real E10 calibration: NOT RUN；reviewed real success: NO；`integration_verified`: NO；deployed runtime does not apply DrawingDecorator；
 - E11/E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
 - portal activation、dimension transition 尚未实现；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
@@ -76,4 +76,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 Before audio mitigation, P1 startup reliability calibration completed 20 fresh-process attempts: 18 success / 2 infrastructure failures (90% first-attempt success). Attempt-006 was a confirmed `liblwjgl_stb` / `Sound engine` SIGSEGV; attempt-014 was a separate unresolved mission/reset reply failure. After deploying the narrowly scoped `disable-client-audio.patch`, the independent post-mitigation validation completed 20 fresh-process attempts: 20 success / 0 failure (100% observed first-attempt success rate), with `max_reset_attempts=1` and no validation action. Failure fingerprints: none. Native crashes: 0; Malmo EOF: 0; timeouts: 0; cleanup failures: 0. No startup infrastructure failure was observed in these 20 post-mitigation attempts, but this finite sample does not prove absolute reliability. `process_release_proven=false` remains for all attempts.
 
-E10 contract/offline runtime/MineRL bridge is implemented / `unit_verified`. Real E10 calibration: NOT RUN. E11: NOT STARTED. E12: NOT STARTED. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. The next exact task is to request explicit authorization for one independent E10 vanilla water-lava → obsidian real MineRL calibration. The current `vendor/minerl/minerl/MCP-Reborn` build tree still contains additional world-decorator and portal-transition code absent from the deployed P1 runtime and must not be deployed as-is. Attempt-014 did not recur in the 20 post-mitigation attempts but remains historically unexplained.
+E10 contract/offline runtime/MineRL bridge is implemented / `unit_verified`. E10 Mission XML controlled geometry is implemented / offline verified; deployed EnvServer still does not apply DrawingDecorator (`NEEDS_E10_RUNTIME_GEOMETRY_AUTHORIZATION`). Real E10 calibration: NOT RUN. E11: NOT STARTED. E12: NOT STARTED. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. The next exact task is to request explicit authorization for one independent E10 vanilla water-lava → obsidian real MineRL calibration. That live run remains blocked on authorized runtime geometry unless a separately authorized Java DrawingDecorator applicator is deployed. The current `vendor/minerl/minerl/MCP-Reborn` build tree still contains additional world-decorator and portal-transition code absent from the deployed P1 runtime and must not be deployed as-is. Attempt-014 did not recur in the 20 post-mitigation attempts but remains historically unexplained.
