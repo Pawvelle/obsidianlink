@@ -48,6 +48,13 @@ Hard Gate.
   runtime log. Its watcher records that the launch child exited after about 20
   seconds. The historical runner discarded the traceback, so the exact Python
   call site cannot be recovered from existing evidence.
+- Build provenance reconstruction identifies MineRL vendor commit
+  `cdeae668c2f334e3c9117adf651b5a94436b45f8`, whose setup selects the
+  MCP-Reborn `1.16.5-20210115` tag (commit
+  `1e71be5bd4c49bc4d6ab0ee559c31b298b7697a3`), followed by the MineRL MCP
+  patch chain and ObsidianLink's 2026-07-30 EnvServer patch (SHA-256
+  `0944d0f09e1d915e45781ea565ff2696b19eed3a395706a1267ce5b330e20609`).
+  The current dirty vendor tree's later phase2 patch was not used.
 - The phrase `a bytes-like object is required, not 'NoneType'` is produced when
   MineRL calls `struct.unpack` on a `None` reply returned by
   `comms.recv_message` after the Minecraft/Malmo socket closes. Attempt-014's
@@ -113,23 +120,25 @@ property before OpenAL initialization or STB preload. Audio is neither an
 Agent-visible observation nor evaluator truth, so this does not change
 benchmark capability semantics. It changes no dependency version.
 
-The patch applies cleanly to the current vendor source, but has not been
-applied to `vendor/minerl`, compiled, installed, or run. Applying the Java part
-requires an authorized Gradle rebuild:
+The patch was applied in an isolated temporary tree reconstructed from the
+deployed runtime source snapshot plus the recorded 2026-07-30 EnvServer patch.
+The dirty `vendor/minerl` worktree was not modified. Before the audio patch,
+all 45,720 rebuilt JAR entries matched the deployed runtime by name and
+uncompressed content except the timestamp comment in `version.properties`;
+the manifest and key P1 classes matched byte-for-byte. This proved the
+baseline before the authorized Gradle rebuild. The deterministic baseline
+source-input fingerprint (9,149 sorted MCP-Reborn and Malmo schema files,
+hashed as relative path plus content SHA-256) is
+`a0484274fa6a65fe0839fa7448b036e908af3ab02a6772b31a48351ce26bf95e`.
 
-```bash
-git -C vendor/minerl apply --directory=minerl/MCP-Reborn \
-  /absolute/path/to/patches/minerl/disable-client-audio.patch
-cd vendor/minerl/minerl/MCP-Reborn
-./gradlew shadowJar
-```
-
-The expected rebuilt artifact is
-`vendor/minerl/minerl/MCP-Reborn/build/libs/mcprec-6.13.jar`; the patched
-`launchClient.sh` must be packaged alongside it in the pinned MineRL 1.0.2
-arm64 artifact before the `mc-agent` runtime can use the fix. This step is
-`NEEDS_GRADLE_REBUILD_AUTHORIZATION` and requires a separately auditable
-deployment into the frozen Conda environment.
+The rebuilt JAR SHA-256 is
+`ac6a46639497117e0813ba2262cc232eca1f2921070dcd8851c6a21501c39d62`.
+Relative to the reproduced baseline, its only content changes are
+`SoundEngine.class` plus the non-semantic build timestamp in
+`version.properties`. The launcher SHA-256 is
+`7e15699c0d0aea517f87680eb5d760d02519d9744285fa0d348f799e2ed77183`.
+Both were deployed to the pinned MineRL 1.0.2 runtime under
+`/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/MCP-Reborn`.
 
 The reliability evidence path now also captures full reset tracebacks,
 exception chains, child PID, Java PID, environment port, signal, problematic
@@ -139,18 +148,22 @@ normal reset or retry behavior; reliability measurement remains
 
 ## Remaining Risk
 
-- Attempt-006 has a targeted mitigation prepared, but it is not active until
-  the patched JAR/launcher are rebuilt and installed.
+- Attempt-006's confirmed SoundEngine/STB path now has an active targeted
+  mitigation. One fresh-process smoke completed successfully with the audio
+  property present in the captured Java command, but one run cannot establish
+  the new failure rate.
 - Attempt-014 remains independently unresolved. A recurrence with the enhanced
   evidence will identify the exact MineRL line and protocol phase.
 - Disabling an unused client subsystem avoids the confirmed crashing path but
   does not prove the underlying LWJGL/STB defect is fixed.
-- No real Minecraft smoke test or 20-process rerun was performed in this task.
+- One authorized real Minecraft smoke completed `reset`, initial observation,
+  and `close` with `max_reset_attempts=1`. No 20-process rerun was performed.
 - `process_release_proven` remains false by design: descendant tracking found
   no residual process in the prior run, but cannot prove that nothing escaped
   or was reparented before inspection.
 
-After authorized build/install, the independent commands are:
+The completed smoke command and the still-pending independent validation
+command are:
 
 ```bash
 /opt/anaconda3/bin/conda run -n mc-agent python \
@@ -160,6 +173,6 @@ After authorized build/install, the independent commands are:
   scripts/run_p1_startup_reliability.py --episodes 20 --timeout-seconds 600
 ```
 
-The one-episode smoke and the 20-process calibration each require explicit real
-MineRL/Minecraft authorization. P1 remains not passed and E10 remains not
-started until the independent evidence is reviewed.
+The 20-process calibration still requires explicit real MineRL/Minecraft
+authorization. P1 remains not passed and E10 remains not started until that
+independent evidence is reviewed.
