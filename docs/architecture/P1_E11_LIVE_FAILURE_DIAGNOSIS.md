@@ -6,11 +6,13 @@ Scope: offline, source-grounded audit of recorded `p1-e11-live-001`.
 This is not a second live run, not a geometry change, not E12, and not a
 runtime deployment.
 
-Status: **NEEDS_E11_DIAGNOSTIC_RUNTIME_AUTHORIZATION**
+Status: **ROOT_CAUSE_NARROWED** (Case F)
 
-Recorded outcome remains `portal_activation_not_observed`. The frozen
-E11 evaluator still requires a complete 6/6 `nether_portal` interior.
-Fire is not success.
+Recorded live #1 outcome remains `portal_activation_not_observed`. The
+frozen E11 evaluator still requires a complete 6/6 `nether_portal`
+interior. Fire is not success. The later instrumented clone
+`p1-e11-diag-001` is not a formal benchmark result; see
+[P1 E11 diagnostic runtime](P1_E11_DIAGNOSTIC_RUNTIME.md).
 
 ## Recorded snapshot
 
@@ -85,32 +87,33 @@ Axis.Z is not required if Axis.X is valid.
 The 14/14 E11 evaluator frame is therefore **not** a vanilla Axis.X
 geometry failure. E11_CONFIG matches `PortalSize` for this plane.
 
-## What static evidence cannot prove
+## What the instrumented clone proved
 
-The live world still has fire and 0 portal blocks. If Axis.X is valid
-and `onBlockAdded` ran, vanilla would have replaced the interior with
-`nether_portal`. Missing runtime signals:
+`p1-e11-diag-001` ran the logging-only diagnostic JAR once. JVM
+`[E11-DIAG]` on the Render thread showed:
 
-1. whether `AbstractFireBlock.onBlockAdded` executed on the server
-2. `canLightPortal` / `getDimensionKey() == World.OVERWORLD`
-3. whether `BlockTags.FIRE` contained `Blocks.FIRE` at that moment
-4. Axis.X/Z `width`, `height`, `bottomLeft`, `isValid` inside the JVM
-5. whether `placePortalBlocks` was invoked
+- `onBlockAdded` YES at `(0,4,1)`, dim `minecraft:overworld`
+- `canLightPortal=true`, `inFireTag=true`
+- Axis.X valid: origin `(0,4,1)`, bottomLeft `(1,4,1)`, width 2,
+  height 3, portalCount 0
+- Axis.Z not constructed
+- Optional present true
+- `placePortalBlocks` ENTER and EXIT both YES
 
-Prepared logging-only patch (not applied, not built, not deployed):
-`patches/minerl/e11-portal-activation-diagnostic.patch`.
+Server-visible after-truth remained fire + 0/6 portal. That is Case F:
+the placement method completed, but the evaluator-visible world did
+not keep nether_portal blocks. Root cause is narrowed to the portal
+world-write / subsequent replacement path (including client Render
+thread vs unproven Server thread). Not proven: `world.isRemote()` /
+world class of `this.world` inside `placePortalBlocks`.
 
-EnvServer DrawBlock patches only place lava/obsidian with flags `2`.
-They do not disable `onBlockAdded`, ticks, or portal callbacks.
-**NO EVIDENCE** those patches caused this failure.
-**NO EVIDENCE OF WORLD-LEVEL PORTAL DISABLE** in Mission game rules.
-
-Grid canonicalization maps `minecraft:nether_portal` / `portal` to
-`nether_portal`. If portal blocks had existed, the evaluator would not
-have called them air.
+Live #1 evidence is unchanged. Diagnostic run is not
+`integration_verified`.
 
 ## Next exact task
 
-Authorize applying and deploying the diagnostic patch, then one
-instrumented E11 ignition. Do not retry the current uninstrumented
-run. Do not start E12. Do not treat fire as success.
+Authorize a logging-only follow-up that records `world.isRemote()`,
+the world class name, and whether a Server-thread `onBlockAdded` or
+`setBlockState(NETHER_PORTAL)` occurs. Do not change placement flags,
+geometry, evaluator success, or the observation window. Do not retry
+for confirmation. Do not start E12.

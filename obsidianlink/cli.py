@@ -72,7 +72,10 @@ def _offline_contract_check() -> dict[str, object]:
             "success is YES and is not integration_verified. E11 offline contract "
             "is unit_verified; E11 geometry real verified is YES and is not "
             "integration_verified. One real E11 ignition produced "
-            "portal_activation_not_observed. E12 and end-to-end portal "
+            "portal_activation_not_observed. One E11 diagnostic "
+            "instrumentation run (p1-e11-diag-001) is Case F / "
+            "ROOT_CAUSE_NARROWED and is not a formal benchmark result. "
+            "E12 and end-to-end portal "
             "construction remain unverified in the real "
             "environment."
         ),

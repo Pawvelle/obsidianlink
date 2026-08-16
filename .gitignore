@@ -27,6 +27,8 @@ dist/
 !/runs/history/p1-e11-geometry-20260816-001/**
 !/runs/history/p1-e11-live-20260816-001/
 !/runs/history/p1-e11-live-20260816-001/**
+!/runs/history/p1-e11-diagnostic-20260817-001/
+!/runs/history/p1-e11-diagnostic-20260817-001/**
 /results/
 /logs/
 

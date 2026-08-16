@@ -40,8 +40,11 @@ from obsidianlink.env.validation.truth import (
 
 ROOT = Path(__file__).resolve().parents[3]
 RECORDED_LIVE_HISTORY = ROOT / "runs" / "history" / "p1-e11-live-20260816-001"
+RECORDED_DIAGNOSTIC_HISTORY = ROOT / "runs" / "history" / "p1-e11-diagnostic-20260817-001"
 RECORDED_RESULT_NAME = "result.json"
 RECORDED_EPISODE_ID = "p1-e11-live-001"
+RECORDED_DIAGNOSTIC_EPISODE_ID = "p1-e11-diag-001"
+DIAGNOSTIC_JVM_LOG_NAME = "e11_diag_jvm.log"
 
 # Minecraft 1.16.5 Direction vectors from MCP-Reborn Direction.java.
 WEST = (-1, 0, 0)
@@ -127,6 +130,29 @@ class ConditionAudit:
 
 
 @dataclass(frozen=True)
+class E11DiagnosticJvmTrace:
+    on_block_added: bool
+    position: str | None
+    dimension: str | None
+    can_light_portal: bool | None
+    in_fire_tag: bool | None
+    axis_x_valid: bool | None
+    axis_x_origin: str | None
+    axis_x_bottom_left: str | None
+    axis_x_width: int | None
+    axis_x_height: int | None
+    axis_x_portal_count: int | None
+    axis_z_attempted: bool
+    optional_present: bool | None
+    place_portal_blocks_enter: bool
+    place_portal_blocks_exit: bool
+    thread: str | None
+    case: str
+    root_cause_status: str
+    lines: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class RecordedE11Diagnosis:
     episode_id: str
     outcome: str
@@ -153,6 +179,147 @@ def load_recorded_result(path: Path | None = None) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise ValueError("recorded E11 result must be a JSON object")
     return payload
+
+
+def recorded_diagnostic_jvm_log_path() -> Path:
+    path = RECORDED_DIAGNOSTIC_HISTORY / DIAGNOSTIC_JVM_LOG_NAME
+    if not path.is_file():
+        raise FileNotFoundError(f"recorded E11 diagnostic JVM log is missing: {path}")
+    return path
+
+
+def _truthy(token: str | None) -> bool | None:
+    if token is None:
+        return None
+    lowered = token.strip().lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    return None
+
+
+def parse_diagnostic_jvm_log(text: str, *, after_portal_block_count: int) -> E11DiagnosticJvmTrace:
+    lines = tuple(line for line in text.splitlines() if "[E11-DIAG]" in line)
+    joined = "\n".join(lines)
+    on_block_added = "AbstractFireBlock.onBlockAdded" in joined
+    position = None
+    dimension = None
+    can_light = None
+    in_fire = None
+    thread = None
+    for line in lines:
+        if "AbstractFireBlock.onBlockAdded" not in line:
+            continue
+        if "[" in line and "/INFO]" in line:
+            thread = line.split("[", 2)[1].split("]", 1)[0] if line.count("[") >= 2 else None
+            # "[00:44:09] [Render thread/INFO]:"
+            parts = line.split("] [")
+            if len(parts) >= 2:
+                thread = parts[1].split("/INFO", 1)[0]
+        if "pos=BlockPos{x=" in line:
+            start = line.index("pos=BlockPos{")
+            end = line.index("}", start)
+            coords = line[start + len("pos=BlockPos{") : end]
+            fields = dict(item.split("=") for item in coords.split(", "))
+            position = f"({fields['x']},{fields['y']},{fields['z']})"
+        if " dim=" in line:
+            dimension = line.split(" dim=", 1)[1].split(" ", 1)[0]
+        if "canLightPortal=" in line:
+            can_light = _truthy(line.split("canLightPortal=", 1)[1].split(" ", 1)[0])
+        if "inFireTag=" in line:
+            in_fire = _truthy(line.split("inFireTag=", 1)[1].split(" ", 1)[0])
+    axis_x_valid = None
+    axis_x_origin = None
+    axis_x_bottom_left = None
+    axis_x_width = None
+    axis_x_height = None
+    axis_x_portal_count = None
+    for line in lines:
+        if "PortalSize axis=" not in line:
+            continue
+        axis = line.split("axis=", 1)[1].split(" ", 1)[0]
+        if axis.lower() != "x":
+            continue
+        if "origin=BlockPos{" in line:
+            start = line.index("origin=BlockPos{")
+            end = line.index("}", start)
+            coords = line[start + len("origin=BlockPos{") : end]
+            fields = dict(item.split("=") for item in coords.split(", "))
+            axis_x_origin = f"({fields['x']},{fields['y']},{fields['z']})"
+        if "bottomLeft=BlockPos{" in line:
+            start = line.index("bottomLeft=BlockPos{")
+            end = line.index("}", start)
+            coords = line[start + len("bottomLeft=BlockPos{") : end]
+            fields = dict(item.split("=") for item in coords.split(", "))
+            axis_x_bottom_left = f"({fields['x']},{fields['y']},{fields['z']})"
+        axis_x_width = int(line.split("width=", 1)[1].split(" ", 1)[0])
+        axis_x_height = int(line.split("height=", 1)[1].split(" ", 1)[0])
+        axis_x_portal_count = int(line.split("portalCount=", 1)[1].split(" ", 1)[0])
+        axis_x_valid = _truthy(line.split("valid=", 1)[1].split(" ", 1)[0])
+    axis_z_attempted = any("fallbackAttempted=true" in line for line in lines)
+    optional_present = None
+    for line in lines:
+        if "Axis.X-first present=" in line:
+            optional_present = _truthy(line.split("Axis.X-first present=", 1)[1].split(" ", 1)[0])
+    place_enter = any("placePortalBlocks ENTER" in line for line in lines)
+    place_exit = any("placePortalBlocks EXIT" in line for line in lines)
+    if not on_block_added:
+        case = "A"
+        status = "ROOT_CAUSE_NARROWED"
+    elif can_light is False:
+        case = "B"
+        status = "ROOT_CAUSE_NARROWED"
+    elif in_fire is False:
+        case = "C"
+        status = "ROOT_CAUSE_NARROWED"
+    elif axis_x_valid is False:
+        case = "D"
+        status = "ROOT_CAUSE_NARROWED"
+    elif optional_present is True and not place_enter:
+        case = "E"
+        status = "ROOT_CAUSE_NARROWED"
+    elif place_enter and place_exit and after_portal_block_count == 0:
+        case = "F"
+        status = "ROOT_CAUSE_NARROWED"
+    elif place_enter and place_exit and after_portal_block_count == 6:
+        case = "G"
+        status = "ROOT_CAUSE_NARROWED"
+    else:
+        case = "UNRESOLVED"
+        status = "ROOT_CAUSE_STILL_UNRESOLVED"
+    return E11DiagnosticJvmTrace(
+        on_block_added=on_block_added,
+        position=position,
+        dimension=dimension,
+        can_light_portal=can_light,
+        in_fire_tag=in_fire,
+        axis_x_valid=axis_x_valid,
+        axis_x_origin=axis_x_origin,
+        axis_x_bottom_left=axis_x_bottom_left,
+        axis_x_width=axis_x_width,
+        axis_x_height=axis_x_height,
+        axis_x_portal_count=axis_x_portal_count,
+        axis_z_attempted=axis_z_attempted,
+        optional_present=optional_present,
+        place_portal_blocks_enter=place_enter,
+        place_portal_blocks_exit=place_exit,
+        thread=thread,
+        case=case,
+        root_cause_status=status,
+        lines=lines,
+    )
+
+
+def load_recorded_diagnostic_trace() -> E11DiagnosticJvmTrace:
+    payload = json.loads((RECORDED_DIAGNOSTIC_HISTORY / RECORDED_RESULT_NAME).read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("recorded E11 diagnostic result must be a JSON object")
+    after_portal = payload.get("after_portal_block_count")
+    if not isinstance(after_portal, int):
+        raise ValueError("diagnostic after_portal_block_count must be int")
+    text = recorded_diagnostic_jvm_log_path().read_text(encoding="utf-8")
+    return parse_diagnostic_jvm_log(text, after_portal_block_count=after_portal)
 
 
 def _cell(value: object) -> tuple[int, int, int]:
@@ -666,8 +833,17 @@ def diagnose_recorded_live_failure(path: Path | None = None) -> RecordedE11Diagn
         ConditionAudit(
             "placePortalBlocks call-site",
             "AbstractFireBlock.onBlockAdded after canLightPortal",
-            "after still fire, 0/6 portal; no runtime log that callback ran",
-            "UNKNOWN",
+            (
+                "instrumented p1-e11-diag-001: ENTER/EXIT on Render thread, "
+                "Axis.X valid, after still 0/6 portal (Case F)"
+                if RECORDED_DIAGNOSTIC_HISTORY.joinpath(DIAGNOSTIC_JVM_LOG_NAME).is_file()
+                else "after still fire, 0/6 portal; no runtime log that callback ran"
+            ),
+            (
+                "NARROWED"
+                if RECORDED_DIAGNOSTIC_HISTORY.joinpath(DIAGNOSTIC_JVM_LOG_NAME).is_file()
+                else "UNKNOWN"
+            ),
         ),
         ConditionAudit(
             "observation window",
@@ -686,7 +862,10 @@ def diagnose_recorded_live_failure(path: Path | None = None) -> RecordedE11Diagn
     # portal blocks, so the missing signal is the runtime callback, not the
     # frozen 14-cell frame.
     if axis_x_after.valid and axis_x_before.valid and inspection.outcome == PORTAL_ACTIVATION_NOT_OBSERVED:
-        status = "NEEDS_E11_DIAGNOSTIC_RUNTIME_AUTHORIZATION"
+        if RECORDED_DIAGNOSTIC_HISTORY.joinpath(DIAGNOSTIC_JVM_LOG_NAME).is_file():
+            status = "ROOT_CAUSE_NARROWED"
+        else:
+            status = "NEEDS_E11_DIAGNOSTIC_RUNTIME_AUTHORIZATION"
     elif not axis_x_after.valid:
         status = "ROOT_CAUSE_PROVEN"
     else:

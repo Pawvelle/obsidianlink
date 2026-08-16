@@ -1,0 +1,85 @@
+# P1 E11 diagnostic instrumentation runtime
+
+Date: 2026-08-17
+
+Scope: one logging-only JVM instrumentation of the E11 ignition
+path. This is **not** a formal capability run, not E12, and not
+`integration_verified`.
+
+Status: **COMPLETED** / Case F / `ROOT_CAUSE_NARROWED`
+
+## Identity
+
+Production E11 JAR (restored after the run):
+
+`836cb5ac6f89edca3cec255dd895e791212b04794d3349eb13a1b2b313416b6f`
+
+Launcher (unchanged):
+
+`7e15699c0d0aea517f87680eb5d760d02519d9744285fa0d348f799e2ed77183`
+
+Temporary diagnostic JAR:
+
+`12c320caa072d55b0eb7280f9be489ca3d2ce9912b65a54a09a241042877ae03`
+
+Backup (not overwritten):
+
+`build/libs/backups/mcprec-6.13.jar.e11-geometry-20260816-836cb5ac`
+
+## Patch / build
+
+Isolated tree `/tmp/obsidianlink-p1-e11-diagnostic-runtime` from the
+installed MineRL 1.0.2 MCP-Reborn snapshot. Dirty `vendor/minerl` HEAD
+was not built.
+
+1. MineRL `cdeae668c2f334e3c9117adf651b5a94436b45f8`
+2. MCP-Reborn `1e71be5bd4c49bc4d6ab0ee559c31b298b7697a3`
+3. `obsidianlink-envserver.patch`
+4. `disable-client-audio.patch`
+5. `e10-drawing-decorator.patch`
+6. `e11-drawing-decorator-obsidian.patch`
+7. `e11-portal-activation-diagnostic.patch`
+   SHA-256 `5783c7d4f1be95cbeb7fc3ceaa15b5ad0f2c23f3e8ce8845900cdca398b9c9df`
+
+Java: `/opt/anaconda3/envs/mc-agent/bin/java` Zulu 8.90.0.19.
+Command: `./gradlew shadowJar --no-daemon`. Behavior changes: **NONE**
+(LOGGER.info only).
+
+Semantic diff versus production: `AbstractFireBlock.class`,
+`PortalSize.class`, `version.properties`. Unexpected class diff count:
+0. `EnvServer.class` and `SoundEngine.class` byte-identical. Future E12
+code: NO.
+
+## Instrumented run
+
+Episode `p1-e11-diag-001`. Raw
+`runs/p1_e11_portal_activation/e11-diagnostic-20260817-001/`. Compact
+`runs/history/p1-e11-diagnostic-20260817-001/`.
+
+Fresh process 1, launch 1, reset 1, retry 0, tested actions 1. Frozen
+geometry / `use_item(flint_and_steel)` / 3-tick window unchanged.
+
+BEFORE: 14/14 obsidian, 6/6 air, portal 0, fire 0, overworld,
+`truth_missing_count=0`. AFTER: ignition fire, 0/6 portal. Outcome
+`portal_activation_not_observed`. This does **not** replace live #1 and
+does not set `integration_verified`.
+
+## JVM trace
+
+All `[E11-DIAG]` lines were on the **Render thread**:
+
+- `onBlockAdded` YES at `(0,4,1)`, dim `minecraft:overworld`
+- `canLightPortal=true`, `inFireTag=true`
+- Axis.X: origin `(0,4,1)`, bottomLeft `(1,4,1)`, width 2, height 3,
+  portalCount 0, valid true
+- Axis.Z not constructed (`fallbackAttempted=false`)
+- Optional present true
+- `placePortalBlocks` ENTER YES / EXIT YES
+
+Case F: placement method completed, server-visible interior stayed
+0/6 portal. Root cause is narrowed to the portal world-write /
+subsequent replacement path, including the fact that the callback ran
+on the client Render thread rather than a proven Server thread.
+
+Live #1 (`p1-e11-live-001`) remains `portal_activation_not_observed`.
+E12: NOT STARTED. P1 Hard Gate: NOT PASSED.

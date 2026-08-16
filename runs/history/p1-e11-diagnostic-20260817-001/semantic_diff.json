@@ -1,0 +1,19 @@
+{
+  "allowed_class_diffs": [
+    "net/minecraft/block/AbstractFireBlock.class",
+    "net/minecraft/block/PortalSize.class"
+  ],
+  "allowed_metadata_diffs": [
+    "version.properties"
+  ],
+  "diagnostic_jar_sha256": "12c320caa072d55b0eb7280f9be489ca3d2ce9912b65a54a09a241042877ae03",
+  "e12_code_present": false,
+  "envserver_class_identical": true,
+  "future_e12_code_present": "NO",
+  "portal_placement_behavior_unchanged": true,
+  "portal_size_algorithm_unchanged_except_logging": true,
+  "production_jar_sha256": "836cb5ac6f89edca3cec255dd895e791212b04794d3349eb13a1b2b313416b6f",
+  "soundengine_class_identical": true,
+  "unexpected_semantic_diff_count": 0,
+  "vanilla_changedimensiontrigger_preexisting_in_both_jars": true
+}

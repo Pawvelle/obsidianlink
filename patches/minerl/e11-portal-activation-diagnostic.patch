@@ -39,10 +39,39 @@
     private static final AbstractBlock.IPositionPredicate POSITION_PREDICATE = (p_242966_0_, p_242966_1_, p_242966_2_) -> {
        return p_242966_0_.isIn(Blocks.OBSIDIAN);
     };
-@@ -58,6 +61,7 @@
+@@ -36,10 +39,13 @@
+    public static Optional<PortalSize> func_242965_a(IWorld world, BlockPos pos, Predicate<PortalSize> sizePredicate, Direction.Axis axis) {
+       Optional<PortalSize> optional = Optional.of(new PortalSize(world, pos, axis)).filter(sizePredicate);
+       if (optional.isPresent()) {
++         LOGGER.info("[E11-DIAG] PortalSize.func_242965_a requestedAxis={} firstPresent=true fallbackAttempted=false", axis);
+          return optional;
+       } else {
+          Direction.Axis direction$axis = axis == Direction.Axis.X ? Direction.Axis.Z : Direction.Axis.X;
+-         return Optional.of(new PortalSize(world, pos, direction$axis)).filter(sizePredicate);
++         Optional<PortalSize> fallback = Optional.of(new PortalSize(world, pos, direction$axis)).filter(sizePredicate);
++         LOGGER.info("[E11-DIAG] PortalSize.func_242965_a requestedAxis={} firstPresent=false fallbackAxis={} fallbackAttempted=true fallbackPresent={}", axis, direction$axis, fallback.isPresent());
++         return fallback;
+       }
+    }
+ 
+@@ -58,6 +64,7 @@
              this.height = this.func_242975_e();
           }
        }
 +      LOGGER.info("[E11-DIAG] PortalSize axis={} origin={} bottomLeft={} width={} height={} portalCount={} valid={}", this.axis, pos, this.bottomLeft, this.width, this.height, this.portalBlockCount, this.isValid());
  
     }
+ 
+@@ -152,10 +159,12 @@
+    }
+ 
+    public void placePortalBlocks() {
++      LOGGER.info("[E11-DIAG] placePortalBlocks ENTER axis={} bottomLeft={} width={} height={} portalCount={}", this.axis, this.bottomLeft, this.width, this.height, this.portalBlockCount);
+       BlockState blockstate = Blocks.NETHER_PORTAL.getDefaultState().with(NetherPortalBlock.AXIS, this.axis);
+       BlockPos.getAllInBoxMutable(this.bottomLeft, this.bottomLeft.offset(Direction.UP, this.height - 1).offset(this.rightDir, this.width - 1)).forEach((p_242967_2_) -> {
+          this.world.setBlockState(p_242967_2_, blockstate, 18);
+       });
++      LOGGER.info("[E11-DIAG] placePortalBlocks EXIT axis={} bottomLeft={} width={} height={}", this.axis, this.bottomLeft, this.width, this.height);
+    }
+ 
+    public boolean validatePortal() {

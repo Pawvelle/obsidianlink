@@ -4,9 +4,11 @@ import unittest
 from pathlib import Path
 
 from obsidianlink.env.integration.e11_diagnostics import (
+    RECORDED_DIAGNOSTIC_HISTORY,
     RECORDED_LIVE_HISTORY,
     diagnose_recorded_live_failure,
     infer_platform_block,
+    load_recorded_diagnostic_trace,
     load_recorded_result,
     parser_would_observe_portal,
     replay_recorded_evaluator,
@@ -103,15 +105,44 @@ class RecordedE11LiveFailureDiagnosisTests(unittest.TestCase):
         self.assertFalse(is_portal_block("fire"))
         self.assertFalse(is_portal_block("air"))
 
-    def test_root_cause_status_requires_runtime_callback_instrumentation(self) -> None:
+    def test_root_cause_status_is_narrowed_after_instrumented_run(self) -> None:
         diagnosis = diagnose_recorded_live_failure()
         self.assertEqual(diagnosis.evaluator_outcome, PORTAL_ACTIVATION_NOT_OBSERVED)
-        self.assertEqual(
-            diagnosis.root_cause_status,
-            "NEEDS_E11_DIAGNOSTIC_RUNTIME_AUTHORIZATION",
-        )
+        self.assertEqual(diagnosis.root_cause_status, "ROOT_CAUSE_NARROWED")
         self.assertTrue(diagnosis.axis_x.valid)
         self.assertFalse(diagnosis.success)
+
+    def test_diagnostic_instrumentation_is_case_f_and_not_a_benchmark_success(self) -> None:
+        trace = load_recorded_diagnostic_trace()
+        payload = load_recorded_result(RECORDED_DIAGNOSTIC_HISTORY / "result.json")
+        self.assertEqual(payload["episode_id"], "p1-e11-diag-001")
+        self.assertEqual(payload["outcome"], PORTAL_ACTIVATION_NOT_OBSERVED)
+        self.assertFalse(payload["success"])
+        self.assertEqual(payload["after_portal_block_count"], 0)
+        self.assertTrue(trace.on_block_added)
+        self.assertEqual(trace.position, "(0,4,1)")
+        self.assertEqual(trace.dimension, "minecraft:overworld")
+        self.assertTrue(trace.can_light_portal)
+        self.assertTrue(trace.in_fire_tag)
+        self.assertTrue(trace.axis_x_valid)
+        self.assertEqual(trace.axis_x_origin, "(0,4,1)")
+        self.assertEqual(trace.axis_x_bottom_left, "(1,4,1)")
+        self.assertEqual(trace.axis_x_width, 2)
+        self.assertEqual(trace.axis_x_height, 3)
+        self.assertEqual(trace.axis_x_portal_count, 0)
+        self.assertFalse(trace.axis_z_attempted)
+        self.assertTrue(trace.optional_present)
+        self.assertTrue(trace.place_portal_blocks_enter)
+        self.assertTrue(trace.place_portal_blocks_exit)
+        self.assertEqual(trace.thread, "Render thread")
+        self.assertEqual(trace.case, "F")
+        self.assertEqual(trace.root_cause_status, "ROOT_CAUSE_NARROWED")
+        self.assertEqual(len(trace.lines), 6)
+        review = load_recorded_result(RECORDED_DIAGNOSTIC_HISTORY / "run_review.json")
+        self.assertTrue(review["not_a_formal_benchmark_result"])
+        self.assertEqual(review["run_kind"], "e11_diagnostic_instrumentation")
+        self.assertFalse(review["verification"]["e11_integration_verified"])
+        self.assertFalse(review["verification"]["e12_started"])
 
     def test_diagnostic_patch_is_logging_only(self) -> None:
         text = PATCH.read_text(encoding="utf-8")
@@ -120,14 +151,32 @@ class RecordedE11LiveFailureDiagnosisTests(unittest.TestCase):
         self.assertIn("[E11-DIAG]", text)
         self.assertIn("canLightPortal", text)
         self.assertIn("BlockTags.FIRE", text)
+        self.assertIn("placePortalBlocks ENTER", text)
+        self.assertIn("placePortalBlocks EXIT", text)
+        self.assertIn("requestedAxis", text)
+        self.assertIn("fallbackAttempted", text)
+        self.assertIn("fallbackAxis", text)
+        self.assertIn("firstPresent", text)
         self.assertNotIn("shadowJar", text)
         self.assertNotIn("entered_via_portal", text)
         self.assertNotIn("func_241124_a__", text)
         added = "\n".join(
             line[1:] for line in text.splitlines() if line.startswith("+") and not line.startswith("+++")
         )
-        self.assertNotIn("setBlockState", added)
-        self.assertNotIn("removeBlock", added)
+        self.assertIn("LOGGER.info", added)
+        forbidden = (
+            "setBlockState",
+            "removeBlock",
+            "placeBlock(",
+            "teleport",
+            "changeDimension",
+            "portal_transition",
+            "entered_via_portal",
+            "Thread.sleep",
+            "retry",
+        )
+        for marker in forbidden:
+            self.assertNotIn(marker, added, marker)
 
 
 class PortalSizeReplicaSanityTests(unittest.TestCase):
