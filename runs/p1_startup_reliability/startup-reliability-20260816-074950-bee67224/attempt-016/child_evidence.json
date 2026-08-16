@@ -1,0 +1,30 @@
+{
+  "attempt_id": "attempt-016",
+  "backend_opened": true,
+  "calibration_only": true,
+  "cleanup": {
+    "backend_marked_closed": true,
+    "close_returned": true,
+    "environment_reference_cleared": true,
+    "limitation": "close() returning does not prove that Java, Minecraft, or MineRL processes were released",
+    "owner_cleared": true,
+    "process_release_proven": false
+  },
+  "close_error": null,
+  "close_returned": true,
+  "duration_seconds": 36.939408,
+  "environment_created": true,
+  "environment_launch_count": 1,
+  "episode_id": "startup-016",
+  "error": null,
+  "finished_at": "2026-08-16T07:57:46.907905Z",
+  "initial_state_present": true,
+  "integration_verified": false,
+  "max_reset_attempts": 1,
+  "outcome": "lifecycle_ok",
+  "reset_attempt_count": 1,
+  "reset_completed": true,
+  "started_at": "2026-08-16T07:57:09.967918Z",
+  "success": true,
+  "validation_action_executed": false
+}

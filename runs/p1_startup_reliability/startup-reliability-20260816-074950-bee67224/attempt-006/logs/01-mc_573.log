@@ -1,0 +1,29 @@
+[15:52:28] [Thread-3/INFO]: [STDOUT]: SERVER enter state: DORMANT
+[15:52:28] [EnvServerSocketHandler/INFO]: Received Mission token d84315d4-3da1-4f4a-8e1f-474f4faf3e03:0:0:1:true:0
+[15:52:28] [EnvServerSocketHandler/INFO]: Received mission init command  <MissionInit xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" SchemaVersion="" PlatformVersion="0.37.0"><Mission><About><Summary>ObsidianLinkPortalA0-v0</Summary></About><ModSettings><MsPerTick>50</MsPerTick></ModSettings><ServerSection><ServerInitialConditions><Time><StartTime>6000</StartTime><AllowPassageOfTime>false</AllowPassageOfTime></Time><Weather>clear</Weather><AllowSpawning>false</AllowSpawning></ServerInitialConditions><ServerHandlers><FlatWorldGenerator forceReset="true" generatorString=""/><ServerQuitFromTimeUp timeLimitMs="30000" description="out_of_time"/><ServerQuitWhenAnyAgentFinishes/></ServerHandlers></ServerSection><AgentSection mode="Survival"><Name>MineRLAgent0</Name><AgentStart><LowLevelInputs>true</LowLevelInputs><GuiScale>1.0</GuiScale><GammaSetting>2.0</GammaSetting><FOVSetting>70.0</FOVSetting><FakeCursorSize>16</FakeCursorSize><Inventory><InventoryObject slot="0" type="dirt" quantity="1"/></Inventory><Placement x="0.5" y="64.0" z="0.5" yaw="0.0" pitch="0.0"/></AgentStart><AgentHandlers><FileBasedPerformanceProducer/><PauseCommand/><VideoProducer want_depth="false"><Width>640</Width><Height>360</Height></VideoProducer><ObservationFromFullInventory flat="false"/><ObservationFromEquippedItem/><ObservationFromFullStats/><ObservationFromFullStats/><ObservationFromGrid><Grid name="portal_build_region" atSpawn="true"><min x="-3" y="-1" z="0"/><max x="4" y="5" z="6"/></Grid></ObservationFromGrid><HumanLevelCommands/><CameraCommands/><IsGuiOpen/></AgentHandlers></AgentSection></Mission><ExperimentUID>d84315d4-3da1-4f4a-8e1f-474f4faf3e03</ExperimentUID><ClientRole>0</ClientRole><ClientAgentConnection><ClientIPAddress>127.0.0.1</ClientIPAddress><ClientMissionControlPort>0</ClientMissionControlPort><ClientCommandsPort>0</ClientCommandsPort><AgentIPAddress>127.0.0.1</AgentIPAddress><AgentMissionControlPort>0</AgentMissionControlPort><AgentVideoPort>0</AgentVideoPort><AgentDepthPort>0</AgentDepthPort><AgentLuminancePort>0</AgentLuminancePort><AgentObservationsPort>0</AgentObservationsPort><AgentRewardsPort>0</AgentRewardsPort><AgentColourMapPort>0</AgentColourMapPort></ClientAgentConnection></MissionInit>
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  SIGSEGV (0xb) at pc=0x00000001693d4158, pid=95545, tid=0x000000000001050b
+#
+# JRE version: OpenJDK Runtime Environment (Zulu 8.90.0.19-CA-macos-aarch64) (8.0_472-b08) (build 1.8.0_472-b08)
+# Java VM: OpenJDK 64-Bit Server VM (25.472-b08 mixed mode bsd-aarch64 compressed oops)
+# Problematic frame:
+# C  [liblwjgl_stb.dylib+0x4c158]
+[error occurred during error reporting (printing problematic frame), id 0xe0000000]
+
+# Failed to write core dump. Core dumps have been disabled. To enable core dumping, try "ulimit -c unlimited" before starting Java again
+#
+# An error report file with more information is saved as:
+# /opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/MCP-Reborn/hs_err_pid95545.log
+[15:52:29] [EnvServerSocketHandler/INFO]: [STDOUT]: Setting width, height to 640, 360
+[15:52:29] [EnvServerSocketHandler/INFO]: [STDOUT]: Gamma: 2.0
+[15:52:29] [EnvServerSocketHandler/INFO]: [STDOUT]: FOV: 70.0
+[15:52:29] [EnvServerSocketHandler/INFO]: [STDOUT]: GuiScale: 1.0
+#
+# If you would like to submit a bug report, please visit:
+#   http://www.azul.com/support/
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/env/../MCP-Reborn/launchClient.sh: line 52: 95545 Abort trap: 6           java -Xmx$maxMem -XstartOnFirstThread -jar $fatjar --envPort=$port

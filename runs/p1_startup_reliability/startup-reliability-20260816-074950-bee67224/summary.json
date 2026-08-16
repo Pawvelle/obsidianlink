@@ -1,0 +1,36 @@
+{
+  "classification_revision": "malmo EOF now requires an explicit EOF token/error phrase; original raw classifications preserved",
+  "cleanup_failure_count": 0,
+  "engineering_interpretation": "mostly_stable_with_known_native_failures",
+  "failed_attempts": 2,
+  "failure_counts_by_class": {
+    "minecraft_native_crash": 1,
+    "reset_failure": 1
+  },
+  "failure_counts_by_fingerprint": {
+    "lwjgl_stb_sound_engine_sigsegv": 1,
+    "other_reset_error": 1
+  },
+  "failure_counts_by_stage": {
+    "minecraft_startup": 1,
+    "reset": 1
+  },
+  "finished_at": "2026-08-16T08:00:17.844652Z",
+  "first_attempt_success_rate": 0.9,
+  "integration_verified": false,
+  "interpretation_is_heuristic_not_benchmark_threshold": true,
+  "malmo_eof_count": 0,
+  "max_startup_duration_seconds": 38.618856,
+  "mean_startup_duration_seconds": 31.3715294,
+  "median_startup_duration_seconds": 31.072755,
+  "min_startup_duration_seconds": 18.02218,
+  "native_crash_count": 1,
+  "native_crash_rate": 0.05,
+  "p1_hard_gate_passed": false,
+  "process_release_proven_attempts": 0,
+  "run_dir": "/Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_startup_reliability/startup-reliability-20260816-074950-bee67224",
+  "successful_attempts": 18,
+  "timeout_count": 0,
+  "total_attempts": 20,
+  "validation_action_executed_attempts": 0
+}

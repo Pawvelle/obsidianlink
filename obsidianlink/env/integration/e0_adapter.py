@@ -106,6 +106,24 @@ class MineRLE0LifecycleAdapter:
     def cleanup_status(self) -> E0CleanupStatus:
         return self._cleanup
 
+    def reset_audit(self) -> dict[str, int]:
+        """Return the backend's narrow reset/launch counters when available."""
+
+        backend = self._backend
+        getter = None if backend is None else getattr(backend, "get_reset_audit", None)
+        if not callable(getter):
+            return {"reset_attempt_count": 0, "environment_launch_count": 0}
+        raw = getter()
+        if not isinstance(raw, Mapping):
+            raise RuntimeError("MineRL backend reset audit must be a mapping")
+        result: dict[str, int] = {}
+        for name in ("reset_attempt_count", "environment_launch_count"):
+            value = raw.get(name)
+            if type(value) is not int or value < 0:
+                raise RuntimeError(f"MineRL backend reset audit {name} is invalid")
+            result[name] = value
+        return result
+
     def _resolve_backend_cls(self) -> type:
         if self._backend_cls is not None:
             return self._backend_cls

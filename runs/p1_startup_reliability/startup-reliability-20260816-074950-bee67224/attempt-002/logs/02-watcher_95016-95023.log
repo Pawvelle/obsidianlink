@@ -1,0 +1,2 @@
+2026-08-16 15:50:21 MacBook Air process_watcher[95032] INFO Process watcher started between parent 95016 and child 95023 
+2026-08-16 15:50:47 MacBook Air process_watcher[95032] INFO Child is not running anymore, launcher can terminate.

@@ -1,0 +1,16 @@
+{
+  "changed_attempt": "startup-006",
+  "changed_field": "secondary_symptoms",
+  "new_value": [],
+  "old_value": [
+    "malmo_eof"
+  ],
+  "preserved_files": [
+    "attempts.original.jsonl",
+    "summary.original.json",
+    "attempt-006/attempt.original.json"
+  ],
+  "primary_failure_unchanged": "minecraft_native_crash",
+  "reason": "ProjectMalmo and PassageOfTime in Mission XML produced a cross-field substring false positive for eof",
+  "reviewed_at": "2026-08-16T08:01:59.315449Z"
+}

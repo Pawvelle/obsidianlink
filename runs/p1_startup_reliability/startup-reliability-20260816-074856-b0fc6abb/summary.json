@@ -1,0 +1,32 @@
+{
+  "cleanup_failure_count": 0,
+  "engineering_interpretation": "unstable",
+  "failed_attempts": 20,
+  "failure_counts_by_class": {
+    "reset_failure": 20
+  },
+  "failure_counts_by_fingerprint": {
+    "other_reset_error": 20
+  },
+  "failure_counts_by_stage": {
+    "reset": 20
+  },
+  "finished_at": "2026-08-16T07:49:22.933819Z",
+  "first_attempt_success_rate": 0.0,
+  "integration_verified": false,
+  "interpretation_is_heuristic_not_benchmark_threshold": true,
+  "malmo_eof_count": 0,
+  "max_startup_duration_seconds": 1.343725,
+  "mean_startup_duration_seconds": 1.31218745,
+  "median_startup_duration_seconds": 1.3128449999999998,
+  "min_startup_duration_seconds": 1.293744,
+  "native_crash_count": 0,
+  "native_crash_rate": 0.0,
+  "p1_hard_gate_passed": false,
+  "process_release_proven_attempts": 0,
+  "run_dir": "/Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_startup_reliability/startup-reliability-20260816-074856-b0fc6abb",
+  "successful_attempts": 0,
+  "timeout_count": 0,
+  "total_attempts": 20,
+  "validation_action_executed_attempts": 0
+}

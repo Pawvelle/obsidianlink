@@ -1,0 +1,70 @@
+{
+  "attempt_id": "attempt-008",
+  "backend_opened": true,
+  "cleanup": {
+    "backend_marked_closed": true,
+    "cleanup_actions": [],
+    "close_returned": true,
+    "environment_reference_cleared": true,
+    "limitation": "close() returning does not prove that Java, Minecraft, or MineRL processes were released",
+    "owner_cleared": true,
+    "process_release_limitation": "PID-tree observation can detect tracked residuals but cannot prove that no process escaped or was reparented before observation",
+    "process_release_proven": false,
+    "residual_descendants": [],
+    "tracked_descendants": [
+      {
+        "command": "<defunct>",
+        "pid": 95830
+      },
+      {
+        "command": "/opt/anaconda3/envs/mc-agent/bin/python -m minerl.utils.process_watcher 95822 95830 --child-dirs /opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/env/../MCP-Reborn/..",
+        "pid": 95831
+      },
+      {
+        "command": "java -Xmx4G -XstartOnFirstThread -jar build/libs/mcprec-6.13.jar --envPort=10463",
+        "pid": 95834
+      }
+    ]
+  },
+  "cleanup_anomaly": false,
+  "close_error": null,
+  "close_returned": true,
+  "duration_seconds": 29.882469,
+  "environment_created": true,
+  "environment_launch_count": 1,
+  "episode_id": "startup-008",
+  "error": null,
+  "failure_class": "success",
+  "failure_fingerprint": null,
+  "failure_stage": "none",
+  "finished_at": "2026-08-16T07:53:30.748027Z",
+  "infrastructure_only": true,
+  "initial_state_present": true,
+  "integration_verified": false,
+  "log_evidence": [
+    {
+      "copied_path": "/Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_startup_reliability/startup-reliability-20260816-074950-bee67224/attempt-008/logs/01-mc_1463.log",
+      "kind": "runtime_log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_path": "/Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/logs/mc_1463.log"
+    },
+    {
+      "copied_path": "/Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_startup_reliability/startup-reliability-20260816-074950-bee67224/attempt-008/logs/02-watcher_95822-95830.log",
+      "kind": "runtime_log",
+      "sha256": "846e5e883d20493e25114b46107c083177de659ee188c27d8a0a6920d7fbc943",
+      "source_path": "/Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/logs/minerl_watchers/watcher_95822-95830.log"
+    }
+  ],
+  "max_reset_attempts": 1,
+  "outcome": "lifecycle_ok",
+  "reset_attempt_count": 1,
+  "reset_completed": true,
+  "secondary_symptoms": [],
+  "started_at": "2026-08-16T07:53:00.865373Z",
+  "startup_duration_seconds": 29.882469,
+  "subprocess_exit_code": 0,
+  "subprocess_started": true,
+  "success": true,
+  "timed_out": false,
+  "validation_action_executed": false
+}
