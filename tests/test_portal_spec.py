@@ -194,6 +194,26 @@ class PortalA0EnvSpecTests(unittest.TestCase):
             PortalA0EnvSpec(initial_blocks=((0, 4, 2, "lava"), (0, 4, 2, "air")))
         with self.assertRaisesRegex(ValueError, "must not pre-place obsidian"):
             PortalA0EnvSpec(initial_blocks=((0, 4, 2, "obsidian"),))
+        xml = PortalA0EnvSpec(
+            initial_blocks=((-1, 3, 1, "obsidian"),),
+            allow_obsidian_frame_fixture=True,
+        ).to_xml()
+        self.assertEqual(parse_mission_draw_blocks(xml), ((-1, 3, 1, "obsidian"),))
+        with self.assertRaisesRegex(ValueError, "must not pre-place nether_portal"):
+            PortalA0EnvSpec(
+                initial_blocks=((0, 4, 1, "nether_portal"),),
+                allow_obsidian_frame_fixture=True,
+            )
+        with self.assertRaisesRegex(ValueError, "must not pre-place fire"):
+            PortalA0EnvSpec(
+                initial_blocks=((0, 4, 1, "fire"),),
+                allow_obsidian_frame_fixture=True,
+            )
+        with self.assertRaisesRegex(ValueError, "not an allowed initial DrawBlock"):
+            PortalA0EnvSpec(
+                initial_blocks=((0, 4, 2, "lava"),),
+                allow_obsidian_frame_fixture=True,
+            )
         with self.assertRaisesRegex(ValueError, "must not pre-place water"):
             PortalA0EnvSpec(initial_blocks=((0, 4, 1, "water"),))
         with self.assertRaisesRegex(ValueError, "not an allowed initial DrawBlock"):

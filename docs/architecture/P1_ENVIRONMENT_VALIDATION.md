@@ -57,6 +57,30 @@ One reviewed real conversion: `p1-e10-live-001`, outcome `obsidian_conversion_ok
 
 E10 通过不表示正式 portal task 成功。当前 verification：contract/offline runtime/MineRL bridge = `unit_verified`；E10 geometry real verified = **YES**；E10 real conversion reviewed success = **YES**；`integration_verified` = **NO**。
 
+## E11 controlled calibration
+
+E11 只验证：完整合法 obsidian portal frame + 一次真实 `use_item(flint_and_steel)` + Minecraft 1.16.5 vanilla portal mechanics → interior 出现 `nether_portal` → evaluator-only server truth → `portal_activation_ok`。
+
+它不是 Agent task、不是 E10 再造 obsidian、不是玩家进入 portal、不是 E12 dimension change。预置 frame 是 **calibration fixture**，不能宣称 Agent built the portal，也不能当作 end-to-end portal construction success。
+
+冻结几何（1.16.5 MCP-Reborn `PortalSize`：interior width 2–21、height 3–21；最小 interior 2×3，外框 4×5 完整 14 格 obsidian；axis X，平面 z=1）：
+
+- spawn `(0, 4, 0)`，yaw `0.0`，pitch `60.0`
+- frame：x=-1..2，y=3..7，z=1（14 obsidian）
+- interior：`(0|1, 4|5|6, 1)` 共 6 格，before 必须是 air，禁止预置 portal/fire
+- ignition cell `(0, 4, 1)`
+- controls `(0, 8, 1)`、`(0, 4, 3)`
+- inventory：仅 `flint_and_steel:1`
+- 恰好 1 次 stimulus：`use_item(flint_and_steel)`，`duration_ticks=1`
+- bounded observation window：最多 3 个 wait tick（工程缓冲，不是科学阈值）
+- 成功必须：6 格 interior 均为 portal block（`nether_portal`，兼容 Malmo `portal` 别名），controls unchanged，dimension 仍为 overworld，`truth_missing_count=0`
+- fire 单独出现不是成功（`portal_activation_not_observed`）
+- 成功 outcome：`portal_activation_ok`
+
+Mission XML 可以预置 obsidian frame（`allow_obsidian_frame_fixture=True`）。当前 deployed JAR 仍是 E10 lava-only DrawingDecorator，**拒绝 obsidian**。因此 live path 保持 fail-closed：`NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION`。最小 runtime 扩展见 [P1 E11 runtime geometry](P1_E11_RUNTIME_GEOMETRY.md)。未经授权禁止 Gradle / 部署新 JAR，也禁止从 dirty `vendor/minerl` HEAD 重建。
+
+FakeBackend success 不能证明真实 Minecraft activation。E11 `unit_verified` 不把 `integration_verified` 设为 true。
+
 ## Startup reliability hardening
 
 - P1 startup reliability hardening: **COMPLETE**.
@@ -70,8 +94,8 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 ## Authorization and hard gate
 
-E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E8/E9/E10 evaluator-only truth 与 Agent-visible observation 保持隔离。E10 geometry real verified 为 **YES**，E10 real conversion reviewed success 为 **YES**。E11、E12 均为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
+E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 real calibration = **NOT RUN**；`integration_verified` = **NO**。E8/E9/E10/E11 evaluator-only truth 与 Agent-visible observation 保持隔离。E12 为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
-下一项经授权的 P1 validation target 是 **E11 portal activation calibration**。这不授权或启动该运行；每次真实 MineRL/Minecraft 运行仍需用户单独明确授权。
+下一项经授权的 P1 工作是 **E11 runtime geometry authorization**（从 deployed P1 baseline 重建并只叠加 E11 obsidian fixture patch），然后才是一次真实 E11 calibration。这不授权或启动 Gradle、部署或真实 MineRL；每次真实运行仍需用户单独明确授权。不要开始 E12。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。

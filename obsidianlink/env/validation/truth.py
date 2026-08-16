@@ -1,10 +1,11 @@
-"""MineRL-independent P1 E8/E9/E10 evaluator-only server-truth contract.
+"""MineRL-independent P1 E8/E9/E10/E11 evaluator-only server-truth contract.
 
 E8 validates the block-truth portion of ServerTruthSnapshot. E9 extends
 the same snapshot with typed fluid truth, including the source/flowing
 distinction that E7 deliberately collapsed. E10 reuses both channels to
-observe a vanilla water-lava → obsidian conversion. None of these
-channels is Agent-visible or a benchmark task.
+observe a vanilla water-lava → obsidian conversion. E11 reuses block
+truth to observe vanilla flint-and-steel portal activation. None of
+these channels is Agent-visible or a benchmark task.
 """
 
 from __future__ import annotations
@@ -59,6 +60,11 @@ CONVERSION_NOT_OBSERVED = "conversion_not_observed"
 WATER_PLACEMENT_NOT_OBSERVED = "water_placement_not_observed"
 UNEXPECTED_BLOCK_TRANSITION = "unexpected_block_transition"
 INFRASTRUCTURE_FAILURE = "infrastructure_failure"
+PORTAL_ACTIVATION_OK = "portal_activation_ok"
+INVALID_INITIAL_FRAME = "invalid_initial_frame"
+IGNITION_EFFECT_NOT_OBSERVED = "ignition_effect_not_observed"
+PORTAL_ACTIVATION_NOT_OBSERVED = "portal_activation_not_observed"
+PORTAL_PATTERN_INCOMPLETE = "portal_pattern_incomplete"
 
 BLOCK_TRUTH_OUTCOMES = frozenset(
     {
@@ -152,6 +158,39 @@ OBSIDIAN_CONVERSION_OUTCOMES = frozenset(
         TRUTH_CALIBRATION_MISMATCH,
     }
 )
+PORTAL_ACTIVATION_OUTCOMES = frozenset(
+    {
+        PORTAL_ACTIVATION_OK,
+        INVALID_INITIAL_FRAME,
+        INVALID_INITIAL_STATE,
+        IGNITION_EFFECT_NOT_OBSERVED,
+        PORTAL_ACTIVATION_NOT_OBSERVED,
+        PORTAL_PATTERN_INCOMPLETE,
+        UNEXPECTED_BLOCK_TRANSITION,
+        INFRASTRUCTURE_FAILURE,
+        TRUTH_SNAPSHOT_MISSING,
+        TRUTH_IDENTITY_MISMATCH,
+        TRUTH_POSITION_MISSING,
+        TRUTH_POSITION_INVALID,
+        TRUTH_DIMENSION_MISSING,
+        TRUTH_DIMENSION_INVALID,
+        TRUTH_WRONG_DIMENSION,
+        TRUTH_ANCHOR_MISMATCH,
+        TRUTH_REGION_EMPTY,
+        TRUTH_DUPLICATE_CELL,
+        TRUTH_CELL_OUT_OF_BOUNDS,
+        TRUTH_BLOCK_MISSING,
+        TRUTH_BLOCK_UNKNOWN,
+        TRUTH_CONTROL_CELL_CHANGED,
+        TRUTH_STIMULUS_REJECTED,
+        TRUTH_TEST_ACTION_NOT_EXECUTED,
+        TRUTH_MULTIPLE_TEST_ACTIONS,
+        TRUTH_LEAK,
+        TRUTH_WRONG_ACTION_TYPE,
+        TRUTH_WRONG_TARGET,
+        TRUTH_CALIBRATION_MISMATCH,
+    }
+)
 
 ALLOWED_DIMENSIONS = frozenset(
     {
@@ -163,7 +202,11 @@ ALLOWED_DIMENSIONS = frozenset(
 E8_REQUIRED_DIMENSION = "minecraft:overworld"
 E9_REQUIRED_DIMENSION = "minecraft:overworld"
 E10_REQUIRED_DIMENSION = "minecraft:overworld"
+E11_REQUIRED_DIMENSION = "minecraft:overworld"
 E10_STIMULUS_ITEM = "water_bucket"
+E11_STIMULUS_ITEM = "flint_and_steel"
+E11_PORTAL_BLOCK = "nether_portal"
+PORTAL_BLOCK_ALIASES = frozenset({"nether_portal", "portal"})
 E10_EXPECTED_BEFORE_BLOCK = "lava"
 E10_EXPECTED_AFTER_BLOCK = "obsidian"
 E10_EXPECTED_AFTER_WATER_BLOCK = "water"
@@ -220,6 +263,15 @@ EVALUATOR_TRUTH_LEAK_KEYS = frozenset(
         "after_water_fluid_type",
         "after_water_flow_state",
         "water_placement_observed",
+        "frame_valid_before",
+        "portal_activated",
+        "portal_activation_observed",
+        "ignition_effect_observed",
+        "before_portal_block_count",
+        "after_portal_block_count",
+        "interior_cells",
+        "expected_frame_cells",
+        "observed_frame_cells",
     }
 )
 
@@ -343,6 +395,27 @@ def classify_server_fluid(block: object) -> tuple[bool, str, str]:
     if name == "missing":
         raise ValueError("fluid truth is missing")
     raise ValueError("unknown fluid truth")
+
+
+def canonicalize_portal_block(block: object, field_name: str = "block") -> str:
+    """Normalize ObservationFromGrid portal names to ``nether_portal``.
+
+    EnvServer serializes ``Registry.BLOCK.getKey(block).toString()``. For
+    the 1.16.5 portal block that is ``minecraft:nether_portal``.
+    ``PortalGridObservation`` strips the ``minecraft:`` prefix. The closed
+    grid vocabulary also keeps the older Malmo alias ``portal``.
+    """
+
+    name = validate_block_name(block, field_name)
+    if name in PORTAL_BLOCK_ALIASES:
+        return E11_PORTAL_BLOCK
+    return name
+
+
+def is_portal_block(block: object) -> bool:
+    if not isinstance(block, str) or not block.strip():
+        return False
+    return canonicalize_portal_block(block) == E11_PORTAL_BLOCK
 
 
 def frozen_fluid_bucket_item(variant: object) -> str:
@@ -1639,4 +1712,527 @@ def inspect_obsidian_conversion(
         )
     return ObsidianConversionInspection(
         conversion_outcome, conversion_error, **evidence  # type: ignore[arg-type]
+    )
+
+
+@dataclass(frozen=True)
+class PortalActivationActionExecution:
+    """Observed backend response to the single bounded E11 ignition stimulus."""
+
+    episode_id: str
+    agent_id: str
+    step_id: int
+    action_type: str
+    target: str
+    duration_ticks: int
+    translated_action_accepted: bool
+    tested_action_count: int
+    observation_wait_count: int = 0
+    portal_activation_observed_at_step: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "episode_id", _identifier(self.episode_id, "episode_id"))
+        object.__setattr__(self, "agent_id", _identifier(self.agent_id, "agent_id"))
+        object.__setattr__(self, "action_type", _identifier(self.action_type, "action_type"))
+        object.__setattr__(self, "target", _identifier(self.target, "target"))
+        if type(self.step_id) is not int or self.step_id < 0:
+            raise ValueError("step_id must be a non-negative int")
+        if type(self.duration_ticks) is not int or self.duration_ticks < 1:
+            raise ValueError("duration_ticks must be a positive int")
+        if type(self.translated_action_accepted) is not bool:
+            raise ValueError("translated_action_accepted must be bool")
+        if type(self.tested_action_count) is not int or self.tested_action_count < 0:
+            raise ValueError("tested_action_count must be a non-negative int")
+        if type(self.observation_wait_count) is not int or self.observation_wait_count < 0:
+            raise ValueError("observation_wait_count must be a non-negative int")
+        if self.portal_activation_observed_at_step is not None and (
+            type(self.portal_activation_observed_at_step) is not int
+            or self.portal_activation_observed_at_step < 1
+        ):
+            raise ValueError(
+                "portal_activation_observed_at_step must be a positive int or None"
+            )
+
+
+@dataclass(frozen=True)
+class PortalActivationInspection:
+    outcome: str
+    error: str | None
+    before_snapshot: ServerTruthSnapshot | None = None
+    after_snapshot: ServerTruthSnapshot | None = None
+    frame_valid_before: bool | None = None
+    frame_block_count: int | None = None
+    expected_frame_cells: tuple[tuple[int, int, int], ...] | None = None
+    observed_frame_cells: tuple[tuple[int, int, int], ...] | None = None
+    interior_cells: tuple[tuple[int, int, int], ...] | None = None
+    before_portal_block_count: int | None = None
+    after_portal_block_count: int | None = None
+    ignition_effect_observed: bool | None = None
+    portal_activation_observed: bool | None = None
+    portal_activation_observed_at_step: int | None = None
+    portal_activated: bool | None = None
+    target_changed: bool | None = None
+    control_cells_unchanged: bool | None = None
+    identity_valid: bool | None = None
+    truth_missing_count: int | None = None
+    observation_wait_count: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.outcome not in PORTAL_ACTIVATION_OUTCOMES:
+            raise ValueError(f"unknown portal-activation outcome: {self.outcome!r}")
+        if self.error is not None:
+            if not isinstance(self.error, str) or not self.error.strip():
+                raise ValueError("error must be None or a non-empty string")
+        for field_name in (
+            "frame_valid_before",
+            "ignition_effect_observed",
+            "portal_activation_observed",
+            "portal_activated",
+            "target_changed",
+            "control_cells_unchanged",
+            "identity_valid",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and type(value) is not bool:
+                raise ValueError(f"{field_name} must be bool or None")
+        for field_name in (
+            "frame_block_count",
+            "before_portal_block_count",
+            "after_portal_block_count",
+            "truth_missing_count",
+            "observation_wait_count",
+            "portal_activation_observed_at_step",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and (type(value) is not int or value < 0):
+                raise ValueError(f"{field_name} must be a non-negative int or None")
+        for field_name in (
+            "expected_frame_cells",
+            "observed_frame_cells",
+            "interior_cells",
+        ):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(
+                    self,
+                    field_name,
+                    tuple(validate_target_cell(cell, field_name) for cell in value),
+                )
+        for field_name in ("before_snapshot", "after_snapshot"):
+            value = getattr(self, field_name)
+            if value is not None and not isinstance(value, ServerTruthSnapshot):
+                raise ValueError(f"{field_name} must be ServerTruthSnapshot or None")
+
+    @property
+    def valid(self) -> bool:
+        return self.outcome == PORTAL_ACTIVATION_OK
+
+
+def _portal_count(snapshot: ServerTruthSnapshot, cells: Sequence[tuple[int, int, int]]) -> int:
+    count = 0
+    for cell in cells:
+        block = snapshot.block_at(cell)
+        if block is not None and is_portal_block(block):
+            count += 1
+    return count
+
+
+def _obsidian_cells(
+    snapshot: ServerTruthSnapshot, cells: Sequence[tuple[int, int, int]]
+) -> tuple[tuple[int, int, int], ...]:
+    observed: list[tuple[int, int, int]] = []
+    for cell in cells:
+        block = snapshot.block_at(cell)
+        if block == "obsidian":
+            observed.append(cell)
+    return tuple(observed)
+
+
+def inspect_portal_activation_precondition(
+    before: ServerTruthSnapshot,
+    *,
+    probe_world_cells: Sequence[tuple[int, int, int]],
+    probe_grid_cells: Sequence[tuple[int, int, int]],
+    frame_world_cells: Sequence[tuple[int, int, int]],
+    interior_world_cells: Sequence[tuple[int, int, int]],
+    ignition_world_cell: tuple[int, int, int],
+    control_world_cells: Sequence[tuple[int, int, int]],
+    expected_dimension: str = E11_REQUIRED_DIMENSION,
+    position_min: tuple[float, float, float] | None = None,
+    position_max: tuple[float, float, float] | None = None,
+) -> PortalActivationInspection | None:
+    """Return a failure inspection, or None when the before frame may be ignited."""
+
+    probes = validate_world_cells(probe_world_cells, "probe_world_cells")
+    grids = tuple(validate_target_cell(cell, "probe_grid_cell") for cell in probe_grid_cells)
+    frame = tuple(validate_target_cell(cell, "frame_world_cell") for cell in frame_world_cells)
+    interior = tuple(
+        validate_target_cell(cell, "interior_world_cell") for cell in interior_world_cells
+    )
+    ignition = validate_target_cell(ignition_world_cell, "ignition_world_cell")
+    controls = tuple(
+        validate_target_cell(cell, "control_world_cell") for cell in control_world_cells
+    )
+    expected_dimension = validate_dimension(expected_dimension, "expected_dimension")
+    observed_frame = _obsidian_cells(before, frame)
+    before_portals = _portal_count(before, interior)
+    evidence: dict[str, object] = {
+        "before_snapshot": before,
+        "frame_valid_before": observed_frame == frame,
+        "frame_block_count": len(observed_frame),
+        "expected_frame_cells": frame,
+        "observed_frame_cells": observed_frame,
+        "interior_cells": interior,
+        "before_portal_block_count": before_portals,
+        "after_portal_block_count": 0,
+        "ignition_effect_observed": False,
+        "portal_activation_observed": False,
+        "portal_activated": False,
+        "target_changed": False,
+        "truth_missing_count": before.truth_missing_count,
+        "observation_wait_count": 0,
+    }
+    if before.truth_missing_count != 0 or not before.block_truth:
+        return PortalActivationInspection(
+            TRUTH_BLOCK_MISSING,
+            "E11 success requires truth_missing_count=0 before ignition",
+            **evidence,  # type: ignore[arg-type]
+        )
+    region_valid = (
+        tuple(item.world_cell for item in before.block_truth) == probes
+        and tuple(item.grid_cell for item in before.block_truth) == grids
+    )
+    if not region_valid:
+        return PortalActivationInspection(
+            TRUTH_IDENTITY_MISMATCH,
+            "E11 before truth region does not match the frozen probe set",
+            identity_valid=False,
+            **evidence,  # type: ignore[arg-type]
+        )
+    evidence["identity_valid"] = True
+    if before.dimension != expected_dimension:
+        return PortalActivationInspection(
+            TRUTH_WRONG_DIMENSION,
+            "E11 calibration must remain in minecraft:overworld",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if position_min is not None or position_max is not None:
+        for index, axis in enumerate(("x", "y", "z")):
+            value = before.position_world[index]
+            if position_min is not None and value < position_min[index]:
+                return PortalActivationInspection(
+                    TRUTH_POSITION_INVALID,
+                    f"before position {axis} is outside E11 calibration bounds",
+                    **evidence,  # type: ignore[arg-type]
+                )
+            if position_max is not None and value > position_max[index]:
+                return PortalActivationInspection(
+                    TRUTH_POSITION_INVALID,
+                    f"before position {axis} is outside E11 calibration bounds",
+                    **evidence,  # type: ignore[arg-type]
+                )
+    if observed_frame != frame:
+        return PortalActivationInspection(
+            INVALID_INITIAL_FRAME,
+            "E11 requires a complete obsidian frame before ignition",
+            **evidence,  # type: ignore[arg-type]
+        )
+    for cell in interior:
+        block = before.block_at(cell)
+        if block is None:
+            return PortalActivationInspection(
+                TRUTH_BLOCK_MISSING,
+                "E11 interior truth is missing before ignition",
+                **evidence,  # type: ignore[arg-type]
+            )
+        if is_portal_block(block):
+            return PortalActivationInspection(
+                INVALID_INITIAL_STATE,
+                "E11 interior already contained a portal block before ignition",
+                **evidence,  # type: ignore[arg-type]
+            )
+        if block == "fire":
+            return PortalActivationInspection(
+                INVALID_INITIAL_STATE,
+                "E11 interior must not contain fire before ignition",
+                **evidence,  # type: ignore[arg-type]
+            )
+        if block != "air":
+            return PortalActivationInspection(
+                INVALID_INITIAL_STATE,
+                "E11 interior must be air before ignition",
+                **evidence,  # type: ignore[arg-type]
+            )
+    ignition_block = before.block_at(ignition)
+    if ignition_block is None:
+        return PortalActivationInspection(
+            TRUTH_BLOCK_MISSING,
+            "E11 ignition cell truth is missing before stimulus",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if is_portal_block(ignition_block) or ignition_block == "fire":
+        return PortalActivationInspection(
+            INVALID_INITIAL_STATE,
+            "E11 ignition cell must not contain portal or fire before stimulus",
+            **evidence,  # type: ignore[arg-type]
+        )
+    for cell in controls:
+        block = before.block_at(cell)
+        if block is None:
+            return PortalActivationInspection(
+                TRUTH_BLOCK_MISSING,
+                "E11 control truth is missing before ignition",
+                **evidence,  # type: ignore[arg-type]
+            )
+        if block != "air":
+            return PortalActivationInspection(
+                INVALID_INITIAL_STATE,
+                "E11 control cells must be air before ignition",
+                **evidence,  # type: ignore[arg-type]
+            )
+    return None
+
+
+def inspect_portal_activation(
+    before: ServerTruthSnapshot,
+    after: ServerTruthSnapshot,
+    execution: PortalActivationActionExecution,
+    *,
+    probe_world_cells: Sequence[tuple[int, int, int]],
+    probe_grid_cells: Sequence[tuple[int, int, int]],
+    frame_world_cells: Sequence[tuple[int, int, int]],
+    interior_world_cells: Sequence[tuple[int, int, int]],
+    ignition_world_cell: tuple[int, int, int],
+    control_world_cells: Sequence[tuple[int, int, int]],
+    expected_dimension: str = E11_REQUIRED_DIMENSION,
+    duration_ticks: int,
+    stimulus_target: str = E11_STIMULUS_ITEM,
+    observation_window_ticks: int,
+    position_min: tuple[float, float, float] | None = None,
+    position_max: tuple[float, float, float] | None = None,
+) -> PortalActivationInspection:
+    """Fail closed unless server truth shows this episode's portal activation."""
+
+    precondition = inspect_portal_activation_precondition(
+        before,
+        probe_world_cells=probe_world_cells,
+        probe_grid_cells=probe_grid_cells,
+        frame_world_cells=frame_world_cells,
+        interior_world_cells=interior_world_cells,
+        ignition_world_cell=ignition_world_cell,
+        control_world_cells=control_world_cells,
+        expected_dimension=expected_dimension,
+        position_min=position_min,
+        position_max=position_max,
+    )
+    if precondition is not None:
+        return precondition
+
+    probes = validate_world_cells(probe_world_cells, "probe_world_cells")
+    grids = tuple(validate_target_cell(cell, "probe_grid_cell") for cell in probe_grid_cells)
+    frame = tuple(validate_target_cell(cell, "frame_world_cell") for cell in frame_world_cells)
+    interior = tuple(
+        validate_target_cell(cell, "interior_world_cell") for cell in interior_world_cells
+    )
+    controls = tuple(
+        validate_target_cell(cell, "control_world_cell") for cell in control_world_cells
+    )
+    expected_dimension = validate_dimension(expected_dimension, "expected_dimension")
+    stimulus_target = _identifier(stimulus_target, "stimulus_target")
+    if stimulus_target != E11_STIMULUS_ITEM:
+        raise ValueError("stimulus_target does not match the frozen E11 flint_and_steel")
+    if type(duration_ticks) is not int or duration_ticks < 1:
+        raise ValueError("duration_ticks must be a positive int")
+    if type(observation_window_ticks) is not int or observation_window_ticks < 1:
+        raise ValueError("observation_window_ticks must be a positive int")
+
+    identity_valid = (
+        before.episode_id == execution.episode_id
+        and after.episode_id == execution.episode_id
+        and before.agent_id == execution.agent_id
+        and after.agent_id == execution.agent_id
+        and before.step_id == 0
+        and execution.step_id >= 1
+        and after.step_id >= execution.step_id
+        and before.grid_anchor_world == after.grid_anchor_world
+        and before.anchor_source == after.anchor_source
+    )
+    missing_count = before.truth_missing_count + after.truth_missing_count
+    after_portals = _portal_count(after, interior)
+    before_portals = _portal_count(before, interior)
+    fire_after = any(after.block_at(cell) == "fire" for cell in interior)
+    complete_portal = all(
+        after.block_at(cell) is not None and is_portal_block(after.block_at(cell))
+        for cell in interior
+    )
+    target_changed = after_portals > before_portals or fire_after
+    observed_at = execution.portal_activation_observed_at_step
+    if complete_portal and observed_at is None:
+        observed_at = after.step_id
+    evidence: dict[str, object] = {
+        "before_snapshot": before,
+        "after_snapshot": after,
+        "frame_valid_before": True,
+        "frame_block_count": len(frame),
+        "expected_frame_cells": frame,
+        "observed_frame_cells": frame,
+        "interior_cells": interior,
+        "before_portal_block_count": before_portals,
+        "after_portal_block_count": after_portals,
+        "ignition_effect_observed": bool(fire_after or after_portals > 0),
+        "portal_activation_observed": complete_portal,
+        "portal_activation_observed_at_step": observed_at,
+        "portal_activated": complete_portal,
+        "target_changed": target_changed,
+        "observation_wait_count": execution.observation_wait_count,
+        "truth_missing_count": missing_count,
+    }
+    if not identity_valid:
+        return PortalActivationInspection(
+            TRUTH_IDENTITY_MISMATCH,
+            "portal-activation identity, region, or step sequence is invalid",
+            identity_valid=False,
+            **evidence,  # type: ignore[arg-type]
+        )
+    evidence["identity_valid"] = True
+    if missing_count != 0 or not after.block_truth:
+        return PortalActivationInspection(
+            TRUTH_BLOCK_MISSING,
+            "E11 success requires truth_missing_count=0",
+            **evidence,  # type: ignore[arg-type]
+        )
+    region_valid = (
+        tuple(item.world_cell for item in after.block_truth) == probes
+        and tuple(item.grid_cell for item in after.block_truth) == grids
+    )
+    if not region_valid:
+        return PortalActivationInspection(
+            TRUTH_IDENTITY_MISMATCH,
+            "portal-activation identity, region, or step sequence is invalid",
+            identity_valid=False,
+            **{key: value for key, value in evidence.items() if key != "identity_valid"},  # type: ignore[arg-type]
+        )
+    if after.dimension != expected_dimension:
+        return PortalActivationInspection(
+            TRUTH_WRONG_DIMENSION,
+            "E11 calibration must remain in minecraft:overworld",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if position_min is not None or position_max is not None:
+        for index, axis in enumerate(("x", "y", "z")):
+            value = after.position_world[index]
+            if position_min is not None and value < position_min[index]:
+                return PortalActivationInspection(
+                    TRUTH_POSITION_INVALID,
+                    f"after position {axis} is outside E11 calibration bounds",
+                    **evidence,  # type: ignore[arg-type]
+                )
+            if position_max is not None and value > position_max[index]:
+                return PortalActivationInspection(
+                    TRUTH_POSITION_INVALID,
+                    f"after position {axis} is outside E11 calibration bounds",
+                    **evidence,  # type: ignore[arg-type]
+                )
+    if execution.action_type != "use_item":
+        return PortalActivationInspection(
+            TRUTH_WRONG_ACTION_TYPE,
+            "E11 stimulus must be use_item",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.target != stimulus_target:
+        return PortalActivationInspection(
+            TRUTH_WRONG_TARGET,
+            "E11 stimulus target differs from frozen calibration",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.duration_ticks != duration_ticks:
+        return PortalActivationInspection(
+            TRUTH_CALIBRATION_MISMATCH,
+            "E11 stimulus duration differs from frozen calibration",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.tested_action_count == 0:
+        return PortalActivationInspection(
+            TRUTH_TEST_ACTION_NOT_EXECUTED,
+            "E11 stimulus was not executed",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.tested_action_count != 1:
+        return PortalActivationInspection(
+            TRUTH_MULTIPLE_TEST_ACTIONS,
+            "exactly one E11 stimulus is required",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if not execution.translated_action_accepted:
+        return PortalActivationInspection(
+            TRUTH_STIMULUS_REJECTED,
+            "E11 stimulus translation was rejected",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.observation_wait_count > observation_window_ticks:
+        return PortalActivationInspection(
+            TRUTH_CALIBRATION_MISMATCH,
+            "E11 observation wait exceeded the frozen window",
+            **evidence,  # type: ignore[arg-type]
+        )
+
+    after_controls_ok = True
+    for cell in controls:
+        before_block = before.block_at(cell)
+        after_block = after.block_at(cell)
+        if before_block is None or after_block is None or before_block != after_block:
+            after_controls_ok = False
+            break
+        if after_block != "air":
+            after_controls_ok = False
+            break
+    evidence["control_cells_unchanged"] = after_controls_ok
+    if not after_controls_ok:
+        return PortalActivationInspection(
+            TRUTH_CONTROL_CELL_CHANGED,
+            "a control probe cell changed during the E11 observation window",
+            **evidence,  # type: ignore[arg-type]
+        )
+
+    unexpected = False
+    for cell in interior:
+        block = after.block_at(cell)
+        if block is None:
+            return PortalActivationInspection(
+                TRUTH_BLOCK_MISSING,
+                "E11 interior truth is missing after ignition",
+                **evidence,  # type: ignore[arg-type]
+            )
+        if block not in {"air", "fire", "nether_portal", "portal"}:
+            unexpected = True
+    if unexpected:
+        return PortalActivationInspection(
+            UNEXPECTED_BLOCK_TRANSITION,
+            "E11 interior changed to a block other than fire or nether_portal",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if complete_portal:
+        if observed_at is None or observed_at < execution.step_id:
+            return PortalActivationInspection(
+                TRUTH_IDENTITY_MISMATCH,
+                "portal activation is not bound to the E11 stimulus step",
+                **evidence,  # type: ignore[arg-type]
+            )
+        return PortalActivationInspection(PORTAL_ACTIVATION_OK, None, **evidence)  # type: ignore[arg-type]
+    if 0 < after_portals < len(interior):
+        return PortalActivationInspection(
+            PORTAL_PATTERN_INCOMPLETE,
+            "E11 observed portal blocks but not the complete 2x3 interior",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if fire_after:
+        return PortalActivationInspection(
+            PORTAL_ACTIVATION_NOT_OBSERVED,
+            "E11 observed fire but no complete nether_portal interior",
+            **evidence,  # type: ignore[arg-type]
+        )
+    return PortalActivationInspection(
+        IGNITION_EFFECT_NOT_OBSERVED,
+        "E11 flint_and_steel produced no fire or portal in the observation window",
+        **evidence,  # type: ignore[arg-type]
     )

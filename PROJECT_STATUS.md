@@ -32,9 +32,9 @@ P1 real MineRL environment validation remains the only active phase.
 
 E10 是 calibration，不是正式 benchmark task。Evaluator 必须同时观察 water-pour cell 出现 water/source，以及相邻 lava source 变为 obsidian。
 
-## P1 E0–E10 active status
+## P1 E0–E11 active status
 
-All E0–E9 contracts, offline runtimes, and MineRL adapters are `unit_verified`; each has at least one reviewed real success, but none is `integration_verified` and `process_release_proven=false` remains. E10 contract/offline runtime/MineRL bridge is `unit_verified`; E10 geometry real verified: YES; E10 real conversion reviewed success: YES; `integration_verified`: NO.
+All E0–E9 contracts, offline runtimes, and MineRL adapters are `unit_verified`; each has at least one reviewed real success, but none is `integration_verified` and `process_release_proven=false` remains. E10 contract/offline runtime/MineRL bridge is `unit_verified`; E10 geometry real verified: YES; E10 real conversion reviewed success: YES; `integration_verified`: NO. E11 contract/offline runtime/MineRL bridge is `unit_verified`; E11 real calibration: NOT RUN; `integration_verified`: NO.
 
 - E0 lifecycle: `runs/p1_e0_reset_close/e0-live-20260813-130313`; E1 RGB: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`.
 - E2 inventory: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`; E3 selected item: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`; E4 camera: `runs/p1_e4_camera_control/e4-live-20260814-001`.
@@ -45,13 +45,14 @@ All E0–E9 contracts, offline runtimes, and MineRL adapters are `unit_verified`
 - E9 fluid truth: historical WATER attempt `p1-e9-water-live-001` failed before validation with the same native fingerprint; `p1-e9-water-live-002` and `p1-e9-lava-live-001` produced `fluid_truth_ok`, preserving source/flowing distinction with `truth_missing_count=0`.
 - Detailed calibration fields remain in the referenced run evidence and [P1 Environment Validation](docs/architecture/P1_ENVIRONMENT_VALIDATION.md); startup failure diagnosis is preserved in [P1 startup reliability root cause](docs/architecture/P1_STARTUP_RELIABILITY_ROOT_CAUSE.md).
 - E10: contract/offline runtime/MineRL bridge implemented / `unit_verified`；controlled Mission geometry deployment: VERIFIED；real conversion reviewed success: YES (`p1-e10-live-001`, `obsidian_conversion_ok`)；before water=`air/none`, target=`lava/source`；stimulus 1 × `use_item(water_bucket)`；after water=`water/source`, target=`obsidian`；`truth_missing_count=0`；`integration_verified`: NO.
-- E11/E12: NOT STARTED; P1 Hard Gate: NOT PASSED; P2: NOT STARTED.
+- E11: contract/offline runtime/MineRL bridge implemented / `unit_verified`；prebuilt obsidian frame is a **calibration fixture**, not Agent construction；real calibration: NOT RUN；`integration_verified`: NO；runtime blocker: `NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION`（deployed DrawingDecorator is still lava-only）。
+- E12: NOT STARTED; P1 Hard Gate: NOT PASSED; P2: NOT STARTED.
 
-None of E0–E10 is `integration_verified`; `process_release_proven=false`. E0–E10 remain solver-independent. Typed evaluator truth never enters Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
+None of E0–E11 is `integration_verified`; `process_release_proven=false`. E0–E11 remain solver-independent. Typed evaluator truth never enters Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
 
 ## 本次 v2 refactor 已完成
 
-- `unit_verified`：v2 taxonomy、verification vocabulary、P1 manifest、E0–E10 contracts/offline runtimes/MineRL bridges、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
+- `unit_verified`：v2 taxonomy、verification vocabulary、P1 manifest、E0–E11 contracts/offline runtimes/MineRL bridges、solver-independent kernel interfaces、catalog quarantine 与文档一致性合同；
 - legacy infrastructure 保持原 import，可继续运行离线 regression；
 - active catalog 不包含旧 C1–C5 正式 benchmark entries；
 - `python -m obsidianlink --check` 与 `scripts/check_environment.py` 使用 v2/P1 语义，不把离线结果提升为真实 integration。标准本地运行时为 `environment.yml` 的 `mc-agent`。
@@ -64,8 +65,10 @@ None of E0–E10 is `integration_verified`; `process_release_proven=false`. E0�
 - E8: `unit_verified`; #1 `p1-e8-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1; #2 `p1-e8-live-002` `block_truth_ok`; reviewed real success: YES; `integration_verified`: NO；
 - E9: `unit_verified`; WATER #1 `p1-e9-water-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1 / E8 #1; WATER #2 `p1-e9-water-live-002` `fluid_truth_ok`; LAVA #1 `p1-e9-lava-live-001` `fluid_truth_ok`; real calibration coverage WATER + LAVA complete; reviewed real success: YES; `integration_verified`: NO；
 - E10: `unit_verified`；geometry VERIFIED；real conversion reviewed success YES (`p1-e10-live-001`, `obsidian_conversion_ok`)；`integration_verified`: NO；
-- E11/E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
-- portal activation、dimension transition 尚未实现；
+- E11: `unit_verified`；real calibration NOT RUN；`integration_verified`: NO；`NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION`；
+- E12: NOT STARTED；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
+- E11 offline contract 已实现，但真实 calibration 尚未运行，不能当作 portal activation capability；
+- E12 dimension transition 尚未开始；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
 
 ## P1 hard gate
@@ -76,4 +79,4 @@ P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation sui
 
 Before audio mitigation, P1 startup reliability calibration completed 20 fresh-process attempts: 18 success / 2 infrastructure failures (90% first-attempt success). Attempt-006 was a confirmed `liblwjgl_stb` / `Sound engine` SIGSEGV; attempt-014 was a separate unresolved mission/reset reply failure. After deploying the narrowly scoped `disable-client-audio.patch`, the independent post-mitigation validation completed 20 fresh-process attempts: 20 success / 0 failure (100% observed first-attempt success rate), with `max_reset_attempts=1` and no validation action. Failure fingerprints: none. Native crashes: 0; Malmo EOF: 0; timeouts: 0; cleanup failures: 0. No startup infrastructure failure was observed in these 20 post-mitigation attempts, but this finite sample does not prove absolute reliability. `process_release_proven=false` remains for all attempts.
 
-E10 contract/offline runtime/MineRL bridge is `unit_verified`. Controlled Mission geometry is VERIFIED. One real E10 conversion (`p1-e10-live-001`) produced `obsidian_conversion_ok` from lava source + one `use_item(water_bucket)` to water source + obsidian, `truth_missing_count=0`. Compact evidence: `runs/history/p1-e10-live-20260816-001/`. `integration_verified`: NO. E11: NOT STARTED. E12: NOT STARTED. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. The next exact task is to implement / prepare E11 portal activation calibration. Do not start E11 automatically. Dirty `vendor/minerl` portal-transition code remains undeployed. Attempt-014 remains historically unexplained.
+E10 contract/offline runtime/MineRL bridge is `unit_verified`. Controlled Mission geometry is VERIFIED. One real E10 conversion (`p1-e10-live-001`) produced `obsidian_conversion_ok` from lava source + one `use_item(water_bucket)` to water source + obsidian, `truth_missing_count=0`. Compact evidence: `runs/history/p1-e10-live-20260816-001/`. `integration_verified`: NO. E11 contract/offline runtime/MineRL bridge is `unit_verified`. E11 real calibration: NOT RUN. `integration_verified`: NO. Runtime blocker: `NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION` — see [P1 E11 runtime geometry](docs/architecture/P1_E11_RUNTIME_GEOMETRY.md). Do not Gradle or deploy a new JAR until authorized. Rebuild only from the deployed P1 baseline plus the existing patch chain and the E11 obsidian-fixture patch; never from dirty `vendor/minerl` HEAD. E12: NOT STARTED. P1 Hard Gate: NOT PASSED. P2: NOT STARTED. Attempt-014 remains historically unexplained.

@@ -1,7 +1,7 @@
 """Minimal P1 validation runner.
 
 Executes one validation case in a controlled lifecycle. This phase
-implements E0 lifecycle through E10 vanilla obsidian conversion. E4--E10
+implements E0 lifecycle through E11 vanilla portal activation. E4--E11
 consume only narrow evaluator truth from their integration adapters; the
 validation core remains MineRL-independent.
 The runner never uses benchmark evaluator success semantics.
@@ -91,6 +91,7 @@ from obsidianlink.env.validation.result import (
     E8_SUCCESS_OUTCOME,
     E9_SUCCESS_OUTCOME,
     E10_SUCCESS_OUTCOME,
+    E11_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
     SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
@@ -105,6 +106,8 @@ from obsidianlink.env.validation.truth import (
     CONVERSION_NOT_OBSERVED,
     E10_EXPECTED_AFTER_BLOCK,
     E10_STIMULUS_ITEM,
+    E11_PORTAL_BLOCK,
+    E11_STIMULUS_ITEM,
     FLUID_PRECONDITION_FAILED,
     INVALID_INITIAL_STATE,
     TRUTH_SNAPSHOT_MISSING,
@@ -115,6 +118,8 @@ from obsidianlink.env.validation.truth import (
     FluidTruthInspection,
     ObsidianConversionActionExecution,
     ObsidianConversionInspection,
+    PortalActivationActionExecution,
+    PortalActivationInspection,
     ServerTruthSnapshot,
     frozen_expected_flow_state,
     frozen_expected_fluid_type,
@@ -122,6 +127,9 @@ from obsidianlink.env.validation.truth import (
     inspect_block_truth,
     inspect_fluid_truth,
     inspect_obsidian_conversion,
+    inspect_portal_activation,
+    inspect_portal_activation_precondition,
+    is_portal_block,
     truth_error_outcome,
     validate_fluid_variant,
 )
@@ -129,7 +137,7 @@ from obsidianlink.env.validation.truth import (
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest common backend surface required by E0--E10.
+    """Smallest common backend surface required by E0--E11.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -247,6 +255,8 @@ def _result(
     expected_target_flow_state: str | None = None,
     obsidian_execution: ObsidianConversionActionExecution | None = None,
     obsidian_inspection: ObsidianConversionInspection | None = None,
+    portal_execution: PortalActivationActionExecution | None = None,
+    portal_inspection: PortalActivationInspection | None = None,
     observation_window_ticks: int | None = None,
     failure_stage: str | None = None,
     original_exception_type: str | None = None,
@@ -290,7 +300,8 @@ def _result(
         expected_selected_item=expected_selected_item,
         selected_item_matches_expected=selected_item_matches_expected,
         agent_id=(
-            obsidian_execution.agent_id if obsidian_execution is not None
+            portal_execution.agent_id if portal_execution is not None
+            else obsidian_execution.agent_id if obsidian_execution is not None
             else fluid_execution.agent_id if fluid_execution is not None
             else truth_execution.agent_id if truth_execution is not None
             else truth_agent_id if truth_agent_id is not None
@@ -304,7 +315,8 @@ def _result(
             else camera_agent_id
         ),
         tested_step_id=(
-            obsidian_execution.step_id if obsidian_execution is not None
+            portal_execution.step_id if portal_execution is not None
+            else obsidian_execution.step_id if obsidian_execution is not None
             else fluid_execution.step_id if fluid_execution is not None
             else truth_execution.step_id if truth_execution is not None
             else bucket_execution.step_id if bucket_execution is not None
@@ -313,7 +325,8 @@ def _result(
             else None if camera_execution is None else camera_execution.step_id
         ),
         action_type=(
-            obsidian_execution.action_type if obsidian_execution is not None
+            portal_execution.action_type if portal_execution is not None
+            else obsidian_execution.action_type if obsidian_execution is not None
             else "use_item" if observation_window_ticks is not None
             else fluid_execution.action_type if fluid_execution is not None
             else "use_item" if fluid_variant_name is not None
@@ -331,7 +344,8 @@ def _result(
         requested_yaw=(camera_requested_yaw if camera_execution is None else camera_execution.requested_yaw),
         requested_pitch=(camera_requested_pitch if camera_execution is None else camera_execution.requested_pitch),
         translated_action_accepted=(
-            obsidian_execution.translated_action_accepted if obsidian_execution is not None
+            portal_execution.translated_action_accepted if portal_execution is not None
+            else obsidian_execution.translated_action_accepted if obsidian_execution is not None
             else fluid_execution.translated_action_accepted if fluid_execution is not None
             else truth_execution.translated_action_accepted if truth_execution is not None
             else bucket_execution.translated_action_accepted if bucket_execution is not None
@@ -340,7 +354,8 @@ def _result(
             else None if camera_execution is None else camera_execution.translated_action_accepted
         ),
         tested_action_count=(
-            obsidian_execution.tested_action_count if obsidian_execution is not None
+            portal_execution.tested_action_count if portal_execution is not None
+            else obsidian_execution.tested_action_count if obsidian_execution is not None
             else 0 if observation_window_ticks is not None
             else fluid_execution.tested_action_count if fluid_execution is not None
             else 0 if fluid_variant_name is not None
@@ -368,7 +383,8 @@ def _result(
         requested_sprint=(requested_sprint if movement_execution is None else movement_execution.sprint),
         requested_jump=(requested_jump if movement_execution is None else movement_execution.jump),
         requested_duration_ticks=(
-            obsidian_execution.duration_ticks if obsidian_execution is not None
+            portal_execution.duration_ticks if portal_execution is not None
+            else obsidian_execution.duration_ticks if obsidian_execution is not None
             else fluid_execution.duration_ticks if fluid_execution is not None
             else truth_execution.duration_ticks if truth_execution is not None
             else bucket_execution.duration_ticks if bucket_execution is not None
@@ -470,6 +486,7 @@ def _result(
             or (
                 block_truth is None
                 and obsidian_inspection is None
+                and portal_inspection is None
                 and observation_window_ticks is None
             )
             else tuple(item.as_dict() for item in before_truth_snapshot.block_truth)
@@ -481,12 +498,14 @@ def _result(
             or (
                 block_truth is None
                 and obsidian_inspection is None
+                and portal_inspection is None
                 and observation_window_ticks is None
             )
             else tuple(item.as_dict() for item in after_truth_snapshot.block_truth)
         ),
         truth_missing_count=(
-            obsidian_inspection.truth_missing_count if obsidian_inspection is not None
+            portal_inspection.truth_missing_count if portal_inspection is not None
+            else obsidian_inspection.truth_missing_count if obsidian_inspection is not None
             else fluid_inspection.truth_missing_count if fluid_inspection is not None
             else block_truth.truth_missing_count if block_truth is not None
             else (
@@ -496,13 +515,15 @@ def _result(
             )
         ),
         stimulus_target=(
-            obsidian_execution.target if obsidian_execution is not None
+            portal_execution.target if portal_execution is not None
+            else obsidian_execution.target if obsidian_execution is not None
             else fluid_execution.target if fluid_execution is not None
             else truth_execution.target if truth_execution is not None
             else stimulus_target
         ),
         target_changed=(
-            None if obsidian_inspection is None and fluid_inspection is None and block_truth is None
+            None if portal_inspection is None and obsidian_inspection is None and fluid_inspection is None and block_truth is None
+            else portal_inspection.target_changed if portal_inspection is not None
             else obsidian_inspection.target_changed if obsidian_inspection is not None
             else fluid_inspection.target_changed if fluid_inspection is not None
             else block_truth.target_changed
@@ -511,7 +532,8 @@ def _result(
             None if block_truth is None else block_truth.target_expected_block_present
         ),
         control_cells_unchanged=(
-            None if obsidian_inspection is None and fluid_inspection is None and block_truth is None
+            None if portal_inspection is None and obsidian_inspection is None and fluid_inspection is None and block_truth is None
+            else portal_inspection.control_cells_unchanged if portal_inspection is not None
             else obsidian_inspection.control_cells_unchanged if obsidian_inspection is not None
             else fluid_inspection.control_cells_unchanged if fluid_inspection is not None
             else block_truth.control_cells_unchanged
@@ -523,7 +545,6 @@ def _result(
             or (
                 fluid_inspection is None
                 and obsidian_inspection is None
-                and observation_window_ticks is None
             )
             else tuple(item.as_dict() for item in before_truth_snapshot.fluid_truth)
         ),
@@ -534,7 +555,6 @@ def _result(
             or (
                 fluid_inspection is None
                 and obsidian_inspection is None
-                and observation_window_ticks is None
             )
             else tuple(item.as_dict() for item in after_truth_snapshot.fluid_truth)
         ),
@@ -585,9 +605,44 @@ def _result(
         conversion_observed_at_step=(
             None if obsidian_inspection is None else obsidian_inspection.conversion_observed_at_step
         ),
-        observation_window_ticks=observation_window_ticks if obsidian_inspection is not None or obsidian_execution is not None or observation_window_ticks is not None else None,
+        observation_window_ticks=observation_window_ticks if portal_inspection is not None or portal_execution is not None or obsidian_inspection is not None or obsidian_execution is not None or observation_window_ticks is not None else None,
         observation_wait_count=(
-            None if obsidian_execution is None else obsidian_execution.observation_wait_count
+            None if portal_execution is None and obsidian_execution is None
+            else portal_execution.observation_wait_count if portal_execution is not None
+            else obsidian_execution.observation_wait_count
+        ),
+        frame_valid_before=(
+            None if portal_inspection is None else portal_inspection.frame_valid_before
+        ),
+        frame_block_count=(
+            None if portal_inspection is None else portal_inspection.frame_block_count
+        ),
+        expected_frame_cells=(
+            None if portal_inspection is None else portal_inspection.expected_frame_cells
+        ),
+        observed_frame_cells=(
+            None if portal_inspection is None else portal_inspection.observed_frame_cells
+        ),
+        interior_cells=(
+            None if portal_inspection is None else portal_inspection.interior_cells
+        ),
+        before_portal_block_count=(
+            None if portal_inspection is None else portal_inspection.before_portal_block_count
+        ),
+        after_portal_block_count=(
+            None if portal_inspection is None else portal_inspection.after_portal_block_count
+        ),
+        ignition_effect_observed=(
+            None if portal_inspection is None else portal_inspection.ignition_effect_observed
+        ),
+        portal_activation_observed=(
+            None if portal_inspection is None else portal_inspection.portal_activation_observed
+        ),
+        portal_activation_observed_at_step=(
+            None if portal_inspection is None else portal_inspection.portal_activation_observed_at_step
+        ),
+        portal_activated=(
+            None if portal_inspection is None else portal_inspection.portal_activated
         ),
     )
 
@@ -626,6 +681,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E9_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E10:
         return E10_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E11:
+        return E11_SUCCESS_OUTCOME
     return None
 
 
@@ -963,6 +1020,82 @@ class EnvironmentValidationRunner:
                     error="invalid E10 calibration: " + _format_error(exc),
                 )
 
+        e11_probe_world: tuple[tuple[int, int, int], ...] | None = None
+        e11_probe_grid: tuple[tuple[int, int, int], ...] | None = None
+        e11_frame_world: tuple[tuple[int, int, int], ...] | None = None
+        e11_interior_world: tuple[tuple[int, int, int], ...] | None = None
+        e11_ignition_world: tuple[int, int, int] | None = None
+        e11_controls: tuple[tuple[int, int, int], ...] | None = None
+        e11_stimulus_target: str | None = None
+        e11_position_min: tuple[float, float, float] | None = None
+        e11_position_max: tuple[float, float, float] | None = None
+        e11_observation_window: int | None = None
+        if case.check_id is EnvironmentValidationId.E11:
+            try:
+                e11_stimulus_target = E11_STIMULUS_ITEM
+                e11_frame_world = tuple(
+                    validate_target_cell(cell, "frame_world_cell")
+                    for cell in (
+                        (-1, 3, 1),
+                        (-1, 4, 1),
+                        (-1, 5, 1),
+                        (-1, 6, 1),
+                        (-1, 7, 1),
+                        (0, 3, 1),
+                        (0, 7, 1),
+                        (1, 3, 1),
+                        (1, 7, 1),
+                        (2, 3, 1),
+                        (2, 4, 1),
+                        (2, 5, 1),
+                        (2, 6, 1),
+                        (2, 7, 1),
+                    )
+                )
+                e11_interior_world = tuple(
+                    validate_target_cell(cell, "interior_world_cell")
+                    for cell in (
+                        (0, 4, 1),
+                        (1, 4, 1),
+                        (0, 5, 1),
+                        (1, 5, 1),
+                        (0, 6, 1),
+                        (1, 6, 1),
+                    )
+                )
+                e11_ignition_world = validate_target_cell((0, 4, 1), "ignition_world_cell")
+                e11_controls = (
+                    validate_target_cell((0, 8, 1), "control_above_frame"),
+                    validate_target_cell((0, 4, 3), "control_behind_frame"),
+                )
+                e11_probe_world = e11_frame_world + e11_interior_world + e11_controls
+                e11_probe_grid = tuple(
+                    spawn_relative_grid_cell(cell, (0, 4, 0)) for cell in e11_probe_world
+                )
+                e11_position_min = (-2.0, 2.0, -2.0)
+                e11_position_max = (3.0, 8.0, 4.0)
+                e11_observation_window = 3
+                if type(requested_duration_ticks) is not int or requested_duration_ticks < 1:
+                    raise ValueError("requested_duration_ticks must be a positive int")
+                if len(e11_frame_world) != 14 or len(e11_interior_world) != 6:
+                    raise ValueError("E11 frozen frame/interior sizes are invalid")
+                if e11_ignition_world not in e11_interior_world:
+                    raise ValueError("E11 ignition cell must be an interior cell")
+                if e11_probe_world is None or len(e11_probe_world) != 22:
+                    raise ValueError("E11 probe set must be frame + interior + controls")
+            except (TypeError, ValueError) as exc:
+                return _result(
+                    case=case,
+                    episode_id=episode_id,
+                    success=False,
+                    outcome="runtime_error",
+                    created=False,
+                    reset_completed=False,
+                    initial_state_present=False,
+                    closed=False,
+                    error="invalid E11 calibration: " + _format_error(exc),
+                )
+
         created = False
         reset_completed = False
         initial_state_present = False
@@ -1010,6 +1143,8 @@ class EnvironmentValidationRunner:
         fluid_inspection: FluidTruthInspection | None = None
         obsidian_execution: ObsidianConversionActionExecution | None = None
         obsidian_inspection: ObsidianConversionInspection | None = None
+        portal_execution: PortalActivationActionExecution | None = None
+        portal_inspection: PortalActivationInspection | None = None
         failure_stage: str | None = None
         original_exception_type: str | None = None
         reset_attempt_count: int | None = None
@@ -1802,6 +1937,186 @@ class EnvironmentValidationRunner:
                                                             )
                                                             outcome = obsidian_inspection.outcome
                                                             error = obsidian_inspection.error
+                        elif case.check_id is EnvironmentValidationId.E11:
+                            if isinstance(reset_result, Mapping) and reset_result:
+                                first_agent = next(iter(reset_result))
+                                if isinstance(first_agent, str) and first_agent.strip():
+                                    truth_agent_id = first_agent.strip()
+                            snapshot = getattr(backend, "server_truth_snapshot", None)
+                            execute = getattr(backend, "execute_activation_stimulus", None)
+                            if not callable(snapshot) or not callable(execute):
+                                outcome = "runtime_error"
+                                error = "E11 backend snapshot/stimulus surface is not callable"
+                            elif (
+                                e11_probe_world is None
+                                or e11_probe_grid is None
+                                or e11_frame_world is None
+                                or e11_interior_world is None
+                                or e11_ignition_world is None
+                                or e11_controls is None
+                                or e11_stimulus_target is None
+                                or e11_position_min is None
+                                or e11_position_max is None
+                                or e11_observation_window is None
+                            ):
+                                outcome = "runtime_error"
+                                error = "E11 calibration cells were not initialized"
+                            else:
+                                try:
+                                    candidate_before = snapshot()
+                                except (TypeError, ValueError) as exc:
+                                    outcome = truth_error_outcome(exc)
+                                    error = _format_error(exc)
+                                else:
+                                    if candidate_before is None:
+                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                        error = "server truth snapshot is missing before stimulus"
+                                    elif not isinstance(candidate_before, ServerTruthSnapshot):
+                                        outcome = truth_error_outcome(
+                                            TypeError("before snapshot has the wrong type")
+                                        )
+                                        error = "before snapshot has the wrong type"
+                                    else:
+                                        before_truth_snapshot = candidate_before
+                                if before_truth_snapshot is not None:
+                                    portal_inspection = inspect_portal_activation_precondition(
+                                        before_truth_snapshot,
+                                        probe_world_cells=e11_probe_world,
+                                        probe_grid_cells=e11_probe_grid,
+                                        frame_world_cells=e11_frame_world,
+                                        interior_world_cells=e11_interior_world,
+                                        ignition_world_cell=e11_ignition_world,
+                                        control_world_cells=e11_controls,
+                                        position_min=e11_position_min,
+                                        position_max=e11_position_max,
+                                    )
+                                    if portal_inspection is not None:
+                                        outcome = portal_inspection.outcome
+                                        error = portal_inspection.error
+                                    else:
+                                        parsed = parse_macro_action(
+                                            json.dumps(
+                                                {
+                                                    "action_type": "use_item",
+                                                    "target": e11_stimulus_target,
+                                                    "duration_ticks": requested_duration_ticks,
+                                                    "parameters": {},
+                                                },
+                                                allow_nan=False,
+                                                sort_keys=True,
+                                            )
+                                        )
+                                        if not parsed.accepted:
+                                            outcome = "truth_stimulus_rejected"
+                                            error = "E11 stimulus protocol rejected: " + (
+                                                parsed.error or "unknown error"
+                                            )
+                                        else:
+                                            try:
+                                                candidate_execution = execute(parsed.action)
+                                            except (TypeError, ValueError) as exc:
+                                                outcome = truth_error_outcome(exc)
+                                                error = _format_error(exc)
+                                            else:
+                                                if not isinstance(
+                                                    candidate_execution,
+                                                    PortalActivationActionExecution,
+                                                ):
+                                                    raise TypeError(
+                                                        "execute_activation_stimulus must return PortalActivationActionExecution"
+                                                    )
+                                                portal_execution = candidate_execution
+                                                try:
+                                                    candidate_after = snapshot()
+                                                except (TypeError, ValueError) as exc:
+                                                    outcome = truth_error_outcome(exc)
+                                                    error = _format_error(exc)
+                                                else:
+                                                    if candidate_after is None:
+                                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                                        error = "server truth snapshot is missing after stimulus"
+                                                    elif not isinstance(candidate_after, ServerTruthSnapshot):
+                                                        outcome = truth_error_outcome(
+                                                            TypeError("after snapshot has the wrong type")
+                                                        )
+                                                        error = "after snapshot has the wrong type"
+                                                    else:
+                                                        after_truth_snapshot = candidate_after
+                                                        wait_count = 0
+                                                        observed_at = None
+                                                        wait_failed = False
+                                                        interior_complete = all(
+                                                            after_truth_snapshot.block_at(cell) is not None
+                                                            and is_portal_block(
+                                                                after_truth_snapshot.block_at(cell)
+                                                            )
+                                                            for cell in e11_interior_world
+                                                        )
+                                                        if interior_complete:
+                                                            observed_at = after_truth_snapshot.step_id
+                                                        else:
+                                                            observe_wait = getattr(backend, "observe_wait", None)
+                                                            if not callable(observe_wait):
+                                                                outcome = "runtime_error"
+                                                                error = "E11 backend observation wait surface is not callable"
+                                                                wait_failed = True
+                                                            else:
+                                                                for _ in range(e11_observation_window):
+                                                                    observe_wait()
+                                                                    wait_count += 1
+                                                                    try:
+                                                                        waited = snapshot()
+                                                                    except (TypeError, ValueError) as exc:
+                                                                        outcome = truth_error_outcome(exc)
+                                                                        error = _format_error(exc)
+                                                                        wait_failed = True
+                                                                        break
+                                                                    if waited is None:
+                                                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                                                        error = "server truth snapshot is missing during E11 observation window"
+                                                                        wait_failed = True
+                                                                        break
+                                                                    if not isinstance(waited, ServerTruthSnapshot):
+                                                                        outcome = truth_error_outcome(
+                                                                            TypeError("after snapshot has the wrong type")
+                                                                        )
+                                                                        error = "after snapshot has the wrong type"
+                                                                        wait_failed = True
+                                                                        break
+                                                                    after_truth_snapshot = waited
+                                                                    if all(
+                                                                        after_truth_snapshot.block_at(cell) is not None
+                                                                        and is_portal_block(
+                                                                            after_truth_snapshot.block_at(cell)
+                                                                        )
+                                                                        for cell in e11_interior_world
+                                                                    ):
+                                                                        observed_at = after_truth_snapshot.step_id
+                                                                        break
+                                                        if not wait_failed and after_truth_snapshot is not None:
+                                                            portal_execution = replace(
+                                                                portal_execution,
+                                                                observation_wait_count=wait_count,
+                                                                portal_activation_observed_at_step=observed_at,
+                                                            )
+                                                            portal_inspection = inspect_portal_activation(
+                                                                before_truth_snapshot,
+                                                                after_truth_snapshot,
+                                                                portal_execution,
+                                                                probe_world_cells=e11_probe_world,
+                                                                probe_grid_cells=e11_probe_grid,
+                                                                frame_world_cells=e11_frame_world,
+                                                                interior_world_cells=e11_interior_world,
+                                                                ignition_world_cell=e11_ignition_world,
+                                                                control_world_cells=e11_controls,
+                                                                duration_ticks=requested_duration_ticks,
+                                                                stimulus_target=e11_stimulus_target,
+                                                                observation_window_ticks=e11_observation_window,
+                                                                position_min=e11_position_min,
+                                                                position_max=e11_position_max,
+                                                            )
+                                                            outcome = portal_inspection.outcome
+                                                            error = portal_inspection.error
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -1820,6 +2135,7 @@ class EnvironmentValidationRunner:
                     EnvironmentValidationId.E8,
                     EnvironmentValidationId.E9,
                     EnvironmentValidationId.E10,
+                    EnvironmentValidationId.E11,
                 ):
                     failure_stage = "reset"
                     original_exception_type = type(_root_exception(exc)).__name__
@@ -1891,6 +2207,13 @@ class EnvironmentValidationRunner:
                 exception_traceback = "".join(
                     traceback.format_exception(type(exc), exc, exc.__traceback__)
                 )
+            elif case.check_id is EnvironmentValidationId.E11 and before_truth_snapshot is not None:
+                outcome = "action_failed"
+                failure_stage = "action"
+                original_exception_type = type(_root_exception(exc)).__name__
+                exception_traceback = "".join(
+                    traceback.format_exception(type(exc), exc, exc.__traceback__)
+                )
             else:
                 outcome = "runtime_error"
         finally:
@@ -1910,6 +2233,7 @@ class EnvironmentValidationRunner:
                 E8_SUCCESS_OUTCOME,
                 E9_SUCCESS_OUTCOME,
                 E10_SUCCESS_OUTCOME,
+                E11_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -1993,7 +2317,7 @@ class EnvironmentValidationRunner:
             requested_strafe=requested_strafe if case.check_id is EnvironmentValidationId.E5 else None,
             requested_sprint=requested_sprint if case.check_id is EnvironmentValidationId.E5 else None,
             requested_jump=requested_jump if case.check_id is EnvironmentValidationId.E5 else None,
-            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
             minimum_horizontal_distance=minimum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
             minimum_forward_projection=minimum_forward_projection if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_lateral_drift=maximum_lateral_drift if case.check_id is EnvironmentValidationId.E5 else None,
@@ -2028,25 +2352,28 @@ class EnvironmentValidationRunner:
             expected_fluid=e7_expected_fluid if case.check_id is EnvironmentValidationId.E7 else None,
             before_selected_item=before_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
             after_selected_item=after_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
-            before_truth_snapshot=before_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
-            after_truth_snapshot=after_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            before_truth_snapshot=before_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            after_truth_snapshot=after_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
             truth_execution=truth_execution if case.check_id is EnvironmentValidationId.E8 else None,
             block_truth=block_truth if case.check_id is EnvironmentValidationId.E8 else None,
-            truth_agent_id=truth_agent_id if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            truth_agent_id=truth_agent_id if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
             stimulus_target=(
-                e10_stimulus_target if case.check_id is EnvironmentValidationId.E10
+                e11_stimulus_target if case.check_id is EnvironmentValidationId.E11
+                else e10_stimulus_target if case.check_id is EnvironmentValidationId.E10
                 else e9_stimulus_target if case.check_id is EnvironmentValidationId.E9
                 else e8_stimulus_target if case.check_id is EnvironmentValidationId.E8
                 else None
             ),
             probe_world_cells=(
-                e10_probe_world if case.check_id is EnvironmentValidationId.E10
+                e11_probe_world if case.check_id is EnvironmentValidationId.E11
+                else e10_probe_world if case.check_id is EnvironmentValidationId.E10
                 else e9_probe_world if case.check_id is EnvironmentValidationId.E9
                 else e8_probe_world if case.check_id is EnvironmentValidationId.E8
                 else None
             ),
             probe_grid_cells=(
-                e10_probe_grid if case.check_id is EnvironmentValidationId.E10
+                e11_probe_grid if case.check_id is EnvironmentValidationId.E11
+                else e10_probe_grid if case.check_id is EnvironmentValidationId.E10
                 else e9_probe_grid if case.check_id is EnvironmentValidationId.E9
                 else e8_probe_grid if case.check_id is EnvironmentValidationId.E8
                 else None
@@ -2058,10 +2385,16 @@ class EnvironmentValidationRunner:
             expected_target_flow_state=e9_expected_flow if case.check_id is EnvironmentValidationId.E9 else None,
             obsidian_execution=obsidian_execution if case.check_id is EnvironmentValidationId.E10 else None,
             obsidian_inspection=obsidian_inspection if case.check_id is EnvironmentValidationId.E10 else None,
-            observation_window_ticks=e10_observation_window if case.check_id is EnvironmentValidationId.E10 else None,
-            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
-            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
-            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
-            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
-            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            portal_execution=portal_execution if case.check_id is EnvironmentValidationId.E11 else None,
+            portal_inspection=portal_inspection if case.check_id is EnvironmentValidationId.E11 else None,
+            observation_window_ticks=(
+                e11_observation_window if case.check_id is EnvironmentValidationId.E11
+                else e10_observation_window if case.check_id is EnvironmentValidationId.E10
+                else None
+            ),
+            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
         )

@@ -333,13 +333,14 @@ class MineRLEnvironmentBackend:
         # the casting workflows' slots from their frozen initial inventory.
         if is_legacy_route_a0:
             params = task.scenario_parameters
-            # E6 dirt-only, E7/E9/E10 bucket-only, and E8 dirt-stimulus
-            # calibrations must map the actual inventory onto hotbar.1.
+            # E6 dirt-only, E7/E9/E10 bucket-only, E8 dirt-stimulus,
+            # and E11 flint-and-steel calibrations must map the actual
+            # inventory onto hotbar.1.
             # The historical A0 three-item slot contract stays unchanged
             # for every other route_a_a0 caller.
             if (
                 isinstance(params, Mapping)
-                and params.get("p1_validation_id") in {"E6", "E7", "E8", "E9", "E10"}
+                and params.get("p1_validation_id") in {"E6", "E7", "E8", "E9", "E10", "E11"}
             ):
                 self._hotbar_mapping = build_hotbar_mapping(
                     task.initial_inventories["agent_1"]

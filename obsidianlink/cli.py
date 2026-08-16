@@ -68,9 +68,10 @@ def _offline_contract_check() -> dict[str, object]:
             "Offline v2 schema, registry, kernel boundary, and P1 E0-E12 manifest "
             "validation only. FakeBackend and deterministic legacy drivers were not "
             "executed. No MineRL/Minecraft, Gradle, or paid model API call was made. "
-            "E10 offline contract is unit_verified; real E10 calibration, E11/E12, "
-            "and end-to-end portal construction remain unverified in the real "
-            "environment."
+            "E10 offline contract is unit_verified; E10 real conversion reviewed "
+            "success is YES and is not integration_verified. E11 offline contract "
+            "is unit_verified; E11 real calibration, E12, and end-to-end portal "
+            "construction remain unverified in the real environment."
         ),
     }
 
