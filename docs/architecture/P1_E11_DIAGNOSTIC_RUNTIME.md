@@ -109,3 +109,10 @@ JVM write path (all six interior cells):
 
 Evaluator after-truth remained fire + 0/6 portal. This is still not
 `integration_verified`.
+
+The later authorized marshal live `p1-e11-live-002` is a different
+failure: EnvServer waited on `server.execute` while the integrated
+server was paused, so flint_and_steel never ran. See
+[P1 E11 server-thread marshal](P1_E11_SERVER_THREAD_MARSHAL.md).
+Do not treat that timeout as a second diagnostic clone of this write
+path.

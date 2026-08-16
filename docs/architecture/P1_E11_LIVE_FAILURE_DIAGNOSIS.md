@@ -112,7 +112,8 @@ Live #1 evidence is unchanged. Diagnostic run is not
 
 ## Next exact task
 
-Marshal `placePortalBlocks` / fire `onBlockAdded` onto the
-`ServerWorld` server thread. Do not change geometry, evaluator success,
-or the observation window. Do not retry for confirmation. Do not start
-E12.
+Authorized marshal live `p1-e11-live-002` timed out waiting on
+`server.execute` while the integrated server was paused; flint_and_steel
+never ran. Do not auto-retry that marshal. Do not change geometry,
+evaluator success, or the observation window. Do not start E12. See
+[P1 E11 server-thread marshal](P1_E11_SERVER_THREAD_MARSHAL.md).

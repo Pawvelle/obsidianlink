@@ -1,0 +1,36 @@
+{
+  "isolated_tree": "/tmp/obsidianlink-p1-e11-server-thread-runtime",
+  "java_path": "/opt/anaconda3/envs/mc-agent/bin/java",
+  "java_version": "Zulu 8.90.0.19 / 1.8.0_472",
+  "launcher_sha256": "7e15699c0d0aea517f87680eb5d760d02519d9744285fa0d348f799e2ed77183",
+  "launcher_unchanged": true,
+  "marshal_timeout_backup": "/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/MCP-Reborn/build/libs/backups/mcprec-6.13.jar.e11-marshal-timeout-20260817-c69fd49e",
+  "mcp_reborn_commit": "1e71be5bd4c49bc4d6ab0ee559c31b298b7697a3",
+  "minerl_commit": "cdeae668c2f334e3c9117adf651b5a94436b45f8",
+  "not_vendor_head": true,
+  "patch_chain": [
+    {
+      "name": "obsidianlink-envserver.patch",
+      "sha256": "0944d0f09e1d915e45781ea565ff2696b19eed3a395706a1267ce5b330e20609"
+    },
+    {
+      "name": "disable-client-audio.patch",
+      "sha256": "1911d1ca6ba18a445a6c8a5038d3b171bf3aaab8eace21af993fb547684dd676"
+    },
+    {
+      "name": "e10-drawing-decorator.patch",
+      "sha256": "a09607bbd3274429e9791f24707d2fb978f62d79fa59da86beb9fd9d50cba26f"
+    },
+    {
+      "name": "e11-drawing-decorator-obsidian.patch",
+      "sha256": "2ba63ea252e80993010c1cd8a11031ae716719697e0bb1562009e4dcf639a0c9"
+    },
+    {
+      "name": "e11-server-thread-marshal.patch",
+      "sha256": "45bf4af8c323806f0905e5851d236ba77f28c925f5ee39f87b50a15b7f2f9be8"
+    }
+  ],
+  "production_jar_restored_after_failure": "836cb5ac6f89edca3cec255dd895e791212b04794d3349eb13a1b2b313416b6f",
+  "run_jar_sha256": "c69fd49e030d501b4c0b1cca9f58b47a2722baf0af9695d679d84188a8499196",
+  "run_kind": "e11_server_thread_marshal_live"
+}
