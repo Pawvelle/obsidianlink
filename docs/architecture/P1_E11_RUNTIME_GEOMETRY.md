@@ -79,5 +79,8 @@ buffer; unused by geometry smoke).
 A later authorized activation run `p1-e11-live-001` produced
 `portal_activation_not_observed` on this same deployed JAR: fire at
 the ignition cell, 0/6 portal. Compact evidence:
-`runs/history/p1-e11-live-20260816-001/`. This document remains
-geometry provenance; it does not set `integration_verified`.
+`runs/history/p1-e11-live-20260816-001/`. Offline PortalSize replica of
+that snapshot treats Axis.X as valid; see
+[P1 E11 live failure diagnosis](P1_E11_LIVE_FAILURE_DIAGNOSIS.md).
+This document remains geometry provenance; it does not set
+`integration_verified`.

@@ -1,0 +1,48 @@
+--- a/src/main/java/net/minecraft/block/AbstractFireBlock.java
++++ b/src/main/java/net/minecraft/block/AbstractFireBlock.java
+@@ -17,8 +17,11 @@
+ import net.minecraft.world.World;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ public abstract class AbstractFireBlock extends Block {
++   private static final Logger LOGGER = LogManager.getLogger();
+    private final float fireDamage;
+    protected static final VoxelShape shapeDown = Block.makeCuboidShape(0.0D, 0.0D, 0.0D, 16.0D, 1.0D, 16.0D);
+ 
+@@ -122,8 +125,11 @@
+ 
+    public void onBlockAdded(BlockState state, World worldIn, BlockPos pos, BlockState oldState, boolean isMoving) {
+       if (!oldState.isIn(state.getBlock())) {
+-         if (canLightPortal(worldIn)) {
++         boolean canLight = canLightPortal(worldIn);
++         LOGGER.info("[E11-DIAG] AbstractFireBlock.onBlockAdded pos={} dim={} canLightPortal={} inFireTag={}", pos, worldIn.getDimensionKey().getLocation(), canLight, state.isIn(net.minecraft.tags.BlockTags.FIRE));
++         if (canLight) {
+             Optional<PortalSize> optional = PortalSize.func_242964_a(worldIn, pos, Direction.Axis.X);
++            LOGGER.info("[E11-DIAG] PortalSize.func_242964_a Axis.X-first present={}", optional.isPresent());
+             if (optional.isPresent()) {
+                optional.get().placePortalBlocks();
+                return;
+--- a/src/main/java/net/minecraft/block/PortalSize.java
++++ b/src/main/java/net/minecraft/block/PortalSize.java
+@@ -13,8 +13,11 @@
+ import net.minecraft.util.math.vector.Vector3d;
+ import net.minecraft.world.IWorld;
+ import net.minecraft.world.server.ServerWorld;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ public class PortalSize {
++   private static final Logger LOGGER = LogManager.getLogger();
+    private static final AbstractBlock.IPositionPredicate POSITION_PREDICATE = (p_242966_0_, p_242966_1_, p_242966_2_) -> {
+       return p_242966_0_.isIn(Blocks.OBSIDIAN);
+    };
+@@ -58,6 +61,7 @@
+             this.height = this.func_242975_e();
+          }
+       }
++      LOGGER.info("[E11-DIAG] PortalSize axis={} origin={} bottomLeft={} width={} height={} portalCount={} valid={}", this.axis, pos, this.bottomLeft, this.width, this.height, this.portalBlockCount, this.isValid());
+ 
+    }
