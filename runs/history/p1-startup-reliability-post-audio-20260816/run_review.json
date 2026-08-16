@@ -1,0 +1,85 @@
+{
+  "comparison": {
+    "after_audio_mitigation": {
+      "failed_attempts": 0,
+      "first_attempt_success_rate": 1.0,
+      "successful_attempts": 20,
+      "total_attempts": 20
+    },
+    "before_audio_mitigation": {
+      "failed_attempts": 2,
+      "failure_fingerprints": {
+        "lwjgl_stb_sound_engine_sigsegv": 1,
+        "other_reset_error": 1
+      },
+      "first_attempt_success_rate": 0.9,
+      "successful_attempts": 18,
+      "total_attempts": 20
+    }
+  },
+  "evidence_audit": {
+    "all_attempts_close_returned": true,
+    "all_attempts_environment_launch_count_one": true,
+    "all_attempts_initial_state_present": true,
+    "all_attempts_reset_attempt_count_one": true,
+    "all_attempts_reset_completed": true,
+    "all_subprocess_exit_codes_zero": true,
+    "attempt_count": 20,
+    "attempts_missing_parsed_launch_pid_or_environment_port": [
+      "attempt-007",
+      "attempt-011",
+      "attempt-019"
+    ],
+    "attempts_with_cleanup_anomaly": [],
+    "attempts_with_residual_descendants": [],
+    "attempts_with_validation_action": [],
+    "new_hs_err_logs": [],
+    "post_run_tracked_pids_still_running": [],
+    "process_release_proven_attempts": 0,
+    "required_attempt_fields_missing": {},
+    "unique_fresh_subprocess_pids": 20
+  },
+  "failure_analysis": {
+    "a_bytes_like_none_type_count": 0,
+    "failure_counts_by_class": {},
+    "failure_counts_by_fingerprint": {},
+    "failure_counts_by_stage": {},
+    "liblwjgl_stb_count": 0,
+    "malmo_reply_missing_count": 0,
+    "sigsegv_count": 0,
+    "sound_engine_count": 0,
+    "stbvorbis_count": 0
+  },
+  "interpretation": {
+    "absolute_reliability_proven": false,
+    "statement": "No startup infrastructure failure was observed in 20 post-mitigation fresh-process attempts."
+  },
+  "recommended_next_step": "Request explicit authorization for one independent E10 vanilla water-lava to obsidian real MineRL calibration; do not start E10 automatically.",
+  "reviewed_at": "2026-08-16T09:40:38Z",
+  "reviewer_notes": [
+    "The three missing parsed launch-process records are a process-command sampling limitation. Their tracked descendant evidence includes a Java PID, and each lifecycle independently completed reset, initial observation, close, and subprocess exit 0.",
+    "No failure attempt evidence is tracked because no attempt failed. The full untracked raw run remains under runs/p1_startup_reliability.",
+    "No tracked residual descendant was observed, but PID-tree inspection cannot prove that no process escaped or was reparented; process_release_proven therefore remains false."
+  ],
+  "runtime_identity": {
+    "jar_path": "/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/MCP-Reborn/build/libs/mcprec-6.13.jar",
+    "jar_sha256": "ac6a46639497117e0813ba2262cc232eca1f2921070dcd8851c6a21501c39d62",
+    "launcher_path": "/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/MCP-Reborn/launchClient.sh",
+    "launcher_sha256": "7e15699c0d0aea517f87680eb5d760d02519d9744285fa0d348f799e2ed77183"
+  },
+  "source_evidence": {
+    "attempts_jsonl_sha256": "923a953f393055b4a8f6cdfb2788a2273381cfadd5ba8dee62bf55263cd6d279",
+    "config_json_sha256": "b5881c78b3e3109c5c76a4a156c15410b1583fc01feb9d230ed19d45f0207a5f",
+    "raw_run_dir": "runs/p1_startup_reliability/startup-reliability-20260816-092716-e8561ac0",
+    "summary_json_sha256": "c6cf1e110171c1afb787dfe3549fbcc16543849d24e753a138507d636b481006"
+  },
+  "status": {
+    "e10_started": false,
+    "e11_started": false,
+    "e12_started": false,
+    "integration_verified": false,
+    "p1_hard_gate_passed": false,
+    "p2_started": false
+  },
+  "validation_command": "/opt/anaconda3/bin/conda run -n mc-agent python scripts/run_p1_startup_reliability.py --episodes 20 --timeout-seconds 600"
+}
