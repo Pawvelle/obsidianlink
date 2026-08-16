@@ -21,6 +21,8 @@ dist/
 !/runs/history/phase1-portal-env-smoke/**
 !/runs/history/p1-startup-reliability-post-audio-20260816/
 !/runs/history/p1-startup-reliability-post-audio-20260816/**
+!/runs/history/p1-e10-live-20260816-001/
+!/runs/history/p1-e10-live-20260816-001/**
 /results/
 /logs/
 

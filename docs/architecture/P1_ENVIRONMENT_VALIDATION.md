@@ -53,7 +53,9 @@ E10 controlled initial geometry：Mission XML `DrawingDecorator` **implemented /
 
 E10 vanilla causality：water placement + lava-source conversion **both required**。FakeBackend success 不能证明真实 Minecraft 能力。
 
-E10 通过不表示正式 portal task 成功。当前 verification：contract/offline runtime/MineRL bridge = `unit_verified`；E10 geometry real verified = **YES**；Real E10 conversion calibration = **NOT RUN**；`integration_verified` = **NO**。
+One reviewed real conversion: `p1-e10-live-001`, outcome `obsidian_conversion_ok`. Before: water `(0, 4, 1)` = air/none, target `(0, 4, 2)` = lava/source. Stimulus: exactly one accepted `use_item(water_bucket)`. After: water = water/source, target = obsidian, controls unchanged, `truth_missing_count=0`. Compact evidence: `runs/history/p1-e10-live-20260816-001/`. This is not portal activation and does not set `integration_verified`.
+
+E10 通过不表示正式 portal task 成功。当前 verification：contract/offline runtime/MineRL bridge = `unit_verified`；E10 geometry real verified = **YES**；E10 real conversion reviewed success = **YES**；`integration_verified` = **NO**。
 
 ## Startup reliability hardening
 
@@ -68,8 +70,8 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 ## Authorization and hard gate
 
-E0–E9 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E8/E9/E10 evaluator-only truth 与 Agent-visible observation 保持隔离。E10 离线实现为 `unit_verified`，geometry real verified 为 **YES**，真实 conversion calibration 为 **NOT RUN**。E11、E12 均为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
+E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E8/E9/E10 evaluator-only truth 与 Agent-visible observation 保持隔离。E10 geometry real verified 为 **YES**，E10 real conversion reviewed success 为 **YES**。E11、E12 均为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
-下一项经授权的 P1 validation target 是 **一次独立真实 E10 water-bucket → obsidian MineRL calibration**。这不授权或启动该运行；每次真实 MineRL/Minecraft 运行仍需用户单独明确授权。
+下一项经授权的 P1 validation target 是 **E11 portal activation calibration**。这不授权或启动该运行；每次真实 MineRL/Minecraft 运行仍需用户单独明确授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。

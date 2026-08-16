@@ -62,4 +62,9 @@ Evidence: `runs/p1_e10_obsidian_conversion/e10-geometry-20260816-002`.
 Outcome `e10_geometry_ready`. Target `(0, 4, 2)` = lava / lava / source.
 Water cell `(0, 4, 1)` = air / no fluid. `truth_missing_count=0`.
 `tested_action_count=0`. `integration_verified=false`. Conversion was
-not run.
+not run in this smoke.
+
+A later authorized conversion run `p1-e10-live-001` produced
+`obsidian_conversion_ok` on the same deployed JAR. Compact evidence:
+`runs/history/p1-e10-live-20260816-001/`. This document remains
+geometry-only provenance; it does not set `integration_verified`.

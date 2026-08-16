@@ -54,9 +54,9 @@ Benchmark kernel 不依赖某个 solver。模型或 baseline 的输出必须经�
 
 v2 scope、架构边界和 legacy quarantine 已冻结。旧 C1/C2、taxonomy C3/C4/C5、Route A0 及其 deterministic drivers 保留为 `unit_verified` legacy/calibration/regression 资产；它们不再是 active benchmark matrix，也不能支持真实 Minecraft 能力声明。
 
-唯一 active engineering task 是 `P1-REAL-MINERL-ENVIRONMENT-VALIDATION`。E0–E9 offline runtimes / adapters 为 `unit_verified`，且各有 reviewed real success；历史 E5/E8/E9 reset failures 保留为 `liblwjgl_stb` / Sound engine / `STBVorbis` infrastructure evidence，不能算 capability failure。Startup reliability audio mitigation 已部署，post-mitigation fresh-process validation 为 20/20 observed success（`max_reset_attempts=1`，native crash / Malmo EOF / timeout / cleanup failure 均为 0）；有限样本不证明绝对可靠。Attempt-014 历史根因仍未证明，post-mitigation 未复现。E0–E10 均不是 `integration_verified`，`process_release_proven=false`。E10 contract/offline runtime/MineRL bridge 为 `unit_verified`，controlled Mission geometry 已部署并经 geometry-only smoke 验证；真实 E10 conversion calibration 尚未运行；E11/E12 尚未开始，P1 Hard Gate 未通过，P2 不得开始。
+唯一 active engineering task 是 `P1-REAL-MINERL-ENVIRONMENT-VALIDATION`。E0–E9 offline runtimes / adapters 为 `unit_verified`，且各有 reviewed real success；历史 E5/E8/E9 reset failures 保留为 `liblwjgl_stb` / Sound engine / `STBVorbis` infrastructure evidence，不能算 capability failure。Startup reliability audio mitigation 已部署，post-mitigation fresh-process validation 为 20/20 observed success（`max_reset_attempts=1`，native crash / Malmo EOF / timeout / cleanup failure 均为 0）；有限样本不证明绝对可靠。Attempt-014 历史根因仍未证明，post-mitigation 未复现。E0–E10 均不是 `integration_verified`，`process_release_proven=false`。E10 contract/offline runtime/MineRL bridge 为 `unit_verified`，controlled Mission geometry 已验证，一次真实 conversion (`p1-e10-live-001`) 为 `obsidian_conversion_ok`；E11/E12 尚未开始，P1 Hard Gate 未通过，P2 不得开始。
 
-下一项 P1 validation target 是一次经明确授权的独立真实 E10 原版水熔岩 → 黑曜石 MineRL calibration；不能自动开始。P1 的 hard gate 仍要求完整 E0–E12 suite 稳定重复成功、`truth_missing=0`、无人工干预。
+下一项 P1 validation target 是 E11 portal activation calibration 的实现/准备；不能自动开始。P1 的 hard gate 仍要求完整 E0–E12 suite 稳定重复成功、`truth_missing=0`、无人工干预。
 
 详见 [PROJECT_STATUS.md](PROJECT_STATUS.md)、[BENCHMARK_SPEC.md](BENCHMARK_SPEC.md)、[ROADMAP.md](ROADMAP.md) 和 [P1 Environment Validation](docs/architecture/P1_ENVIRONMENT_VALIDATION.md)。
 

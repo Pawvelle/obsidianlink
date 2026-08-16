@@ -1,0 +1,11 @@
+{
+  "authorized_live_run": "e10_obsidian_conversion",
+  "catalog_live_run_allowed_remains_false": true,
+  "execution_mode": "authorized_live_e10",
+  "gradle_authorized": false,
+  "integration_verified": false,
+  "model_api_authorized": false,
+  "obsidian_preplaced": false,
+  "planned_tested_stimulus_count": 1,
+  "runtime_applies_drawing_decorator": true
+}
