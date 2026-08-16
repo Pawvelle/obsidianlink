@@ -104,6 +104,13 @@ Apple Silicon 上仍存在 MineRL 历史性的间歇 `liblwjgl_stb.dylib` Sound 
 SIGSEGV；失败发生在 Mission 世界创建之前，限定重试可以成功，且每次失败后均无
 残留 Minecraft 进程。该原生音频问题不属于本次 EnvServer 补丁范围。
 
+后续 P1 startup hardening 通过 property-gated client-audio mitigation 绕开该
+SoundEngine/STB 路径。2026-08-16 的独立 post-mitigation validation 在
+`max_reset_attempts=1` 下观察到 20/20 fresh-process success，native crash 与
+Malmo EOF recurrence 均为 0；这不删除上述历史证据，也不构成绝对可靠性证明。
+详见 `docs/architecture/P1_STARTUP_RELIABILITY_ROOT_CAUSE.md` 与
+`runs/history/p1-startup-reliability-post-audio-20260816/`。
+
 ## 最终端到端验证
 
 确定性 Scripted-A0 已完成：

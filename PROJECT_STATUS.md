@@ -32,57 +32,19 @@ P1 real MineRL environment validation remains the only active phase.
 
 E10 是 calibration，不是正式 benchmark task。Evaluator 必须观察 server-side `air/lava/... -> obsidian`。
 
-## P1-E0 / E1 / E2 / E3 / E4 / E5 / E6 / E7 / E8 / E9 status
+## P1 E0–E9 active status
 
-- E0–E5 contract / offline runtime / MineRL adapter：`unit_verified`；各有一次已审查真实成功；均 `integration_verified`: NO
-- E0 RGB/lifecycle evidence: `runs/p1_e0_reset_close/e0-live-20260813-130313`；E1 RGB 360×640×3 uint8: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`
-- E2 inventory match `{"dirt": 7, "obsidian": 4, "flint_and_steel": 1}`: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`
-- E3 selected item `flint_and_steel`: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`
-- E4 one `look(pitch=0°, yaw=+20°)`，FullStats yaw/pitch，tolerance 1.0°: `runs/p1_e4_camera_control/e4-live-20260814-001`, `camera_ok`
-- E5 one `move(forward=1.0)`, FullStats xpos/ypos/zpos；#1 reset_failed `p1-e5-live-001` / `runs/p1_e5_movement/e5-live-20260814-001`（JVM SIGSEGV / Malmo EOF，不是 movement_failed）；#2 `p1-e5-live-002` / `runs/p1_e5_movement/e5-live-20260815-002`, `movement_ok`, delta z≈0.098
-- E6 contract / offline runtime: complete / `unit_verified`
-- E6 MineRL adapter / live bridge: implemented / offline tested
-- E6 calibration: `dirt`; one `place_block(dirt)`, `duration_ticks=1`; spawn world `(0, 4, 0)`, yaw `0`, pitch `60`; target world `(0, 4, 1)` = atSpawn grid `(0, 0, 1)`; before `air` → after `dirt` from evaluator-only `portal_grid`
-- E6 coordinate audit: ObservationFromGrid(`atSpawn=true`) is spawn-relative; `_cell_index_in_grid` indexes that namespace. Offline fix `unit_verified`
-- E6 real attempt #1: episode `p1-e6-live-001` / `runs/p1_e6_block_placement/e6-live-20260815-001`; `real_execution_performed=true`; `success=true`; `outcome=placement_ok`; before world `(0, 4, 1)=air`; one `place_block(dirt)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after world `(0, 4, 1)=dirt`; `world_changed=true`; `intended_block_present=true`; close returned; `process_release_proven=false`
-- E6 reviewed real success: YES
-- E6 `integration_verified`: NO
-- E7 contract / offline runtime: complete / `unit_verified`
-- E7 water calibration: offline verified; `water_bucket` → `bucket` and none → water
-- E7 lava calibration: offline verified; `lava_bucket` → `bucket` and none → lava
-- E7 MineRL adapter / live bridge: implemented / offline tested
-- E7 calibration: closed WATER / LAVA variants; each is a fresh episode with exactly one `use_item`; spawn world `(0, 4, 0)`, yaw `0`, pitch `60`; target world `(0, 4, 1)` = atSpawn grid `(0, 0, 1)`; success requires public inventory transition AND evaluator-only fluid effect
-- E7 WATER real attempt #1: episode `p1-e7-water-live-001` / `runs/p1_e7_bucket_usage/water/e7-water-live-20260815-001`; `real_execution_performed=true`; `success=true`; `outcome=bucket_ok`; before inventory `water_bucket=1` `bucket=0`; before fluid `none` at world `(0, 4, 1)` / atSpawn grid `(0, 0, 1)`; one `use_item(water_bucket)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after inventory `water_bucket=0` `bucket=1`; after fluid `water`; `inventory_changed=true`; `bucket_consumed=true`; `empty_bucket_produced=true`; `fluid_changed=true`; `intended_fluid_present=true`; close returned; `process_release_proven=false`
-- E7 WATER reviewed real success: YES
-- E7 LAVA real attempt #1: episode `p1-e7-lava-live-001` / `runs/p1_e7_bucket_usage/lava/e7-lava-live-20260815-001`; `real_execution_performed=true`; `success=true`; `outcome=bucket_ok`; before inventory `lava_bucket=1` `bucket=0`; before fluid `none` at world `(0, 4, 1)` / atSpawn grid `(0, 0, 1)`; one `use_item(lava_bucket)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after inventory `lava_bucket=0` `bucket=1`; after fluid `lava`; `inventory_changed=true`; `bucket_consumed=true`; `empty_bucket_produced=true`; `fluid_changed=true`; `intended_fluid_present=true`; close returned; `process_release_proven=false`
-- E7 LAVA reviewed real success: YES
-- E7 real calibration coverage: WATER + LAVA complete
-- E7 `integration_verified`: NO
-- E8 contract / offline runtime: complete / `unit_verified`
-- E8 ServerTruthSnapshot block portion: implemented / offline verified; fluid portion is E9
-- E8 generalized target-region block truth: offline verified
-- E8 MineRL adapter / live bridge: implemented / offline tested
-- E8 truth parser hardened to reject coordinate coercion and inconsistent truth_missing_count.
-- E8 calibration: 3-cell region world `(0, 4, 1)` / `(1, 4, 1)` / `(-1, 4, 1)` = atSpawn grid `(0, 0, 1)` / `(1, 0, 1)` / `(-1, 0, 1)`; before all `air`; one E6-style `place_block(dirt)` stimulus; after target `dirt`, controls `air`; success is `block_truth_ok`, not placement success
-- E8 live attempt #1: `p1-e8-live-001` / `runs/p1_e8_block_truth/e8-live-20260815-001`; `reset_failed` / `minecraft_native_crash`; `tested_action_count=0`; no snapshots; SAME_FINGERPRINT as E5 #1 (`liblwjgl_stb` Sound engine STBVorbis); not block-truth failure
-- E8 live attempt #2: `p1-e8-live-002` / `runs/p1_e8_block_truth/e8-live-20260815-002`; `real_execution_performed=true`; `success=true`; `outcome=block_truth_ok`; before (0,4,1)/(1,4,1)/(-1,4,1)=air/air/air; one `place_block(dirt)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after dirt/air/air; `target_changed=true`; `target_expected_block_present=true`; `control_cells_unchanged=true`; `truth_missing_count=0`; dimension `minecraft:overworld`; position (0.5, 4.0, 0.5); `anchor_source=expected_spawn_fallback`; close returned; `process_release_proven=false`
-- E8 reviewed real success: YES
-- E8 `integration_verified`: NO
-- E9 contract / offline runtime: complete / `unit_verified`
-- E9 generalized fluid truth: implemented; `ServerTruthSnapshot.fluid_truth` plus typed `ServerFluidTruth`; source/flowing remain distinct (`water`/`flowing_water`, `lava`/`flowing_lava`)
-- E9 MineRL adapter / live bridge: implemented / offline tested
-- E9 verification level: `unit_verified`
-- E9 WATER live attempt #1: episode `p1-e9-water-live-001` / `runs/p1_e9_fluid_truth/water/e9-water-live-20260815-001`; `real_execution_performed=true`; `reset_failed` / `minecraft_native_crash`; `tested_action_count=0`; no before/after fluid snapshots; SAME_FINGERPRINT as E5 #1 and E8 #1 (`liblwjgl_stb` Sound engine STBVorbis); not a fluid-truth capability failure
-- E9 WATER live attempt #2: episode `p1-e9-water-live-002` / `runs/p1_e9_fluid_truth/water/e9-water-live-20260816-002`; `real_execution_performed=true`; `success=true`; `outcome=fluid_truth_ok`; before target world `(0, 4, 1)` / atSpawn grid `(0, 0, 1)` `observed_block=air` `fluid_type=none` `flow_state=none`; one `use_item(water_bucket)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after `observed_block=water` `fluid_type=water` `flow_state=source` (distinct from `flowing_water`); controls world `(0, 5, 1)` / `(0, 5, 0)` remain `air`; `control_cells_unchanged=true`; `source_flowing_match=true`; `truth_missing_count=0`; dimension `minecraft:overworld`; position `(0.5, 4.0, 0.5)`; `anchor_source=expected_spawn_fallback`; close returned; `process_release_proven=false`
-- E9 WATER reviewed real success: YES
-- E9 LAVA live attempt #1: episode `p1-e9-lava-live-001` / `runs/p1_e9_fluid_truth/lava/e9-lava-live-20260816-001`; `real_execution_performed=true`; `success=true`; `outcome=fluid_truth_ok`; before target world `(0, 4, 1)` / atSpawn grid `(0, 0, 1)` `observed_block=air` `fluid_type=none` `flow_state=none`; one `use_item(lava_bucket)` `duration_ticks=1` `translation_accepted=true` `tested_action_count=1`; after `observed_block=lava` `fluid_type=lava` `flow_state=source` (distinct from `flowing_lava`); controls world `(0, 5, 1)` / `(0, 5, 0)` remain `air`; `control_cells_unchanged=true`; `source_flowing_match=true`; `truth_missing_count=0`; dimension `minecraft:overworld`; position `(0.5, 4.0, 0.5)`; `anchor_source=expected_spawn_fallback`; close returned; `process_release_proven=false`
-- E9 LAVA reviewed real success: YES
-- E9 real calibration coverage: WATER + LAVA complete
-- E9 reviewed real success: YES
-- E9 `integration_verified`: NO
-- E10–E12: NOT STARTED
-- P1 Hard Gate: NOT PASSED
-- P2: NOT STARTED
+All E0–E9 contracts, offline runtimes, and MineRL adapters are `unit_verified`; each has at least one reviewed real success, but none is `integration_verified` and `process_release_proven=false` remains.
+
+- E0 lifecycle: `runs/p1_e0_reset_close/e0-live-20260813-130313`; E1 RGB: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`.
+- E2 inventory: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`; E3 selected item: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`; E4 camera: `runs/p1_e4_camera_control/e4-live-20260814-001`.
+- E5 movement: historical attempt `p1-e5-live-001` failed during reset with JVM `SIGSEGV` / Malmo EOF; reviewed success `p1-e5-live-002` produced `movement_ok`. The failure was infrastructure, not movement capability.
+- E6 placement: `p1-e6-live-001`, `placement_ok`, target `air -> dirt` from evaluator-only grid truth.
+- E7 bucket use: `p1-e7-water-live-001` and `p1-e7-lava-live-001`, both `bucket_ok`; WATER + LAVA coverage complete.
+- E8 block truth: historical attempt `p1-e8-live-001` failed before validation with the E5 `liblwjgl_stb` / Sound engine / `STBVorbis` fingerprint; `p1-e8-live-002` produced `block_truth_ok` with `truth_missing_count=0`.
+- E9 fluid truth: historical WATER attempt `p1-e9-water-live-001` failed before validation with the same native fingerprint; `p1-e9-water-live-002` and `p1-e9-lava-live-001` produced `fluid_truth_ok`, preserving source/flowing distinction with `truth_missing_count=0`.
+- Detailed calibration fields remain in the referenced run evidence and [P1 Environment Validation](docs/architecture/P1_ENVIRONMENT_VALIDATION.md); startup failure diagnosis is preserved in [P1 startup reliability root cause](docs/architecture/P1_STARTUP_RELIABILITY_ROOT_CAUSE.md).
+- E10–E12: NOT STARTED; P1 Hard Gate: NOT PASSED; P2: NOT STARTED.
 
 None of E0–E9 is `integration_verified`; `process_release_proven=false`. E0–E9 remain solver-independent. Typed evaluator truth never enters Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
 

@@ -30,11 +30,12 @@ Hard Gate.
   the fat JAR's 3.3.1 arm64 resources by SHA-256. The OpenAL module's macOS
   native is named `libopenal.dylib`; there is no separately loaded
   `liblwjgl_openal.dylib` in this runtime.
-- `launchClient.sh` always invokes
+- The pre-mitigation `launchClient.sh` invoked
   `java -Xmx4G -XstartOnFirstThread -jar build/libs/mcprec-6.13.jar
   --envPort=...`. Attempt-006 and attempt-014 process evidence contain the same
   `-XstartOnFirstThread` argument. It is a macOS launcher option and therefore
-  is not repeated under the hs_err `jvm_args` field.
+  is not repeated under the hs_err `jvm_args` field. The deployed mitigated
+  launcher now also passes `-Dobsidianlink.disableClientAudio=true`.
 - Attempt-006's current thread is `Sound engine`; its problematic frame is
   `liblwjgl_stb.dylib+0x4c158`; its Java stack is
   `STBVorbis.nstb_vorbis_decode_frame_pushdata` -> `OggAudioStream.readOgg` ->
@@ -149,30 +150,20 @@ normal reset or retry behavior; reliability measurement remains
 ## Remaining Risk
 
 - Attempt-006's confirmed SoundEngine/STB path now has an active targeted
-  mitigation. One fresh-process smoke completed successfully with the audio
-  property present in the captured Java command, but one run cannot establish
-  the new failure rate.
-- Attempt-014 remains independently unresolved. A recurrence with the enhanced
-  evidence will identify the exact MineRL line and protocol phase.
+  mitigation. The independent post-mitigation run completed 20/20 fresh-process
+  first attempts without a native crash recurrence; this finite sample does
+  not prove absolute reliability.
+- Attempt-014 remains historically unresolved. It did not recur in the 20
+  post-mitigation attempts, so the audio patch cannot be claimed as its fix.
 - Disabling an unused client subsystem avoids the confirmed crashing path but
   does not prove the underlying LWJGL/STB defect is fixed.
-- One authorized real Minecraft smoke completed `reset`, initial observation,
-  and `close` with `max_reset_attempts=1`. No 20-process rerun was performed.
+- Post-mitigation evidence is tracked at
+  `runs/history/p1-startup-reliability-post-audio-20260816/`: 20 success, 0
+  failure, `max_reset_attempts=1`, with no validation action.
 - `process_release_proven` remains false by design: descendant tracking found
   no residual process in the prior run, but cannot prove that nothing escaped
   or was reparented before inspection.
 
-The completed smoke command and the still-pending independent validation
-command are:
-
-```bash
-/opt/anaconda3/bin/conda run -n mc-agent python \
-  scripts/run_p1_startup_reliability.py --episodes 1 --timeout-seconds 600
-
-/opt/anaconda3/bin/conda run -n mc-agent python \
-  scripts/run_p1_startup_reliability.py --episodes 20 --timeout-seconds 600
-```
-
-The 20-process calibration still requires explicit real MineRL/Minecraft
-authorization. P1 remains not passed and E10 remains not started until that
-independent evidence is reviewed.
+Startup reliability hardening is complete. P1 remains not passed because
+E10–E12 are not started. The next authorized validation target is E10, but it
+must not start without separate explicit real MineRL/Minecraft authorization.
