@@ -368,8 +368,8 @@ def check_e10_live_runner() -> dict[str, Any]:
         "truth_missing_required": 0,
         "verification_level": "unit_verified",
         "water_world_cell": list(E10_WATER_WORLD_CELL),
-        "runtime_applies_drawing_decorator": False,
-        "needs_e10_runtime_geometry_authorization": True,
+        "runtime_applies_drawing_decorator": True,
+        "needs_e10_runtime_geometry_authorization": False,
     }
 
 
@@ -472,7 +472,7 @@ def _write_evidence(record: E10MineRLRunRecord, output_dir: Path) -> Path:
                 "integration_verified": False,
                 "model_api_authorized": False,
                 "obsidian_preplaced": False,
-                "runtime_applies_drawing_decorator": False,
+                "runtime_applies_drawing_decorator": True,
                 "planned_tested_stimulus_count": 1,
             },
             indent=2,

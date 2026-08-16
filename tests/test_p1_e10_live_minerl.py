@@ -181,8 +181,8 @@ class E10LiveGateTests(unittest.TestCase):
             payload["expected_water_after"],
             {"block": "water", "flow_state": "source", "fluid_type": "water"},
         )
-        self.assertFalse(payload["runtime_applies_drawing_decorator"])
-        self.assertTrue(payload["needs_e10_runtime_geometry_authorization"])
+        self.assertTrue(payload["runtime_applies_drawing_decorator"])
+        self.assertFalse(payload["needs_e10_runtime_geometry_authorization"])
         self.assertEqual(payload["stimulus"]["target"], "water_bucket")
         self.assertEqual(payload["verification_level"], "unit_verified")
 

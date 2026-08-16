@@ -1,0 +1,155 @@
+--- a/src/main/java/com/minerl/multiagent/env/EnvServer.java
++++ b/src/main/java/com/minerl/multiagent/env/EnvServer.java
+@@ -47,8 +47,12 @@
+ import java.nio.charset.Charset;
+ import java.text.SimpleDateFormat;
+ import java.util.*;
++import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.ExecutionException;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.TimeoutException;
+ import java.util.stream.Collectors;
++import javax.xml.bind.JAXBElement;
+ import java.util.stream.Stream;
+ 
+ public class EnvServer {
+@@ -271,6 +275,8 @@
+ 
+         applyServerInitialConditions(mc, missionInit);
+         prepareControlledBuildArea(mc, missionInit);
++        CompletableFuture<Void> drawingDone =
++                applyMissionDrawingDecorator(mc, missionInit);
+         mc.execute(() -> setAgentInventory(mc.player, missionInit));
+         mc.execute(() -> setAgentPosition(mc.player, missionInit));
+         envTickCounter = PlayRecorder.getInstance().getTickCounter();
+@@ -281,6 +287,7 @@
+             execActions("camera 0 0.0", 0);
+             waitForNextObservation();
+         }
++        awaitMissionDrawingDecorator(drawingDone);
+ 
+         mc.execute( () -> {
+                     Pos startV = getAgentStart(missionInit).getVelocity();
+@@ -435,6 +442,122 @@
+         });
+     }
+ 
++    private CompletableFuture<Void> applyMissionDrawingDecorator(
++            Minecraft mc, MissionInit missionInit) {
++        if (missionInit == null
++                || missionInit.getMission() == null
++                || missionInit.getMission().getServerSection() == null
++                || missionInit.getMission().getServerSection().getServerHandlers() == null) {
++            return null;
++        }
++        java.util.List<Object> decorators = missionInit.getMission()
++                .getServerSection()
++                .getServerHandlers()
++                .getWorldDecorators();
++        if (decorators == null || decorators.isEmpty()) {
++            return null;
++        }
++        MinecraftServer server = mc.getIntegratedServer();
++        if (server == null) {
++            throw new IllegalStateException(
++                    "E10 DrawingDecorator requires an integrated server");
++        }
++        CompletableFuture<Void> done = new CompletableFuture<Void>();
++        server.execute(() -> {
++            try {
++                ServerWorld world = server.getWorld(World.OVERWORLD);
++                if (world == null) {
++                    throw new IllegalStateException("Overworld is unavailable");
++                }
++                for (Object decorator : decorators) {
++                    if (!(decorator instanceof DrawingDecorator)) {
++                        throw new IllegalStateException(
++                                "unsupported Mission world decorator: "
++                                        + decorator.getClass().getSimpleName());
++                    }
++                    applyAllowedDrawBlocks(world, (DrawingDecorator) decorator);
++                }
++                done.complete(null);
++            } catch (Throwable error) {
++                done.completeExceptionally(error);
++            }
++        });
++        return done;
++    }
++
++    private void awaitMissionDrawingDecorator(CompletableFuture<Void> drawingDone) {
++        if (drawingDone == null) {
++            return;
++        }
++        try {
++            drawingDone.get(30L, TimeUnit.SECONDS);
++        } catch (TimeoutException timeout) {
++            throw new IllegalStateException(
++                    "DrawingDecorator application timed out", timeout);
++        } catch (InterruptedException interrupted) {
++            Thread.currentThread().interrupt();
++            throw new IllegalStateException(
++                    "DrawingDecorator application interrupted", interrupted);
++        } catch (ExecutionException execution) {
++            Throwable cause = execution.getCause();
++            if (cause instanceof RuntimeException) {
++                throw (RuntimeException) cause;
++            }
++            throw new IllegalStateException(
++                    "DrawingDecorator application failed", cause);
++        }
++    }
++
++    private void applyAllowedDrawBlocks(
++            ServerWorld world, DrawingDecorator decorator) {
++        java.util.List<JAXBElement<? extends DrawObjectType>> objects =
++                decorator.getDrawObjectType();
++        if (objects == null || objects.isEmpty()) {
++            throw new IllegalStateException(
++                    "DrawingDecorator has no DrawBlock entries");
++        }
++        for (JAXBElement<? extends DrawObjectType> element : objects) {
++            DrawObjectType value = element == null ? null : element.getValue();
++            if (!(value instanceof DrawBlock)) {
++                throw new IllegalStateException(
++                        "E10 DrawingDecorator only allows DrawBlock, got "
++                                + (value == null
++                                        ? "null"
++                                        : value.getClass().getSimpleName()));
++            }
++            DrawBlock block = (DrawBlock) value;
++            if (block.getVariant() != null
++                    || block.getColour() != null
++                    || block.getFace() != null) {
++                throw new IllegalStateException(
++                        "DrawBlock extra attributes are not allowed");
++            }
++            BlockType type = block.getType();
++            if (type == null) {
++                throw new IllegalStateException("DrawBlock type is missing");
++            }
++            int x = block.getX();
++            int y = block.getY();
++            int z = block.getZ();
++            if (y < 0 || y > 255) {
++                throw new IllegalStateException(
++                        "DrawBlock y is outside world height: "
++                                + x + "," + y + "," + z);
++            }
++            if (type == BlockType.OBSIDIAN) {
++                throw new IllegalStateException(
++                        "DrawBlock must not pre-place obsidian at "
++                                + x + "," + y + "," + z);
++            }
++            if (type != BlockType.LAVA) {
++                throw new IllegalStateException(
++                        "DrawBlock type not allowed: " + type.value());
++            }
++            BlockPos pos = new BlockPos(x, y, z);
++            world.setBlockState(pos, Blocks.LAVA.getDefaultState(), 2);
++        }
++    }
++
+     private String getSaveFile(MissionInit missionInit) {
+         return missionInit.getMission().getAgentSection().get(0).getAgentStart().getLoadWorldFile();
+     }

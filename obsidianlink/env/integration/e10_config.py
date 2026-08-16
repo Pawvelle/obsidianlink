@@ -359,7 +359,7 @@ def build_e10_compatibility_task(episode_id: str) -> TaskInstance:
                     {"x": x, "y": y, "z": z, "block": block}
                     for x, y, z, block in calibration.initial_draw_blocks
                 ],
-                "runtime_applies_drawing_decorator": False,
+                "runtime_applies_drawing_decorator": True,
             },
         }
     )

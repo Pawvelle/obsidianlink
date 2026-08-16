@@ -207,6 +207,7 @@ class E10MineRLIntegrationTests(unittest.TestCase):
         self.assertTrue(task.scenario_parameters["not_a_benchmark_task"])
         self.assertTrue(task.scenario_parameters["calibration_only"])
         self.assertIs(task.scenario_parameters["obsidian_preplaced"], False)
+        self.assertIs(task.scenario_parameters["runtime_applies_drawing_decorator"], True)
         self.assertIs(task.scenario_parameters["controlled_initial_geometry"], True)
         self.assertIs(task.scenario_parameters["lava_preplaced"], True)
         self.assertEqual(task.scenario_parameters["lava_target_world_cell"], (0, 4, 2))
@@ -400,7 +401,7 @@ class E10MineRLIntegrationTests(unittest.TestCase):
         self.assertEqual(translated.action["use"], 1)
         wait = translate_macro_action(MacroAction.wait(), env.action_space)
         self.assertTrue(wait.accepted)
-        for name in ("e10_adapter.py", "e10_config.py", "e10_run.py"):
+        for name in ("e10_adapter.py", "e10_config.py", "e10_run.py", "e10_geometry.py"):
             tree = ast.parse((ROOT / "obsidianlink/env/integration" / name).read_text())
             imports = "\n".join(
                 ast.unparse(node)
