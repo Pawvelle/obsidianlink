@@ -20,9 +20,9 @@ deployed runtime, not from wiki text:
   that plane at world z=1 so the proven E7 looking-down pose can ignite
   interior ``(0, 4, 1)`` without movement.
 
-The current deployed DrawingDecorator allowlist still rejects obsidian.
-E11 therefore emits Mission XML for the frozen frame, but live Minecraft
-requires a separately authorized runtime extension.
+The deployed DrawingDecorator allowlist accepts lava (E10) and obsidian
+(E11 frame fixture) and still rejects portal and fire. Live portal
+ignition remains a separately authorized calibration.
 """
 
 from __future__ import annotations
@@ -330,8 +330,8 @@ def build_e11_compatibility_task(episode_id: str) -> TaskInstance:
                     {"x": x, "y": y, "z": z, "block": block}
                     for x, y, z, block in calibration.initial_draw_blocks
                 ],
-                "runtime_applies_obsidian_draw_blocks": False,
-                "needs_e11_runtime_geometry_authorization": True,
+                "runtime_applies_obsidian_draw_blocks": True,
+                "needs_e11_runtime_geometry_authorization": False,
             },
         }
     )

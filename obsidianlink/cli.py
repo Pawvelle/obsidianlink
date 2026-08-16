@@ -70,8 +70,10 @@ def _offline_contract_check() -> dict[str, object]:
             "executed. No MineRL/Minecraft, Gradle, or paid model API call was made. "
             "E10 offline contract is unit_verified; E10 real conversion reviewed "
             "success is YES and is not integration_verified. E11 offline contract "
-            "is unit_verified; E11 real calibration, E12, and end-to-end portal "
-            "construction remain unverified in the real environment."
+            "is unit_verified; E11 geometry real verified is YES and is not "
+            "integration_verified. E11 real portal activation, E12, and "
+            "end-to-end portal construction remain unverified in the real "
+            "environment."
         ),
     }
 

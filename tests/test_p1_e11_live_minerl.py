@@ -171,8 +171,8 @@ class E11LiveGateTests(unittest.TestCase):
         self.assertTrue(payload["obsidian_frame_preplaced"])
         self.assertFalse(payload["portal_preplaced"])
         self.assertFalse(payload["fire_preplaced"])
-        self.assertTrue(payload["needs_e11_runtime_geometry_authorization"])
-        self.assertFalse(payload["runtime_applies_obsidian_draw_blocks"])
+        self.assertFalse(payload["needs_e11_runtime_geometry_authorization"])
+        self.assertTrue(payload["runtime_applies_obsidian_draw_blocks"])
         self.assertEqual(payload["stimulus"]["target"], "flint_and_steel")
         self.assertEqual(payload["verification_level"], "unit_verified")
 
@@ -192,17 +192,17 @@ class E11LiveGateTests(unittest.TestCase):
                     )  # type: ignore[arg-type]
             production.assert_not_called()
 
-    def test_live_without_runtime_authorization_does_not_construct_backend(self):
+    def test_live_without_geometry_tokens_does_not_construct_backend(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "p1_e11_portal_activation"
             root.mkdir()
             with patch("obsidianlink.env.integration.e11_run.FORMAL_E11_RUNS_ROOT", root.resolve()), patch(
                 "obsidianlink.env.integration.e11_run._production_backend_cls"
             ) as production:
-                with self.assertRaisesRegex(E11AuthorizationError, "NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION"):
+                with self.assertRaises(E11AuthorizationError):
                     run_authorized_e11_minerl(
-                        execution_mode=EXECUTION_MODE_AUTHORIZED_LIVE_E11,
-                        authorized_live_run=AUTHORIZED_LIVE_E11_RUN_VALUE,
+                        execution_mode="authorized_live_e11_geometry",
+                        authorized_live_run="e11_geometry_smoke",
                         output_dir=root / "e11-live-blocked",
                     )
                 production.assert_not_called()
@@ -223,7 +223,7 @@ class E11LiveGateTests(unittest.TestCase):
         self.assertEqual(payload["probe_world_cells"], [list(cell) for cell in E11_PROBE_WORLD_CELLS])
         self.assertEqual(payload["probe_grid_cells"], [list(cell) for cell in E11_PROBE_GRID_CELLS])
         self.assertFalse(payload["integration_verified"])
-        self.assertTrue(payload["needs_e11_runtime_geometry_authorization"])
+        self.assertFalse(payload["needs_e11_runtime_geometry_authorization"])
 
     def test_stub_success_writes_narrow_evidence_and_one_step(self):
         record, output, cls, temporary = self.run_stub()

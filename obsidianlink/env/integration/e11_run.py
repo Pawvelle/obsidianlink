@@ -1,9 +1,9 @@
 """Explicitly authorized P1 E11 real-MineRL portal-activation entrypoint.
 
-Imports and ``--check`` are offline-safe. The live path is prepared but
-currently fail-closed with ``NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION``
-because the deployed DrawingDecorator allowlist still rejects obsidian.
-This module never runs Gradle, models, solvers, or E12.
+Imports and ``--check`` are offline-safe. The deployed DrawingDecorator
+allowlist now accepts the E11 obsidian frame fixture. This module still
+never runs Gradle, models, solvers, geometry-only smoke, or E12. Real
+portal ignition remains a separate authorized live run.
 """
 
 from __future__ import annotations
@@ -51,8 +51,10 @@ FORMAL_E11_RUNS_ROOT = (ROOT / "runs" / "p1_e11_portal_activation").resolve()
 RUNTIME_LOGS_ROOT = (ROOT / "logs").resolve()
 EXECUTION_MODE_AUTHORIZED_LIVE_E11 = "authorized_live_e11"
 AUTHORIZED_LIVE_E11_RUN_VALUE = "e11_portal_activation"
-DEPLOYED_E10_JAR_SHA256 = "935af788fcce57ce30df6ddcebca491cd4ae3253683cf14bedebea02eb4a0afa"
-NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION = True
+DEPLOYED_E11_FIXTURE_JAR_SHA256 = (
+    "836cb5ac6f89edca3cec255dd895e791212b04794d3349eb13a1b2b313416b6f"
+)
+NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION = False
 
 _PROCESS_LIVE_RUN_STARTED = False
 _PROCESS_LIVE_RUN_LOCK = threading.Lock()
@@ -236,7 +238,7 @@ def check_e11_live_runner() -> dict[str, Any]:
         "authorized_live_run_required": AUTHORIZED_LIVE_E11_RUN_VALUE,
         "calibration_only": True,
         "check_id": "E11",
-        "deployed_jar_sha256": DEPLOYED_E10_JAR_SHA256,
+        "deployed_jar_sha256": DEPLOYED_E11_FIXTURE_JAR_SHA256,
         "execution_mode_required": EXECUTION_MODE_AUTHORIZED_LIVE_E11,
         "frame_cell_count": len(E11_FRAME_BLOCKS),
         "gradle_authorized": False,
@@ -263,13 +265,11 @@ def check_e11_live_runner() -> dict[str, Any]:
         },
         "truth_missing_required": 0,
         "verification_level": "unit_verified",
-        "runtime_applies_obsidian_draw_blocks": False,
-        "needs_e11_runtime_geometry_authorization": NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION,
-        "runtime_blocker": (
-            "Deployed DrawingDecorator allowlist is lava-only. E11 requires a "
-            "fail-closed obsidian fixture allowlist that still forbids portal "
-            "and fire. See docs/architecture/P1_E11_RUNTIME_GEOMETRY.md."
+        "runtime_applies_obsidian_draw_blocks": (
+            not NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION
         ),
+        "needs_e11_runtime_geometry_authorization": NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION,
+        "runtime_blocker": None,
     }
 
 
@@ -436,7 +436,9 @@ def _write_evidence(record: E11MineRLRunRecord, output_dir: Path) -> Path:
                 "spawn_world": list(E11_SPAWN_WORLD),
                 "stimulus_item": E11_STIMULUS_ITEM_NAME,
                 "needs_e11_runtime_geometry_authorization": NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION,
-                "runtime_applies_obsidian_draw_blocks": False,
+                "runtime_applies_obsidian_draw_blocks": (
+                    not NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION
+                ),
             },
             indent=2,
             sort_keys=True,
@@ -457,7 +459,9 @@ def _write_evidence(record: E11MineRLRunRecord, output_dir: Path) -> Path:
                 "prebuilt_frame_is_calibration_fixture": True,
                 "agent_built_portal": False,
                 "needs_e11_runtime_geometry_authorization": NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION,
-                "runtime_applies_obsidian_draw_blocks": False,
+                "runtime_applies_obsidian_draw_blocks": (
+                    not NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION
+                ),
                 "planned_tested_stimulus_count": 1,
             },
             indent=2,

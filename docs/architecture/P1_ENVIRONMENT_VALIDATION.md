@@ -77,7 +77,7 @@ E11 只验证：完整合法 obsidian portal frame + 一次真实 `use_item(flin
 - fire 单独出现不是成功（`portal_activation_not_observed`）
 - 成功 outcome：`portal_activation_ok`
 
-Mission XML 可以预置 obsidian frame（`allow_obsidian_frame_fixture=True`）。当前 deployed JAR 仍是 E10 lava-only DrawingDecorator，**拒绝 obsidian**。因此 live path 保持 fail-closed：`NEEDS_E11_RUNTIME_GEOMETRY_AUTHORIZATION`。最小 runtime 扩展见 [P1 E11 runtime geometry](P1_E11_RUNTIME_GEOMETRY.md)。未经授权禁止 Gradle / 部署新 JAR，也禁止从 dirty `vendor/minerl` HEAD 重建。
+Mission XML 可以预置 obsidian frame（`allow_obsidian_frame_fixture=True`）。Deployed DrawingDecorator allowlist is lava + obsidian; portal/fire remain forbidden. Geometry evidence: [P1 E11 runtime geometry](P1_E11_RUNTIME_GEOMETRY.md), `runs/p1_e11_portal_activation/e11-geometry-20260816-001`, outcome `e11_geometry_ready`. This is not `portal_activation_ok` and does not set `integration_verified`.
 
 FakeBackend success 不能证明真实 Minecraft activation。E11 `unit_verified` 不把 `integration_verified` 设为 true。
 
@@ -94,8 +94,8 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 ## Authorization and hard gate
 
-E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 real calibration = **NOT RUN**；`integration_verified` = **NO**。E8/E9/E10/E11 evaluator-only truth 与 Agent-visible observation 保持隔离。E12 为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
+E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 runtime geometry deployed / real verified = **YES**；E11 real activation = **NOT RUN**；`integration_verified` = **NO**。E8/E9/E10/E11 evaluator-only truth 与 Agent-visible observation 保持隔离。E12 为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
-下一项经授权的 P1 工作是 **E11 runtime geometry authorization**（从 deployed P1 baseline 重建并只叠加 E11 obsidian fixture patch），然后才是一次真实 E11 calibration。这不授权或启动 Gradle、部署或真实 MineRL；每次真实运行仍需用户单独明确授权。不要开始 E12。
+下一项经授权的 P1 工作是 **一次真实 E11 flint_and_steel → vanilla portal activation calibration**。不要自动开始点火、Gradle 或 E12。每次真实运行仍需用户单独明确授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。

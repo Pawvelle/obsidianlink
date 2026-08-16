@@ -1,0 +1,11 @@
+{
+  "authorized_live_run": "e11_geometry_smoke",
+  "catalog_live_run_allowed_remains_false": true,
+  "execution_mode": "authorized_live_e11_geometry",
+  "gradle_authorized": false,
+  "integration_verified": false,
+  "model_api_authorized": false,
+  "planned_tested_stimulus_count": 0,
+  "portal_activation_authorized": false,
+  "runtime_applies_obsidian_draw_blocks": true
+}

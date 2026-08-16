@@ -116,6 +116,12 @@ from obsidianlink.env.integration.e10_run import (
     run_authorized_e10_minerl,
 )
 from obsidianlink.env.integration.e11_adapter import MineRLE11PortalActivationAdapter
+from obsidianlink.env.integration.e11_geometry import (
+    AUTHORIZED_LIVE_E11_GEOMETRY_RUN_VALUE,
+    EXECUTION_MODE_AUTHORIZED_LIVE_E11_GEOMETRY,
+    preflight_authorized_e11_geometry,
+    run_authorized_e11_geometry_smoke,
+)
 from obsidianlink.env.integration.e11_run import (
     AUTHORIZED_LIVE_E11_RUN_VALUE,
     EXECUTION_MODE_AUTHORIZED_LIVE_E11,
@@ -139,6 +145,7 @@ __all__ = [
     "AUTHORIZED_LIVE_E9_WATER_RUN_VALUE",
     "AUTHORIZED_LIVE_E10_GEOMETRY_RUN_VALUE",
     "AUTHORIZED_LIVE_E10_RUN_VALUE",
+    "AUTHORIZED_LIVE_E11_GEOMETRY_RUN_VALUE",
     "AUTHORIZED_LIVE_E11_RUN_VALUE",
     "AUTHORIZED_LIVE_RUN_VALUE",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E0",
@@ -156,6 +163,7 @@ __all__ = [
     "EXECUTION_MODE_AUTHORIZED_LIVE_E10",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E10_GEOMETRY",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E11",
+    "EXECUTION_MODE_AUTHORIZED_LIVE_E11_GEOMETRY",
     "E0AuthorizationError",
     "E0CleanupStatus",
     "E0MineRLRunRecord",
@@ -206,6 +214,7 @@ __all__ = [
     "preflight_authorized_e10",
     "preflight_authorized_e10_geometry",
     "preflight_authorized_e11",
+    "preflight_authorized_e11_geometry",
     "run_authorized_e0_minerl",
     "run_authorized_e1_minerl",
     "run_authorized_e2_minerl",
@@ -218,5 +227,6 @@ __all__ = [
     "run_authorized_e9_minerl",
     "run_authorized_e10_minerl",
     "run_authorized_e10_geometry_smoke",
+    "run_authorized_e11_geometry_smoke",
     "run_authorized_e11_minerl",
 ]
