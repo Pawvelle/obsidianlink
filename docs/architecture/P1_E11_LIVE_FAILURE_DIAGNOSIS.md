@@ -112,8 +112,7 @@ Live #1 evidence is unchanged. Diagnostic run is not
 
 ## Next exact task
 
-Authorize a logging-only follow-up that records `world.isRemote()`,
-the world class name, and whether a Server-thread `onBlockAdded` or
-`setBlockState(NETHER_PORTAL)` occurs. Do not change placement flags,
-geometry, evaluator success, or the observation window. Do not retry
-for confirmation. Do not start E12.
+Marshal `placePortalBlocks` / fire `onBlockAdded` onto the
+`ServerWorld` server thread. Do not change geometry, evaluator success,
+or the observation window. Do not retry for confirmation. Do not start
+E12.

@@ -83,3 +83,29 @@ on the client Render thread rather than a proven Server thread.
 
 Live #1 (`p1-e11-live-001`) remains `portal_activation_not_observed`.
 E12: NOT STARTED. P1 Hard Gate: NOT PASSED.
+
+## Write-path follow-up (`p1-e11-diag-002`)
+
+Temporary JAR SHA-256:
+
+`9011798f67a93adbb391890c2857249290cc1ac32359d3557c892054a9fe0029`
+
+Production JAR restored afterward to `836cb5ac…`. Patch SHA-256
+`0f43178fa2f2466af336c67f2843a0914a41934e87204d07a274e51cb73d3156`.
+Semantic diff: `AbstractFireBlock`, `PortalSize`, `NetherPortalBlock`,
+switch-map `$1` line numbers, `version.properties`. Unexpected count 0.
+
+Episode `p1-e11-diag-002`. Compact
+`runs/history/p1-e11-diagnostic-20260817-002/`.
+
+JVM write path (all six interior cells):
+
+- world class: `net.minecraft.world.server.ServerWorld`
+- `isRemote=false`
+- thread: `Render thread`
+- `setBlockState` accepted=`true`
+- immediate after-state: `minecraft:nether_portal[axis=x]`
+- `NetherPortalBlock.updatePostPlacement`: not observed
+
+Evaluator after-truth remained fire + 0/6 portal. This is still not
+`integration_verified`.

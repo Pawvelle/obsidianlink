@@ -75,6 +75,8 @@ def _offline_contract_check() -> dict[str, object]:
             "portal_activation_not_observed. One E11 diagnostic "
             "instrumentation run (p1-e11-diag-001) is Case F / "
             "ROOT_CAUSE_NARROWED and is not a formal benchmark result. "
+            "Write-path diagnostic p1-e11-diag-002 proved ServerWorld "
+            "writes from the Render thread. "
             "E12 and end-to-end portal "
             "construction remain unverified in the real "
             "environment."

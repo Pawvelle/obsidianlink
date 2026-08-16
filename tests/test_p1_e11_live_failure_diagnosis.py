@@ -144,19 +144,47 @@ class RecordedE11LiveFailureDiagnosisTests(unittest.TestCase):
         self.assertFalse(review["verification"]["e11_integration_verified"])
         self.assertFalse(review["verification"]["e12_started"])
 
+    def test_write_path_diagnostic_proves_serverworld_render_thread_write(self) -> None:
+        hist = ROOT / "runs" / "history" / "p1-e11-diagnostic-20260817-002"
+        payload = load_recorded_result(hist / "result.json")
+        self.assertEqual(payload["episode_id"], "p1-e11-diag-002")
+        self.assertEqual(payload["outcome"], PORTAL_ACTIVATION_NOT_OBSERVED)
+        self.assertEqual(payload["after_portal_block_count"], 0)
+        lines = (hist / "e11_diag_jvm.log").read_text(encoding="utf-8").splitlines()
+        sets = [line for line in lines if "placePortalBlocks SET" in line]
+        self.assertEqual(len(sets), 6)
+        for line in sets:
+            self.assertIn("accepted=true", line)
+            self.assertIn("after=Block{minecraft:nether_portal}[axis=x]", line)
+            self.assertIn("thread=Render thread", line)
+            self.assertIn("worldClass=net.minecraft.world.server.ServerWorld", line)
+            self.assertIn("isRemote=false", line)
+        self.assertTrue(any("onBlockAdded" in line and "ServerWorld" in line for line in lines))
+        self.assertFalse(any("updatePostPlacement" in line for line in lines))
+        self.assertFalse(any("ClientWorld" in line for line in lines))
+        live = load_recorded_result()
+        self.assertEqual(live["episode_id"], "p1-e11-live-001")
+        self.assertEqual(live["outcome"], PORTAL_ACTIVATION_NOT_OBSERVED)
+
     def test_diagnostic_patch_is_logging_only(self) -> None:
         text = PATCH.read_text(encoding="utf-8")
         self.assertIn("AbstractFireBlock.java", text)
         self.assertIn("PortalSize.java", text)
+        self.assertIn("NetherPortalBlock.java", text)
         self.assertIn("[E11-DIAG]", text)
         self.assertIn("canLightPortal", text)
         self.assertIn("BlockTags.FIRE", text)
         self.assertIn("placePortalBlocks ENTER", text)
         self.assertIn("placePortalBlocks EXIT", text)
+        self.assertIn("placePortalBlocks SET", text)
         self.assertIn("requestedAxis", text)
         self.assertIn("fallbackAttempted", text)
         self.assertIn("fallbackAxis", text)
         self.assertIn("firstPresent", text)
+        self.assertIn("worldClass", text)
+        self.assertIn("isRemote", text)
+        self.assertIn("Thread.currentThread().getName()", text)
+        self.assertIn("updatePostPlacement", text)
         self.assertNotIn("shadowJar", text)
         self.assertNotIn("entered_via_portal", text)
         self.assertNotIn("func_241124_a__", text)
@@ -164,8 +192,10 @@ class RecordedE11LiveFailureDiagnosisTests(unittest.TestCase):
             line[1:] for line in text.splitlines() if line.startswith("+") and not line.startswith("+++")
         )
         self.assertIn("LOGGER.info", added)
+        self.assertIn("boolean accepted = this.world.setBlockState(p_242967_2_, blockstate, 18);", added)
+        self.assertEqual(added.count("setBlockState"), 1)
+        self.assertIn(", 18)", added)
         forbidden = (
-            "setBlockState",
             "removeBlock",
             "placeBlock(",
             "teleport",

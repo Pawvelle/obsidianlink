@@ -1,0 +1,63 @@
+{
+  "after": {
+    "after_portal_block_count": 0,
+    "dimension": "minecraft:overworld",
+    "ignition_cell_after": "fire",
+    "portal_interior": "0/6 nether_portal",
+    "truth_missing_count": 0
+  },
+  "authorization_sha256": "7359c60bb5c4d77482b57447d85c0c3422d0593be0ae032f16d45827e200db6e",
+  "before": {
+    "before_portal_block_count": 0,
+    "dimension": "minecraft:overworld",
+    "fire_block_count": 0,
+    "frame_block_count": 14,
+    "frame_valid_before": true,
+    "interior_truth": "6/6 air",
+    "truth_missing_count": 0
+  },
+  "config_sha256": "d0f0c9ff5e1b9749fc7e05ce7fd0fad9732e78aaf45272af54cb09a012a1fc65",
+  "diagnostic_finding": "ServerWorld write from Render thread; 6/6 setBlockState accepted=true after=nether_portal; updatePostPlacement did not run; evaluator after still 0/6",
+  "e11_diag_jvm_sha256": "19118bbad64d5c00249d576c821aab3764289ade935ba44b07c050e83be6e982",
+  "environment_launch_count": 1,
+  "episode_id": "p1-e11-diag-002",
+  "fresh_process_count": 1,
+  "jvm_write_path": {
+    "accepted_all_six": true,
+    "after_block": "minecraft:nether_portal[axis=x]",
+    "isRemote": false,
+    "place_cells": 6,
+    "thread": "Render thread",
+    "updatePostPlacement_observed": false,
+    "worldClass": "net.minecraft.world.server.ServerWorld"
+  },
+  "launcher_sha256": "7e15699c0d0aea517f87680eb5d760d02519d9744285fa0d348f799e2ed77183",
+  "max_reset_attempts_configured": 1,
+  "not_a_formal_benchmark_result": true,
+  "observation_wait_count": 3,
+  "outcome": "portal_activation_not_observed",
+  "raw_result_sha256": "c5d23158ad02610b6cc5dced2de60e6cb41a8c9f1624699b9272a65a5fcf408e",
+  "raw_run_path": "/Users/joey/Documents/Projects/ObsidianLink/ObsidianLink/runs/p1_e11_portal_activation/e11-diagnostic-20260817-002",
+  "reset_attempts": 1,
+  "retry_count": 0,
+  "reviewed_at": "2026-08-16T17:14:26.318111+00:00",
+  "root_cause_status": "ROOT_CAUSE_PROVEN",
+  "run_kind": "e11_diagnostic_world_write",
+  "runtime_jar_sha256_during_run": "9011798f67a93adbb391890c2857249290cc1ac32359d3557c892054a9fe0029",
+  "runtime_jar_sha256_restored": "836cb5ac6f89edca3cec255dd895e791212b04794d3349eb13a1b2b313416b6f",
+  "semantic_diff_sha256": "7aaf7e0d5c060059ba735d7344e3c9d85e8a882e5efb71074ecd2678d67af6ee",
+  "success": false,
+  "tested_action_count": 1,
+  "update_post_placement_lines": 0,
+  "verification": {
+    "e10_real_reviewed_success": true,
+    "e11_diagnostic_instrumentation": "COMPLETED",
+    "e11_geometry_real_verified": true,
+    "e11_integration_verified": false,
+    "e11_live_001_outcome": "portal_activation_not_observed",
+    "e11_real_activation_reviewed_success": false,
+    "e12_started": false,
+    "p1_hard_gate_passed": false,
+    "p2_started": false
+  }
+}

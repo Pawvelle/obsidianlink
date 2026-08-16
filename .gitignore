@@ -29,6 +29,8 @@ dist/
 !/runs/history/p1-e11-live-20260816-001/**
 !/runs/history/p1-e11-diagnostic-20260817-001/
 !/runs/history/p1-e11-diagnostic-20260817-001/**
+!/runs/history/p1-e11-diagnostic-20260817-002/
+!/runs/history/p1-e11-diagnostic-20260817-002/**
 /results/
 /logs/
 

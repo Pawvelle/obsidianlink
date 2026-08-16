@@ -18,7 +18,7 @@
        if (!oldState.isIn(state.getBlock())) {
 -         if (canLightPortal(worldIn)) {
 +         boolean canLight = canLightPortal(worldIn);
-+         LOGGER.info("[E11-DIAG] AbstractFireBlock.onBlockAdded pos={} dim={} canLightPortal={} inFireTag={}", pos, worldIn.getDimensionKey().getLocation(), canLight, state.isIn(net.minecraft.tags.BlockTags.FIRE));
++         LOGGER.info("[E11-DIAG] AbstractFireBlock.onBlockAdded pos={} dim={} canLightPortal={} inFireTag={} thread={} worldClass={} isRemote={}", pos, worldIn.getDimensionKey().getLocation(), canLight, state.isIn(net.minecraft.tags.BlockTags.FIRE), Thread.currentThread().getName(), worldIn.getClass().getName(), worldIn.isRemote());
 +         if (canLight) {
              Optional<PortalSize> optional = PortalSize.func_242964_a(worldIn, pos, Direction.Axis.X);
 +            LOGGER.info("[E11-DIAG] PortalSize.func_242964_a Axis.X-first present={}", optional.isPresent());
@@ -62,16 +62,43 @@
  
     }
  
-@@ -152,10 +159,12 @@
+@@ -152,10 +159,13 @@
     }
  
     public void placePortalBlocks() {
-+      LOGGER.info("[E11-DIAG] placePortalBlocks ENTER axis={} bottomLeft={} width={} height={} portalCount={}", this.axis, this.bottomLeft, this.width, this.height, this.portalBlockCount);
++      LOGGER.info("[E11-DIAG] placePortalBlocks ENTER axis={} bottomLeft={} width={} height={} portalCount={} thread={} worldClass={} isRemote={}", this.axis, this.bottomLeft, this.width, this.height, this.portalBlockCount, Thread.currentThread().getName(), this.world.getClass().getName(), this.world.isRemote());
        BlockState blockstate = Blocks.NETHER_PORTAL.getDefaultState().with(NetherPortalBlock.AXIS, this.axis);
        BlockPos.getAllInBoxMutable(this.bottomLeft, this.bottomLeft.offset(Direction.UP, this.height - 1).offset(this.rightDir, this.width - 1)).forEach((p_242967_2_) -> {
-          this.world.setBlockState(p_242967_2_, blockstate, 18);
+-         this.world.setBlockState(p_242967_2_, blockstate, 18);
++         boolean accepted = this.world.setBlockState(p_242967_2_, blockstate, 18);
++         LOGGER.info("[E11-DIAG] placePortalBlocks SET pos={} accepted={} after={} thread={} worldClass={} isRemote={}", p_242967_2_, accepted, this.world.getBlockState(p_242967_2_), Thread.currentThread().getName(), this.world.getClass().getName(), this.world.isRemote());
        });
 +      LOGGER.info("[E11-DIAG] placePortalBlocks EXIT axis={} bottomLeft={} width={} height={}", this.axis, this.bottomLeft, this.width, this.height);
     }
  
     public boolean validatePortal() {
+--- a/src/main/java/net/minecraft/block/NetherPortalBlock.java
++++ b/src/main/java/net/minecraft/block/NetherPortalBlock.java
+@@ -26,8 +26,11 @@
+ import net.minecraft.world.server.ServerWorld;
+ import net.minecraftforge.api.distmarker.Dist;
+ import net.minecraftforge.api.distmarker.OnlyIn;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
+ 
+ public class NetherPortalBlock extends Block {
++   private static final Logger LOGGER = LogManager.getLogger();
+    public static final EnumProperty<Direction.Axis> AXIS = BlockStateProperties.HORIZONTAL_AXIS;
+    protected static final VoxelShape X_AABB = Block.makeCuboidShape(0.0D, 0.0D, 6.0D, 16.0D, 16.0D, 10.0D);
+    protected static final VoxelShape Z_AABB = Block.makeCuboidShape(6.0D, 0.0D, 0.0D, 10.0D, 16.0D, 16.0D);
+@@ -67,7 +70,9 @@
+       Direction.Axis direction$axis = facing.getAxis();
+       Direction.Axis direction$axis1 = stateIn.get(AXIS);
+       boolean flag = direction$axis1 != direction$axis && direction$axis.isHorizontal();
+-      return !flag && !facingState.isIn(this) && !(new PortalSize(worldIn, currentPos, direction$axis1)).validatePortal() ? Blocks.AIR.getDefaultState() : super.updatePostPlacement(stateIn, facing, facingState, worldIn, currentPos, facingPos);
++      BlockState result = !flag && !facingState.isIn(this) && !(new PortalSize(worldIn, currentPos, direction$axis1)).validatePortal() ? Blocks.AIR.getDefaultState() : super.updatePostPlacement(stateIn, facing, facingState, worldIn, currentPos, facingPos);
++      LOGGER.info("[E11-DIAG] NetherPortalBlock.updatePostPlacement pos={} facing={} thread={} worldClass={} isRemote={} result={}", currentPos, facing, Thread.currentThread().getName(), worldIn.getClass().getName(), worldIn.isRemote(), result);
++      return result;
+    }
+ 
+    public void onEntityCollision(BlockState state, World worldIn, BlockPos pos, Entity entityIn) {
