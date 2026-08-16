@@ -75,3 +75,9 @@ interior width 2–21, height 3–21, so the frozen minimum is interior
 Interior starts as air. Ignition cell `(0, 4, 1)`. Spawn `(0, 4, 0)`,
 yaw `0.0`, pitch `60.0`. Observation window: 3 ticks (engineering
 buffer; unused by geometry smoke).
+
+A later authorized activation run `p1-e11-live-001` produced
+`portal_activation_not_observed` on this same deployed JAR: fire at
+the ignition cell, 0/6 portal. Compact evidence:
+`runs/history/p1-e11-live-20260816-001/`. This document remains
+geometry provenance; it does not set `integration_verified`.

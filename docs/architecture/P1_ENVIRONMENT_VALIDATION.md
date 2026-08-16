@@ -81,6 +81,8 @@ Mission XML 可以预置 obsidian frame（`allow_obsidian_frame_fixture=True`）
 
 FakeBackend success 不能证明真实 Minecraft activation。E11 `unit_verified` 不把 `integration_verified` 设为 true。
 
+One real E11 activation: `p1-e11-live-001`, outcome `portal_activation_not_observed`. Before: 14/14 obsidian, 6/6 interior air, portal=0, fire=0, ignition `(0, 4, 1)` = air. Stimulus: exactly one accepted `use_item(flint_and_steel)`. After: ignition cell = `fire`, 0/6 `nether_portal`, controls unchanged, `truth_missing_count=0`. Fire ≠ success. Compact evidence: `runs/history/p1-e11-live-20260816-001/`. This is not portal activation capability and does not set `integration_verified`. Do not retry this run.
+
 ## Startup reliability hardening
 
 - P1 startup reliability hardening: **COMPLETE**.
@@ -94,8 +96,8 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 ## Authorization and hard gate
 
-E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 runtime geometry deployed / real verified = **YES**；E11 real activation = **NOT RUN**；`integration_verified` = **NO**。E8/E9/E10/E11 evaluator-only truth 与 Agent-visible observation 保持隔离。E12 为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
+E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 runtime geometry deployed / real verified = **YES**；E11 real activation attempted = **YES** (`p1-e11-live-001`, `portal_activation_not_observed`)；`integration_verified` = **NO**。E8/E9/E10/E11 evaluator-only truth 与 Agent-visible observation 保持隔离。E12 为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
-下一项经授权的 P1 工作是 **一次真实 E11 flint_and_steel → vanilla portal activation calibration**。不要自动开始点火、Gradle 或 E12。每次真实运行仍需用户单独明确授权。
+下一项经授权的 P1 工作是 **调查这一次 E11 live activation failure**。不要 retry、不要 Gradle、不要开始 E12。每次真实运行仍需用户单独明确授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。
