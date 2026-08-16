@@ -333,13 +333,13 @@ class MineRLEnvironmentBackend:
         # the casting workflows' slots from their frozen initial inventory.
         if is_legacy_route_a0:
             params = task.scenario_parameters
-            # E6 dirt-only, E7/E9 bucket-only, and E8 dirt-stimulus
+            # E6 dirt-only, E7/E9/E10 bucket-only, and E8 dirt-stimulus
             # calibrations must map the actual inventory onto hotbar.1.
             # The historical A0 three-item slot contract stays unchanged
             # for every other route_a_a0 caller.
             if (
                 isinstance(params, Mapping)
-                and params.get("p1_validation_id") in {"E6", "E7", "E8", "E9"}
+                and params.get("p1_validation_id") in {"E6", "E7", "E8", "E9", "E10"}
             ):
                 self._hotbar_mapping = build_hotbar_mapping(
                     task.initial_inventories["agent_1"]
@@ -550,7 +550,7 @@ class MineRLEnvironmentBackend:
     def get_server_truth_snapshot(
         self, cells: Sequence[tuple[int, int, int]]
     ) -> Mapping[str, Any] | None:
-        """Return evaluator-only target-region block and fluid truth for P1 E8/E9.
+        """Return evaluator-only target-region block and fluid truth for P1 E8/E9/E10.
 
         ``cells`` are Minecraft **world** coordinates. Lookup uses the
         spawn-relative ObservationFromGrid(atSpawn=true) conversion. A

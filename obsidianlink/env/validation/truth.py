@@ -1,9 +1,10 @@
-"""MineRL-independent P1 E8/E9 evaluator-only server-truth contract.
+"""MineRL-independent P1 E8/E9/E10 evaluator-only server-truth contract.
 
 E8 validates the block-truth portion of ServerTruthSnapshot. E9 extends
 the same snapshot with typed fluid truth, including the source/flowing
-distinction that E7 deliberately collapsed. Neither channel is
-Agent-visible, a benchmark task, or E10 water-lava-to-obsidian mechanics.
+distinction that E7 deliberately collapsed. E10 reuses both channels to
+observe a vanilla water-lava → obsidian conversion. None of these
+channels is Agent-visible or a benchmark task.
 """
 
 from __future__ import annotations
@@ -51,6 +52,12 @@ TRUTH_FLUID_UNKNOWN = "truth_fluid_unknown"
 TRUTH_SOURCE_FLOWING_MISMATCH = "truth_source_flowing_mismatch"
 TRUTH_BEFORE_FLUID_MISMATCH = "truth_before_fluid_mismatch"
 TRUTH_AFTER_FLUID_MISMATCH = "truth_after_fluid_mismatch"
+OBSIDIAN_CONVERSION_OK = "obsidian_conversion_ok"
+INVALID_INITIAL_STATE = "invalid_initial_state"
+FLUID_PRECONDITION_FAILED = "fluid_precondition_failed"
+CONVERSION_NOT_OBSERVED = "conversion_not_observed"
+UNEXPECTED_BLOCK_TRANSITION = "unexpected_block_transition"
+INFRASTRUCTURE_FAILURE = "infrastructure_failure"
 
 BLOCK_TRUTH_OUTCOMES = frozenset(
     {
@@ -109,6 +116,40 @@ FLUID_TRUTH_OUTCOMES = frozenset(
         TRUTH_CALIBRATION_MISMATCH,
     }
 )
+OBSIDIAN_CONVERSION_OUTCOMES = frozenset(
+    {
+        OBSIDIAN_CONVERSION_OK,
+        INVALID_INITIAL_STATE,
+        FLUID_PRECONDITION_FAILED,
+        CONVERSION_NOT_OBSERVED,
+        UNEXPECTED_BLOCK_TRANSITION,
+        INFRASTRUCTURE_FAILURE,
+        TRUTH_SNAPSHOT_MISSING,
+        TRUTH_IDENTITY_MISMATCH,
+        TRUTH_POSITION_MISSING,
+        TRUTH_POSITION_INVALID,
+        TRUTH_DIMENSION_MISSING,
+        TRUTH_DIMENSION_INVALID,
+        TRUTH_WRONG_DIMENSION,
+        TRUTH_ANCHOR_MISMATCH,
+        TRUTH_REGION_EMPTY,
+        TRUTH_DUPLICATE_CELL,
+        TRUTH_CELL_OUT_OF_BOUNDS,
+        TRUTH_BLOCK_MISSING,
+        TRUTH_BLOCK_UNKNOWN,
+        TRUTH_FLUID_MISSING,
+        TRUTH_FLUID_UNKNOWN,
+        TRUTH_SOURCE_FLOWING_MISMATCH,
+        TRUTH_CONTROL_CELL_CHANGED,
+        TRUTH_STIMULUS_REJECTED,
+        TRUTH_TEST_ACTION_NOT_EXECUTED,
+        TRUTH_MULTIPLE_TEST_ACTIONS,
+        TRUTH_LEAK,
+        TRUTH_WRONG_ACTION_TYPE,
+        TRUTH_WRONG_TARGET,
+        TRUTH_CALIBRATION_MISMATCH,
+    }
+)
 
 ALLOWED_DIMENSIONS = frozenset(
     {
@@ -119,6 +160,10 @@ ALLOWED_DIMENSIONS = frozenset(
 )
 E8_REQUIRED_DIMENSION = "minecraft:overworld"
 E9_REQUIRED_DIMENSION = "minecraft:overworld"
+E10_REQUIRED_DIMENSION = "minecraft:overworld"
+E10_STIMULUS_ITEM = "water_bucket"
+E10_EXPECTED_BEFORE_BLOCK = "lava"
+E10_EXPECTED_AFTER_BLOCK = "obsidian"
 ANCHOR_SOURCE_ORIGIN = "portal_grid_origin"
 ANCHOR_SOURCE_SPAWN_FALLBACK = "expected_spawn_fallback"
 ALLOWED_ANCHOR_SOURCES = frozenset(
@@ -159,6 +204,10 @@ EVALUATOR_TRUTH_LEAK_KEYS = frozenset(
         "server_fluid_truth",
         "server_truth",
         "truth_snapshot",
+        "obsidian_present",
+        "conversion_observed",
+        "before_target_block",
+        "after_target_block",
     }
 )
 
@@ -1128,3 +1177,384 @@ def inspect_fluid_truth(
             **evidence,
         )
     return FluidTruthInspection(FLUID_TRUTH_OK, None, **evidence)
+
+
+@dataclass(frozen=True)
+class ObsidianConversionActionExecution:
+    """Observed backend response to the single bounded E10 water stimulus."""
+
+    episode_id: str
+    agent_id: str
+    step_id: int
+    action_type: str
+    target: str
+    duration_ticks: int
+    translated_action_accepted: bool
+    tested_action_count: int
+    observation_wait_count: int = 0
+    conversion_observed_at_step: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "episode_id", _identifier(self.episode_id, "episode_id"))
+        object.__setattr__(self, "agent_id", _identifier(self.agent_id, "agent_id"))
+        object.__setattr__(self, "action_type", _identifier(self.action_type, "action_type"))
+        object.__setattr__(self, "target", _identifier(self.target, "target"))
+        if type(self.step_id) is not int or self.step_id < 0:
+            raise ValueError("step_id must be a non-negative int")
+        if type(self.duration_ticks) is not int or self.duration_ticks < 1:
+            raise ValueError("duration_ticks must be a positive int")
+        if type(self.translated_action_accepted) is not bool:
+            raise ValueError("translated_action_accepted must be bool")
+        if type(self.tested_action_count) is not int or self.tested_action_count < 0:
+            raise ValueError("tested_action_count must be a non-negative int")
+        if type(self.observation_wait_count) is not int or self.observation_wait_count < 0:
+            raise ValueError("observation_wait_count must be a non-negative int")
+        if self.conversion_observed_at_step is not None and (
+            type(self.conversion_observed_at_step) is not int
+            or self.conversion_observed_at_step < 1
+        ):
+            raise ValueError("conversion_observed_at_step must be a positive int or None")
+
+
+@dataclass(frozen=True)
+class ObsidianConversionInspection:
+    outcome: str
+    error: str | None
+    before_snapshot: ServerTruthSnapshot | None = None
+    after_snapshot: ServerTruthSnapshot | None = None
+    before_target_block: str | None = None
+    after_target_block: str | None = None
+    target_changed: bool | None = None
+    obsidian_present: bool | None = None
+    conversion_observed: bool | None = None
+    conversion_observed_at_step: int | None = None
+    control_cells_unchanged: bool | None = None
+    identity_valid: bool | None = None
+    truth_missing_count: int | None = None
+    observation_wait_count: int | None = None
+    source_flowing_match: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.outcome not in OBSIDIAN_CONVERSION_OUTCOMES:
+            raise ValueError(f"unknown obsidian-conversion outcome: {self.outcome!r}")
+        if self.error is not None:
+            if not isinstance(self.error, str) or not self.error.strip():
+                raise ValueError("error must be None or a non-empty string")
+        for field_name in (
+            "target_changed",
+            "obsidian_present",
+            "conversion_observed",
+            "control_cells_unchanged",
+            "identity_valid",
+            "source_flowing_match",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and type(value) is not bool:
+                raise ValueError(f"{field_name} must be bool or None")
+        for field_name in (
+            "truth_missing_count",
+            "observation_wait_count",
+            "conversion_observed_at_step",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and (type(value) is not int or value < 0):
+                raise ValueError(f"{field_name} must be a non-negative int or None")
+        for field_name in ("before_target_block", "after_target_block"):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(
+                    self, field_name, validate_block_name(value, field_name)
+                )
+        for field_name in ("before_snapshot", "after_snapshot"):
+            value = getattr(self, field_name)
+            if value is not None and not isinstance(value, ServerTruthSnapshot):
+                raise ValueError(f"{field_name} must be ServerTruthSnapshot or None")
+
+    @property
+    def valid(self) -> bool:
+        return self.outcome == OBSIDIAN_CONVERSION_OK
+
+
+def inspect_obsidian_conversion(
+    before: ServerTruthSnapshot,
+    after: ServerTruthSnapshot,
+    execution: ObsidianConversionActionExecution,
+    *,
+    probe_world_cells: Sequence[tuple[int, int, int]],
+    probe_grid_cells: Sequence[tuple[int, int, int]],
+    target_world_cell: tuple[int, int, int],
+    water_world_cell: tuple[int, int, int],
+    control_world_cells: Sequence[tuple[int, int, int]],
+    expected_dimension: str = E10_REQUIRED_DIMENSION,
+    duration_ticks: int,
+    stimulus_target: str = E10_STIMULUS_ITEM,
+    observation_window_ticks: int,
+    position_min: tuple[float, float, float] | None = None,
+    position_max: tuple[float, float, float] | None = None,
+) -> ObsidianConversionInspection:
+    """Fail closed unless server truth shows this episode's lava → obsidian."""
+
+    probes = validate_world_cells(probe_world_cells, "probe_world_cells")
+    grids = tuple(
+        validate_target_cell(cell, "probe_grid_cell") for cell in probe_grid_cells
+    )
+    if len(grids) != len(probes):
+        raise ValueError("probe world/grid regions must have the same length")
+    target_world_cell = validate_target_cell(target_world_cell, "target_world_cell")
+    water_world_cell = validate_target_cell(water_world_cell, "water_world_cell")
+    controls = tuple(
+        validate_target_cell(cell, "control_world_cell") for cell in control_world_cells
+    )
+    expected_dimension = validate_dimension(expected_dimension, "expected_dimension")
+    stimulus_target = _identifier(stimulus_target, "stimulus_target")
+    if stimulus_target != E10_STIMULUS_ITEM:
+        raise ValueError("stimulus_target does not match the frozen E10 water bucket")
+    if type(duration_ticks) is not int or duration_ticks < 1:
+        raise ValueError("duration_ticks must be a positive int")
+    if type(observation_window_ticks) is not int or observation_window_ticks < 1:
+        raise ValueError("observation_window_ticks must be a positive int")
+    if execution.action_type != "use_item":
+        return ObsidianConversionInspection(
+            TRUTH_WRONG_ACTION_TYPE, "E10 stimulus must be use_item"
+        )
+    if execution.target != stimulus_target:
+        return ObsidianConversionInspection(
+            TRUTH_WRONG_TARGET, "E10 stimulus target differs from frozen calibration"
+        )
+    if execution.duration_ticks != duration_ticks:
+        return ObsidianConversionInspection(
+            TRUTH_CALIBRATION_MISMATCH,
+            "E10 stimulus duration differs from frozen calibration",
+        )
+    if execution.tested_action_count == 0:
+        return ObsidianConversionInspection(
+            TRUTH_TEST_ACTION_NOT_EXECUTED, "E10 stimulus was not executed"
+        )
+    if execution.tested_action_count != 1:
+        return ObsidianConversionInspection(
+            TRUTH_MULTIPLE_TEST_ACTIONS, "exactly one E10 stimulus is required"
+        )
+    if not execution.translated_action_accepted:
+        return ObsidianConversionInspection(
+            TRUTH_STIMULUS_REJECTED, "E10 stimulus translation was rejected"
+        )
+    if execution.observation_wait_count > observation_window_ticks:
+        return ObsidianConversionInspection(
+            TRUTH_CALIBRATION_MISMATCH,
+            "E10 observation wait exceeded the frozen window",
+        )
+
+    identity_valid = (
+        before.episode_id == execution.episode_id
+        and after.episode_id == execution.episode_id
+        and before.agent_id == execution.agent_id
+        and after.agent_id == execution.agent_id
+        and before.step_id == 0
+        and execution.step_id >= 1
+        and after.step_id >= execution.step_id
+        and before.grid_anchor_world == after.grid_anchor_world
+        and before.anchor_source == after.anchor_source
+    )
+    missing_count = before.truth_missing_count + after.truth_missing_count
+    before_target = before.block_at(target_world_cell)
+    after_target = after.block_at(target_world_cell)
+    before_fluid = before.fluid_at(target_world_cell)
+    target_changed = (
+        before_target is not None
+        and after_target is not None
+        and before_target != after_target
+    )
+    obsidian_present = after_target == E10_EXPECTED_AFTER_BLOCK
+    conversion_observed = bool(target_changed and obsidian_present)
+    observed_at = execution.conversion_observed_at_step
+    if conversion_observed and observed_at is None:
+        observed_at = after.step_id
+    evidence: dict[str, object] = {
+        "before_snapshot": before,
+        "after_snapshot": after,
+        "before_target_block": before_target,
+        "after_target_block": after_target,
+        "target_changed": target_changed,
+        "obsidian_present": obsidian_present,
+        "conversion_observed": conversion_observed,
+        "conversion_observed_at_step": observed_at,
+        "observation_wait_count": execution.observation_wait_count,
+        "truth_missing_count": missing_count,
+    }
+    if not identity_valid:
+        return ObsidianConversionInspection(
+            TRUTH_IDENTITY_MISMATCH,
+            "obsidian-conversion identity, region, or step sequence is invalid",
+            identity_valid=False,
+            **evidence,  # type: ignore[arg-type]
+        )
+    evidence["identity_valid"] = True
+    if missing_count != 0:
+        return ObsidianConversionInspection(
+            TRUTH_BLOCK_MISSING,
+            "E10 success requires truth_missing_count=0",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if not before.block_truth or not after.block_truth:
+        return ObsidianConversionInspection(
+            TRUTH_BLOCK_MISSING,
+            "block truth is missing",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if not before.fluid_truth or not after.fluid_truth:
+        return ObsidianConversionInspection(
+            TRUTH_FLUID_MISSING,
+            "fluid truth is missing",
+            **evidence,  # type: ignore[arg-type]
+        )
+    region_valid = (
+        tuple(item.world_cell for item in before.block_truth) == probes
+        and tuple(item.world_cell for item in after.block_truth) == probes
+        and tuple(item.grid_cell for item in before.block_truth) == grids
+        and tuple(item.grid_cell for item in after.block_truth) == grids
+        and tuple(item.world_cell for item in before.fluid_truth) == probes
+        and tuple(item.world_cell for item in after.fluid_truth) == probes
+    )
+    if not region_valid:
+        return ObsidianConversionInspection(
+            TRUTH_IDENTITY_MISMATCH,
+            "obsidian-conversion identity, region, or step sequence is invalid",
+            identity_valid=False,
+            **{key: value for key, value in evidence.items() if key != "identity_valid"},  # type: ignore[arg-type]
+        )
+    if before.dimension != expected_dimension or after.dimension != expected_dimension:
+        return ObsidianConversionInspection(
+            TRUTH_WRONG_DIMENSION,
+            "E10 calibration must remain in minecraft:overworld",
+            **evidence,  # type: ignore[arg-type]
+        )
+    for snapshot, label in ((before, "before"), (after, "after")):
+        if position_min is not None or position_max is not None:
+            for index, axis in enumerate(("x", "y", "z")):
+                value = snapshot.position_world[index]
+                if position_min is not None and value < position_min[index]:
+                    return ObsidianConversionInspection(
+                        TRUTH_POSITION_INVALID,
+                        f"{label} position {axis} is outside E10 calibration bounds",
+                        **evidence,  # type: ignore[arg-type]
+                    )
+                if position_max is not None and value > position_max[index]:
+                    return ObsidianConversionInspection(
+                        TRUTH_POSITION_INVALID,
+                        f"{label} position {axis} is outside E10 calibration bounds",
+                        **evidence,  # type: ignore[arg-type]
+                    )
+
+    if before_target is None:
+        return ObsidianConversionInspection(
+            TRUTH_BLOCK_MISSING,
+            "before snapshot is missing the target cell",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if before_target == E10_EXPECTED_AFTER_BLOCK:
+        return ObsidianConversionInspection(
+            INVALID_INITIAL_STATE,
+            "target already contained obsidian before the E10 stimulus",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if (
+        before_fluid is None
+        or before_fluid.fluid_type != "lava"
+        or before_fluid.flow_state != "source"
+        or before_target != E10_EXPECTED_BEFORE_BLOCK
+    ):
+        source_mismatch = (
+            before_fluid is not None
+            and before_fluid.fluid_type == "lava"
+            and before_fluid.flow_state != "source"
+        )
+        if source_mismatch:
+            return ObsidianConversionInspection(
+                TRUTH_SOURCE_FLOWING_MISMATCH,
+                "E10 requires a lava source at the target before stimulus",
+                source_flowing_match=False,
+                **evidence,  # type: ignore[arg-type]
+            )
+        return ObsidianConversionInspection(
+            FLUID_PRECONDITION_FAILED,
+            "E10 requires a lava source at the target before stimulus",
+            source_flowing_match=False,
+            **evidence,  # type: ignore[arg-type]
+        )
+    evidence["source_flowing_match"] = True
+
+    water_before = before.fluid_at(water_world_cell)
+    if (
+        water_before is None
+        or water_before.fluid_type != "none"
+        or water_before.flow_state != "none"
+    ):
+        return ObsidianConversionInspection(
+            FLUID_PRECONDITION_FAILED,
+            "E10 water-pour cell must be empty before stimulus",
+            **evidence,  # type: ignore[arg-type]
+        )
+
+    after_controls_ok = True
+    for cell in controls:
+        before_block = before.block_at(cell)
+        after_block = after.block_at(cell)
+        before_control_fluid = before.fluid_at(cell)
+        after_control_fluid = after.fluid_at(cell)
+        if (
+            before_block is None
+            or after_block is None
+            or before_block != after_block
+            or before_control_fluid is None
+            or after_control_fluid is None
+            or (
+                before_control_fluid.fluid_type,
+                before_control_fluid.flow_state,
+            )
+            != (
+                after_control_fluid.fluid_type,
+                after_control_fluid.flow_state,
+            )
+        ):
+            after_controls_ok = False
+            break
+    evidence["control_cells_unchanged"] = after_controls_ok
+    if not after_controls_ok:
+        return ObsidianConversionInspection(
+            TRUTH_CONTROL_CELL_CHANGED,
+            "a control probe cell changed during the E10 conversion window",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if after_target is None:
+        return ObsidianConversionInspection(
+            TRUTH_BLOCK_MISSING,
+            "after snapshot is missing the target cell",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if after_target == E10_EXPECTED_AFTER_BLOCK:
+        if not target_changed:
+            return ObsidianConversionInspection(
+                INVALID_INITIAL_STATE,
+                "target already contained obsidian before the E10 stimulus",
+                **evidence,  # type: ignore[arg-type]
+            )
+        if observed_at is None or observed_at < execution.step_id:
+            return ObsidianConversionInspection(
+                TRUTH_IDENTITY_MISMATCH,
+                "obsidian conversion is not bound to the E10 stimulus step",
+                **evidence,  # type: ignore[arg-type]
+            )
+        return ObsidianConversionInspection(
+            OBSIDIAN_CONVERSION_OK, None, **evidence  # type: ignore[arg-type]
+        )
+    if after_target == before_target:
+        return ObsidianConversionInspection(
+            CONVERSION_NOT_OBSERVED,
+            "observation window expired without server-side obsidian",
+            **evidence,  # type: ignore[arg-type]
+        )
+    return ObsidianConversionInspection(
+        UNEXPECTED_BLOCK_TRANSITION,
+        "target changed to a block other than obsidian",
+        **evidence,  # type: ignore[arg-type]
+    )

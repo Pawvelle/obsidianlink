@@ -24,7 +24,17 @@ P1 验证实验仪器，不评测 Agent。所有 case 都是 calibration/integra
 
 ## E10 controlled calibration
 
-环境可预置合法 support/trench，但不能预置目标黑曜石。Deterministic calibration script 只执行最小 lava/water interaction。Evaluator 必须观察目标位置的 server-side transition（例如 `air/lava/... -> obsidian`），并把动作、world update 和 verdict 绑定到同一 episode/step 因果链。
+E10 验证 MineRL `use_item(water_bucket)` → Minecraft 1.16.5 vanilla water/lava 更新 → evaluator-only server truth 观察到目标格变为 `obsidian`。它不是 Agent benchmark、portal construction、E11 点火或 E12 维度切换。
+
+冻结几何（spawn-relative / `ObservationFromGrid(atSpawn=true)`）：
+
+- spawn `(0, 4, 0)`，yaw `0.0`，pitch `60.0`（复用已验证的 E7 姿态）
+- water-pour cell `(0, 4, 1)` / grid `(0, 0, 1)`
+- target lava-source cell `(0, 4, 2)` / grid `(0, 0, 2)`；禁止预置目标 obsidian
+- control cells `(0, 5, 1)`、`(0, 5, 2)`
+- 恰好 1 次 stimulus：`use_item(water_bucket)`，`duration_ticks=1`
+- bounded observation window：最多 5 个 `wait` tick
+- 成功 outcome：`obsidian_conversion_ok`，必须看到 server-side obsidian
 
 ```text
 MineRL Action
@@ -34,7 +44,9 @@ MineRL Action
   -> Verdict
 ```
 
-E10 通过不表示正式 portal task 成功。
+离线 Fake/test doubles 可在 reset 时预置合法 lava source。生产 flat platform 当前没有 DrawingDecorator；真实运行若目标格不是 lava source，必须 fail-closed（例如 `fluid_precondition_failed`），不能为此改 Java runtime。
+
+E10 通过不表示正式 portal task 成功。当前 verification：contract/offline runtime/MineRL bridge = `unit_verified`；Real E10 calibration = **NOT RUN**；`integration_verified` = **NO**。
 
 ## Startup reliability hardening
 
@@ -49,8 +61,8 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 ## Authorization and hard gate
 
-E0–E9 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E8/E9 evaluator-only truth 与 Agent-visible observation 保持隔离。E10、E11、E12 均为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
+E0–E9 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E8/E9/E10 evaluator-only truth 与 Agent-visible observation 保持隔离。E10 离线实现为 `unit_verified`，真实 calibration 为 **NOT RUN**。E11、E12 均为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
-下一项经授权的 P1 validation target 是 **E10 — vanilla water-lava -> obsidian**。这只更新任务顺序，不授权或启动 E10；每次真实 MineRL/Minecraft 运行仍需用户单独明确授权。
+下一项经授权的 P1 validation target 是 **一次独立真实 E10 MineRL calibration**。这不授权或启动该运行；每次真实 MineRL/Minecraft 运行仍需用户单独明确授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。

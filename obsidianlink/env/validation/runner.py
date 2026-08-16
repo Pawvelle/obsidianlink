@@ -1,11 +1,9 @@
 """Minimal P1 validation runner.
 
 Executes one validation case in a controlled lifecycle. This phase
-implements E0 lifecycle, E1 RGB, E2 inventory, E3 selected item, E4 camera,
-E5 movement, E6 block placement, E7 bucket usage, E8 server-side block
-truth, and E9 server-side fluid truth. E4/E5/E6/E7/E8/E9 consume only
-narrow evaluator truth from their integration adapters; the validation
-core remains MineRL-independent.
+implements E0 lifecycle through E10 vanilla obsidian conversion. E4--E10
+consume only narrow evaluator truth from their integration adapters; the
+validation core remains MineRL-independent.
 The runner never uses benchmark evaluator success semantics.
 """
 
@@ -13,6 +11,7 @@ from __future__ import annotations
 
 import json
 import traceback
+from dataclasses import replace
 from typing import Callable, Mapping, Protocol, runtime_checkable
 
 from obsidianlink.actions.protocol import parse_macro_action
@@ -91,6 +90,7 @@ from obsidianlink.env.validation.result import (
     E7_SUCCESS_OUTCOME,
     E8_SUCCESS_OUTCOME,
     E9_SUCCESS_OUTCOME,
+    E10_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
     SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
@@ -102,18 +102,26 @@ from obsidianlink.env.validation.selected_item import (
     validate_selected_item,
 )
 from obsidianlink.env.validation.truth import (
+    CONVERSION_NOT_OBSERVED,
+    E10_EXPECTED_AFTER_BLOCK,
+    E10_STIMULUS_ITEM,
+    FLUID_PRECONDITION_FAILED,
+    INVALID_INITIAL_STATE,
     TRUTH_SNAPSHOT_MISSING,
     BlockTruthActionExecution,
     BlockTruthInspection,
     FluidCalibrationVariant,
     FluidTruthActionExecution,
     FluidTruthInspection,
+    ObsidianConversionActionExecution,
+    ObsidianConversionInspection,
     ServerTruthSnapshot,
     frozen_expected_flow_state,
     frozen_expected_fluid_type,
     frozen_fluid_bucket_item,
     inspect_block_truth,
     inspect_fluid_truth,
+    inspect_obsidian_conversion,
     truth_error_outcome,
     validate_fluid_variant,
 )
@@ -121,7 +129,7 @@ from obsidianlink.env.validation.truth import (
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest common backend surface required by E0--E9.
+    """Smallest common backend surface required by E0--E10.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -237,6 +245,9 @@ def _result(
     fluid_variant_name: str | None = None,
     expected_target_fluid_type: str | None = None,
     expected_target_flow_state: str | None = None,
+    obsidian_execution: ObsidianConversionActionExecution | None = None,
+    obsidian_inspection: ObsidianConversionInspection | None = None,
+    observation_window_ticks: int | None = None,
     failure_stage: str | None = None,
     original_exception_type: str | None = None,
     reset_attempt_count: int | None = None,
@@ -279,7 +290,8 @@ def _result(
         expected_selected_item=expected_selected_item,
         selected_item_matches_expected=selected_item_matches_expected,
         agent_id=(
-            fluid_execution.agent_id if fluid_execution is not None
+            obsidian_execution.agent_id if obsidian_execution is not None
+            else fluid_execution.agent_id if fluid_execution is not None
             else truth_execution.agent_id if truth_execution is not None
             else truth_agent_id if truth_agent_id is not None
             else bucket_execution.agent_id if bucket_execution is not None
@@ -292,7 +304,8 @@ def _result(
             else camera_agent_id
         ),
         tested_step_id=(
-            fluid_execution.step_id if fluid_execution is not None
+            obsidian_execution.step_id if obsidian_execution is not None
+            else fluid_execution.step_id if fluid_execution is not None
             else truth_execution.step_id if truth_execution is not None
             else bucket_execution.step_id if bucket_execution is not None
             else placement_execution.step_id if placement_execution is not None
@@ -300,7 +313,9 @@ def _result(
             else None if camera_execution is None else camera_execution.step_id
         ),
         action_type=(
-            fluid_execution.action_type if fluid_execution is not None
+            obsidian_execution.action_type if obsidian_execution is not None
+            else "use_item" if observation_window_ticks is not None
+            else fluid_execution.action_type if fluid_execution is not None
             else "use_item" if fluid_variant_name is not None
             else truth_execution.action_type if truth_execution is not None
             else "place_block" if stimulus_target is not None
@@ -316,7 +331,8 @@ def _result(
         requested_yaw=(camera_requested_yaw if camera_execution is None else camera_execution.requested_yaw),
         requested_pitch=(camera_requested_pitch if camera_execution is None else camera_execution.requested_pitch),
         translated_action_accepted=(
-            fluid_execution.translated_action_accepted if fluid_execution is not None
+            obsidian_execution.translated_action_accepted if obsidian_execution is not None
+            else fluid_execution.translated_action_accepted if fluid_execution is not None
             else truth_execution.translated_action_accepted if truth_execution is not None
             else bucket_execution.translated_action_accepted if bucket_execution is not None
             else placement_execution.translated_action_accepted if placement_execution is not None
@@ -324,7 +340,9 @@ def _result(
             else None if camera_execution is None else camera_execution.translated_action_accepted
         ),
         tested_action_count=(
-            fluid_execution.tested_action_count if fluid_execution is not None
+            obsidian_execution.tested_action_count if obsidian_execution is not None
+            else 0 if observation_window_ticks is not None
+            else fluid_execution.tested_action_count if fluid_execution is not None
             else 0 if fluid_variant_name is not None
             else truth_execution.tested_action_count if truth_execution is not None
             else 0 if stimulus_target is not None
@@ -350,7 +368,8 @@ def _result(
         requested_sprint=(requested_sprint if movement_execution is None else movement_execution.sprint),
         requested_jump=(requested_jump if movement_execution is None else movement_execution.jump),
         requested_duration_ticks=(
-            fluid_execution.duration_ticks if fluid_execution is not None
+            obsidian_execution.duration_ticks if obsidian_execution is not None
+            else fluid_execution.duration_ticks if fluid_execution is not None
             else truth_execution.duration_ticks if truth_execution is not None
             else bucket_execution.duration_ticks if bucket_execution is not None
             else placement_execution.duration_ticks if placement_execution is not None
@@ -445,15 +464,30 @@ def _result(
         probe_world_cells=probe_world_cells,
         probe_grid_cells=probe_grid_cells,
         before_block_truth=(
-            None if block_truth is None or before_truth_snapshot is None
+            None
+            if before_truth_snapshot is None
+            or not before_truth_snapshot.block_truth
+            or (
+                block_truth is None
+                and obsidian_inspection is None
+                and observation_window_ticks is None
+            )
             else tuple(item.as_dict() for item in before_truth_snapshot.block_truth)
         ),
         after_block_truth=(
-            None if block_truth is None or after_truth_snapshot is None
+            None
+            if after_truth_snapshot is None
+            or not after_truth_snapshot.block_truth
+            or (
+                block_truth is None
+                and obsidian_inspection is None
+                and observation_window_ticks is None
+            )
             else tuple(item.as_dict() for item in after_truth_snapshot.block_truth)
         ),
         truth_missing_count=(
-            fluid_inspection.truth_missing_count if fluid_inspection is not None
+            obsidian_inspection.truth_missing_count if obsidian_inspection is not None
+            else fluid_inspection.truth_missing_count if fluid_inspection is not None
             else block_truth.truth_missing_count if block_truth is not None
             else (
                 None if before_truth_snapshot is None or after_truth_snapshot is None
@@ -462,12 +496,14 @@ def _result(
             )
         ),
         stimulus_target=(
-            fluid_execution.target if fluid_execution is not None
+            obsidian_execution.target if obsidian_execution is not None
+            else fluid_execution.target if fluid_execution is not None
             else truth_execution.target if truth_execution is not None
             else stimulus_target
         ),
         target_changed=(
-            None if fluid_inspection is None and block_truth is None
+            None if obsidian_inspection is None and fluid_inspection is None and block_truth is None
+            else obsidian_inspection.target_changed if obsidian_inspection is not None
             else fluid_inspection.target_changed if fluid_inspection is not None
             else block_truth.target_changed
         ),
@@ -475,22 +511,31 @@ def _result(
             None if block_truth is None else block_truth.target_expected_block_present
         ),
         control_cells_unchanged=(
-            None if fluid_inspection is None and block_truth is None
+            None if obsidian_inspection is None and fluid_inspection is None and block_truth is None
+            else obsidian_inspection.control_cells_unchanged if obsidian_inspection is not None
             else fluid_inspection.control_cells_unchanged if fluid_inspection is not None
             else block_truth.control_cells_unchanged
         ),
         before_server_fluid_truth=(
             None
-            if fluid_inspection is None
-            or before_truth_snapshot is None
+            if before_truth_snapshot is None
             or not before_truth_snapshot.fluid_truth
+            or (
+                fluid_inspection is None
+                and obsidian_inspection is None
+                and observation_window_ticks is None
+            )
             else tuple(item.as_dict() for item in before_truth_snapshot.fluid_truth)
         ),
         after_server_fluid_truth=(
             None
-            if fluid_inspection is None
-            or after_truth_snapshot is None
+            if after_truth_snapshot is None
             or not after_truth_snapshot.fluid_truth
+            or (
+                fluid_inspection is None
+                and obsidian_inspection is None
+                and observation_window_ticks is None
+            )
             else tuple(item.as_dict() for item in after_truth_snapshot.fluid_truth)
         ),
         fluid_variant=fluid_variant_name,
@@ -500,7 +545,28 @@ def _result(
             None if fluid_inspection is None else fluid_inspection.target_expected_fluid_present
         ),
         source_flowing_match=(
-            None if fluid_inspection is None else fluid_inspection.source_flowing_match
+            None if obsidian_inspection is None and fluid_inspection is None
+            else obsidian_inspection.source_flowing_match if obsidian_inspection is not None
+            else fluid_inspection.source_flowing_match
+        ),
+        before_target_block=(
+            None if obsidian_inspection is None else obsidian_inspection.before_target_block
+        ),
+        after_target_block=(
+            None if obsidian_inspection is None else obsidian_inspection.after_target_block
+        ),
+        obsidian_present=(
+            None if obsidian_inspection is None else obsidian_inspection.obsidian_present
+        ),
+        conversion_observed=(
+            None if obsidian_inspection is None else obsidian_inspection.conversion_observed
+        ),
+        conversion_observed_at_step=(
+            None if obsidian_inspection is None else obsidian_inspection.conversion_observed_at_step
+        ),
+        observation_window_ticks=observation_window_ticks if obsidian_inspection is not None or obsidian_execution is not None or observation_window_ticks is not None else None,
+        observation_wait_count=(
+            None if obsidian_execution is None else obsidian_execution.observation_wait_count
         ),
     )
 
@@ -537,6 +603,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E8_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E9:
         return E9_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E10:
+        return E10_SUCCESS_OUTCOME
     return None
 
 
@@ -827,6 +895,53 @@ class EnvironmentValidationRunner:
                     error="invalid E9 calibration: " + _format_error(exc),
                 )
 
+        e10_probe_world: tuple[tuple[int, int, int], ...] | None = None
+        e10_probe_grid: tuple[tuple[int, int, int], ...] | None = None
+        e10_target_world: tuple[int, int, int] | None = None
+        e10_water_world: tuple[int, int, int] | None = None
+        e10_controls: tuple[tuple[int, int, int], ...] | None = None
+        e10_stimulus_target: str | None = None
+        e10_position_min: tuple[float, float, float] | None = None
+        e10_position_max: tuple[float, float, float] | None = None
+        e10_observation_window: int | None = None
+        if case.check_id is EnvironmentValidationId.E10:
+            try:
+                e10_stimulus_target = E10_STIMULUS_ITEM
+                e10_target_world = validate_target_cell((0, 4, 2), "target_world_cell")
+                e10_water_world = validate_target_cell((0, 4, 1), "water_world_cell")
+                e10_probe_world = (
+                    e10_target_world,
+                    e10_water_world,
+                    validate_target_cell((0, 5, 1), "control_above_water"),
+                    validate_target_cell((0, 5, 2), "control_above_target"),
+                )
+                e10_probe_grid = (
+                    spawn_relative_grid_cell(e10_probe_world[0], (0, 4, 0)),
+                    spawn_relative_grid_cell(e10_probe_world[1], (0, 4, 0)),
+                    spawn_relative_grid_cell(e10_probe_world[2], (0, 4, 0)),
+                    spawn_relative_grid_cell(e10_probe_world[3], (0, 4, 0)),
+                )
+                e10_controls = e10_probe_world[2:]
+                e10_position_min = (-2.0, 2.0, -2.0)
+                e10_position_max = (3.0, 7.0, 4.0)
+                e10_observation_window = 5
+                if type(requested_duration_ticks) is not int or requested_duration_ticks < 1:
+                    raise ValueError("requested_duration_ticks must be a positive int")
+                if e10_probe_grid != ((0, 0, 2), (0, 0, 1), (0, 1, 1), (0, 1, 2)):
+                    raise ValueError("E10 probe grid conversion is not the frozen atSpawn mapping")
+            except (TypeError, ValueError) as exc:
+                return _result(
+                    case=case,
+                    episode_id=episode_id,
+                    success=False,
+                    outcome="runtime_error",
+                    created=False,
+                    reset_completed=False,
+                    initial_state_present=False,
+                    closed=False,
+                    error="invalid E10 calibration: " + _format_error(exc),
+                )
+
         created = False
         reset_completed = False
         initial_state_present = False
@@ -872,6 +987,8 @@ class EnvironmentValidationRunner:
         truth_agent_id: str | None = None
         fluid_execution: FluidTruthActionExecution | None = None
         fluid_inspection: FluidTruthInspection | None = None
+        obsidian_execution: ObsidianConversionActionExecution | None = None
+        obsidian_inspection: ObsidianConversionInspection | None = None
         failure_stage: str | None = None
         original_exception_type: str | None = None
         reset_attempt_count: int | None = None
@@ -1506,6 +1623,164 @@ class EnvironmentValidationRunner:
                                                     )
                                                     outcome = fluid_inspection.outcome
                                                     error = fluid_inspection.error
+                        elif case.check_id is EnvironmentValidationId.E10:
+                            if isinstance(reset_result, Mapping) and reset_result:
+                                first_agent = next(iter(reset_result))
+                                if isinstance(first_agent, str) and first_agent.strip():
+                                    truth_agent_id = first_agent.strip()
+                            snapshot = getattr(backend, "server_truth_snapshot", None)
+                            execute = getattr(backend, "execute_conversion_stimulus", None)
+                            if not callable(snapshot) or not callable(execute):
+                                outcome = "runtime_error"
+                                error = "E10 backend snapshot/stimulus surface is not callable"
+                            else:
+                                try:
+                                    candidate_before = snapshot()
+                                except (TypeError, ValueError) as exc:
+                                    outcome = truth_error_outcome(exc)
+                                    error = _format_error(exc)
+                                else:
+                                    if candidate_before is None:
+                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                        error = "server truth snapshot is missing before stimulus"
+                                    elif not isinstance(candidate_before, ServerTruthSnapshot):
+                                        outcome = truth_error_outcome(
+                                            TypeError("before snapshot has the wrong type")
+                                        )
+                                        error = "before snapshot has the wrong type"
+                                    else:
+                                        before_truth_snapshot = candidate_before
+                                if before_truth_snapshot is not None:
+                                    assert e10_target_world is not None
+                                    assert e10_water_world is not None
+                                    assert e10_probe_world is not None
+                                    assert e10_probe_grid is not None
+                                    assert e10_controls is not None
+                                    assert e10_stimulus_target is not None
+                                    assert e10_observation_window is not None
+                                    before_target = before_truth_snapshot.block_at(e10_target_world)
+                                    if before_target == E10_EXPECTED_AFTER_BLOCK:
+                                        obsidian_inspection = ObsidianConversionInspection(
+                                            INVALID_INITIAL_STATE,
+                                            "target already contained obsidian before the E10 stimulus",
+                                            before_snapshot=before_truth_snapshot,
+                                            before_target_block=before_target,
+                                            obsidian_present=True,
+                                            conversion_observed=False,
+                                            truth_missing_count=before_truth_snapshot.truth_missing_count,
+                                        )
+                                        outcome = obsidian_inspection.outcome
+                                        error = obsidian_inspection.error
+                                    else:
+                                        parsed = parse_macro_action(
+                                            json.dumps(
+                                                {
+                                                    "action_type": "use_item",
+                                                    "target": e10_stimulus_target,
+                                                    "duration_ticks": requested_duration_ticks,
+                                                    "parameters": {},
+                                                },
+                                                allow_nan=False,
+                                                sort_keys=True,
+                                            )
+                                        )
+                                        if not parsed.accepted:
+                                            outcome = "truth_stimulus_rejected"
+                                            error = "E10 stimulus protocol rejected: " + (
+                                                parsed.error or "unknown error"
+                                            )
+                                        else:
+                                            try:
+                                                candidate_execution = execute(parsed.action)
+                                            except (TypeError, ValueError) as exc:
+                                                outcome = truth_error_outcome(exc)
+                                                error = _format_error(exc)
+                                            else:
+                                                if not isinstance(
+                                                    candidate_execution,
+                                                    ObsidianConversionActionExecution,
+                                                ):
+                                                    raise TypeError(
+                                                        "execute_conversion_stimulus must return ObsidianConversionActionExecution"
+                                                    )
+                                                obsidian_execution = candidate_execution
+                                                try:
+                                                    candidate_after = snapshot()
+                                                except (TypeError, ValueError) as exc:
+                                                    outcome = truth_error_outcome(exc)
+                                                    error = _format_error(exc)
+                                                else:
+                                                    if candidate_after is None:
+                                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                                        error = "server truth snapshot is missing after stimulus"
+                                                    elif not isinstance(candidate_after, ServerTruthSnapshot):
+                                                        outcome = truth_error_outcome(
+                                                            TypeError("after snapshot has the wrong type")
+                                                        )
+                                                        error = "after snapshot has the wrong type"
+                                                    else:
+                                                        after_truth_snapshot = candidate_after
+                                                        wait_count = 0
+                                                        observed_at = None
+                                                        wait_failed = False
+                                                        if after_truth_snapshot.block_at(e10_target_world) == E10_EXPECTED_AFTER_BLOCK:
+                                                            observed_at = after_truth_snapshot.step_id
+                                                        else:
+                                                            observe_wait = getattr(backend, "observe_wait", None)
+                                                            if not callable(observe_wait):
+                                                                outcome = "runtime_error"
+                                                                error = "E10 backend observation wait surface is not callable"
+                                                                wait_failed = True
+                                                            else:
+                                                                for _ in range(e10_observation_window):
+                                                                    observe_wait()
+                                                                    wait_count += 1
+                                                                    try:
+                                                                        waited = snapshot()
+                                                                    except (TypeError, ValueError) as exc:
+                                                                        outcome = truth_error_outcome(exc)
+                                                                        error = _format_error(exc)
+                                                                        wait_failed = True
+                                                                        break
+                                                                    if waited is None:
+                                                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                                                        error = "server truth snapshot is missing during E10 observation window"
+                                                                        wait_failed = True
+                                                                        break
+                                                                    if not isinstance(waited, ServerTruthSnapshot):
+                                                                        outcome = truth_error_outcome(
+                                                                            TypeError("after snapshot has the wrong type")
+                                                                        )
+                                                                        error = "after snapshot has the wrong type"
+                                                                        wait_failed = True
+                                                                        break
+                                                                    after_truth_snapshot = waited
+                                                                    if after_truth_snapshot.block_at(e10_target_world) == E10_EXPECTED_AFTER_BLOCK:
+                                                                        observed_at = after_truth_snapshot.step_id
+                                                                        break
+                                                        if not wait_failed and after_truth_snapshot is not None:
+                                                            obsidian_execution = replace(
+                                                                obsidian_execution,
+                                                                observation_wait_count=wait_count,
+                                                                conversion_observed_at_step=observed_at,
+                                                            )
+                                                            obsidian_inspection = inspect_obsidian_conversion(
+                                                                before_truth_snapshot,
+                                                                after_truth_snapshot,
+                                                                obsidian_execution,
+                                                                probe_world_cells=e10_probe_world,
+                                                                probe_grid_cells=e10_probe_grid,
+                                                                target_world_cell=e10_target_world,
+                                                                water_world_cell=e10_water_world,
+                                                                control_world_cells=e10_controls,
+                                                                duration_ticks=requested_duration_ticks,
+                                                                stimulus_target=e10_stimulus_target,
+                                                                observation_window_ticks=e10_observation_window,
+                                                                position_min=e10_position_min,
+                                                                position_max=e10_position_max,
+                                                            )
+                                                            outcome = obsidian_inspection.outcome
+                                                            error = obsidian_inspection.error
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -1523,6 +1798,7 @@ class EnvironmentValidationRunner:
                     EnvironmentValidationId.E7,
                     EnvironmentValidationId.E8,
                     EnvironmentValidationId.E9,
+                    EnvironmentValidationId.E10,
                 ):
                     failure_stage = "reset"
                     original_exception_type = type(_root_exception(exc)).__name__
@@ -1587,6 +1863,13 @@ class EnvironmentValidationRunner:
                 exception_traceback = "".join(
                     traceback.format_exception(type(exc), exc, exc.__traceback__)
                 )
+            elif case.check_id is EnvironmentValidationId.E10 and before_truth_snapshot is not None:
+                outcome = "action_failed"
+                failure_stage = "action"
+                original_exception_type = type(_root_exception(exc)).__name__
+                exception_traceback = "".join(
+                    traceback.format_exception(type(exc), exc, exc.__traceback__)
+                )
             else:
                 outcome = "runtime_error"
         finally:
@@ -1605,6 +1888,7 @@ class EnvironmentValidationRunner:
                 E7_SUCCESS_OUTCOME,
                 E8_SUCCESS_OUTCOME,
                 E9_SUCCESS_OUTCOME,
+                E10_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -1629,6 +1913,7 @@ class EnvironmentValidationRunner:
             E7_SUCCESS_OUTCOME,
             E8_SUCCESS_OUTCOME,
             E9_SUCCESS_OUTCOME,
+            E10_SUCCESS_OUTCOME,
         }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
@@ -1687,7 +1972,7 @@ class EnvironmentValidationRunner:
             requested_strafe=requested_strafe if case.check_id is EnvironmentValidationId.E5 else None,
             requested_sprint=requested_sprint if case.check_id is EnvironmentValidationId.E5 else None,
             requested_jump=requested_jump if case.check_id is EnvironmentValidationId.E5 else None,
-            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
             minimum_horizontal_distance=minimum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
             minimum_forward_projection=minimum_forward_projection if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_lateral_drift=maximum_lateral_drift if case.check_id is EnvironmentValidationId.E5 else None,
@@ -1722,23 +2007,26 @@ class EnvironmentValidationRunner:
             expected_fluid=e7_expected_fluid if case.check_id is EnvironmentValidationId.E7 else None,
             before_selected_item=before_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
             after_selected_item=after_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
-            before_truth_snapshot=before_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
-            after_truth_snapshot=after_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            before_truth_snapshot=before_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            after_truth_snapshot=after_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
             truth_execution=truth_execution if case.check_id is EnvironmentValidationId.E8 else None,
             block_truth=block_truth if case.check_id is EnvironmentValidationId.E8 else None,
-            truth_agent_id=truth_agent_id if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            truth_agent_id=truth_agent_id if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
             stimulus_target=(
-                e9_stimulus_target if case.check_id is EnvironmentValidationId.E9
+                e10_stimulus_target if case.check_id is EnvironmentValidationId.E10
+                else e9_stimulus_target if case.check_id is EnvironmentValidationId.E9
                 else e8_stimulus_target if case.check_id is EnvironmentValidationId.E8
                 else None
             ),
             probe_world_cells=(
-                e9_probe_world if case.check_id is EnvironmentValidationId.E9
+                e10_probe_world if case.check_id is EnvironmentValidationId.E10
+                else e9_probe_world if case.check_id is EnvironmentValidationId.E9
                 else e8_probe_world if case.check_id is EnvironmentValidationId.E8
                 else None
             ),
             probe_grid_cells=(
-                e9_probe_grid if case.check_id is EnvironmentValidationId.E9
+                e10_probe_grid if case.check_id is EnvironmentValidationId.E10
+                else e9_probe_grid if case.check_id is EnvironmentValidationId.E9
                 else e8_probe_grid if case.check_id is EnvironmentValidationId.E8
                 else None
             ),
@@ -1747,9 +2035,12 @@ class EnvironmentValidationRunner:
             fluid_variant_name=None if e9_variant is None or case.check_id is not EnvironmentValidationId.E9 else e9_variant.value,
             expected_target_fluid_type=e9_expected_type if case.check_id is EnvironmentValidationId.E9 else None,
             expected_target_flow_state=e9_expected_flow if case.check_id is EnvironmentValidationId.E9 else None,
-            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
-            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
-            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
-            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
-            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9) else None,
+            obsidian_execution=obsidian_execution if case.check_id is EnvironmentValidationId.E10 else None,
+            obsidian_inspection=obsidian_inspection if case.check_id is EnvironmentValidationId.E10 else None,
+            observation_window_ticks=e10_observation_window if case.check_id is EnvironmentValidationId.E10 else None,
+            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
+            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10) else None,
         )
