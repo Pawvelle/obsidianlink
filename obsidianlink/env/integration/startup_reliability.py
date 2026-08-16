@@ -39,6 +39,28 @@ FINGERPRINT_MALMO = "malmo_eof"
 FINGERPRINT_RESET = "other_reset_error"
 
 
+def extract_jvm_crash_details(text: str) -> dict[str, str | None]:
+    """Extract stable fields from an ``hs_err_pid`` report or launch log."""
+
+    signal_match = re.search(r"(?:^|\n)#?\s*(SIG[A-Z]+)\b", text)
+    frame_match = re.search(
+        r"(?:Problematic frame:\s*\n)?#?\s*C\s+\[([^\]]+)\]",
+        text,
+    )
+    thread_match = re.search(
+        r'Current thread[^\n]*JavaThread\s+"([^"]+)"',
+        text,
+    )
+    frame = frame_match.group(1).strip() if frame_match else None
+    library_match = re.search(r"([^/\s+]+\.dylib)", frame or "")
+    return {
+        "signal": signal_match.group(1) if signal_match else None,
+        "problematic_frame": frame,
+        "thread_name": thread_match.group(1) if thread_match else None,
+        "native_library": library_match.group(1) if library_match else None,
+    }
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -133,6 +155,20 @@ def classify_failure(
     if child.get("close_error") or outcome == "close_failed":
         return "close", "cleanup_failure", "close_error", secondary
     if not child.get("reset_completed", False):
+        missing_protocol_reply = (
+            "bytes-like object is required" in lowered and "nonetype" in lowered
+        )
+        if missing_protocol_reply and "_send_mission" in lowered:
+            return "reset", "reset_failure", "malmo_mission_reply_missing", secondary
+        if missing_protocol_reply and "_to_move_quit_current_episode" in lowered:
+            return "minecraft_startup", "reset_failure", "malmo_quit_reply_missing", secondary
+        if missing_protocol_reply and "_peek_obs" in lowered:
+            return (
+                "observation",
+                "observation_failure",
+                "malmo_observation_reply_missing",
+                secondary,
+            )
         stage = "environment_creation" if not child.get("environment_created", False) else "reset"
         return stage, "reset_failure", FINGERPRINT_RESET, secondary
     if not child.get("initial_state_present", False):
@@ -167,6 +203,11 @@ def _run_child(attempt_dir: Path, attempt_id: str, episode_id: str) -> int:
         if adapter is None
         else adapter.reset_audit()
     )
+    reset_diagnostics = (
+        {"traceback": None, "exception_chain": []}
+        if adapter is None
+        else adapter.reset_failure_diagnostics()
+    )
     cleanup_payload = (
         {
             "close_returned": lifecycle.closed,
@@ -197,6 +238,8 @@ def _run_child(attempt_dir: Path, attempt_id: str, episode_id: str) -> int:
             "cleanup_failed" if lifecycle.success else lifecycle.outcome
         ),
         "error": lifecycle.error,
+        "error_traceback": reset_diagnostics["traceback"],
+        "exception_chain": reset_diagnostics["exception_chain"],
         "close_error": lifecycle.close_error,
         "reset_attempt_count": audit["reset_attempt_count"],
         "environment_launch_count": audit["environment_launch_count"],
@@ -318,6 +361,7 @@ def build_attempt_record(
     residual_descendants: Sequence[Mapping[str, Any]] = (),
     cleanup_actions: Sequence[str] = (),
     log_evidence: Sequence[Mapping[str, Any]] = (),
+    subprocess_pid: int | None = None,
 ) -> dict[str, Any]:
     cleanup_payload = child.get("cleanup", {}) if child is not None else {}
     explicit_cleanup_failure = any(
@@ -332,6 +376,13 @@ def build_attempt_record(
     cleanup_anomaly = explicit_cleanup_failure or bool(residual_descendants)
     nominal_success = bool(child and child.get("success"))
     success = nominal_success and exit_code == 0 and not timed_out and not cleanup_anomaly
+    diagnostic_text = (
+        combined_text
+        + "\n"
+        + (child_error or "")
+        + "\n"
+        + ("" if child is None else str(child.get("error_traceback") or ""))
+    )
     if success:
         stage, failure_class, fingerprint, secondary = (
             "none",
@@ -341,7 +392,7 @@ def build_attempt_record(
         )
     else:
         stage, failure_class, fingerprint, secondary = classify_failure(
-            combined_text + "\n" + (child_error or ""),
+            diagnostic_text,
             child=child,
             timed_out=timed_out,
             exit_code=exit_code,
@@ -350,6 +401,20 @@ def build_attempt_record(
     error = child_error if child is None else child.get("error")
     if timed_out:
         error = f"subprocess exceeded timeout"
+    launch_processes = []
+    for process in tracked_descendants:
+        command = str(process.get("command", ""))
+        if not re.search(r"(?:^|/)java(?:\s|$)", command):
+            continue
+        port_match = re.search(r"--envPort=(\d+)", command)
+        launch_processes.append(
+            {
+                "pid": process.get("pid"),
+                "command": command,
+                "environment_port": int(port_match.group(1)) if port_match else None,
+            }
+        )
+    crash_details = extract_jvm_crash_details(diagnostic_text) if not success else None
     return {
         "attempt_id": attempt_id,
         "episode_id": episode_id,
@@ -358,6 +423,7 @@ def build_attempt_record(
         "duration_seconds": round(duration_seconds, 6),
         "startup_duration_seconds": round(duration_seconds, 6),
         "subprocess_started": True,
+        "subprocess_pid": subprocess_pid,
         "subprocess_exit_code": exit_code,
         "backend_opened": bool(child and child.get("backend_opened")),
         "environment_created": bool(child and child.get("environment_created")),
@@ -367,6 +433,8 @@ def build_attempt_record(
         "success": success,
         "outcome": "lifecycle_ok" if success else failure_class,
         "error": error,
+        "error_traceback": None if child is None else child.get("error_traceback"),
+        "exception_chain": [] if child is None else child.get("exception_chain", []),
         "close_error": None if child is None else child.get("close_error"),
         "reset_attempt_count": 0 if child is None else child.get("reset_attempt_count", 0),
         "environment_launch_count": 0 if child is None else child.get("environment_launch_count", 0),
@@ -375,6 +443,8 @@ def build_attempt_record(
         "failure_class": failure_class,
         "failure_fingerprint": fingerprint,
         "secondary_symptoms": secondary,
+        "jvm_crash_details": crash_details,
+        "launch_processes": launch_processes,
         "timed_out": timed_out,
         "cleanup": {
             **cleanup_payload,
@@ -492,6 +562,7 @@ def run_one_attempt(
         episode_id,
     ]
     tracked: dict[int, str] = {}
+    subprocess_pid: int | None = None
     timed_out = False
     exit_code: int | None = None
     cleanup_actions: list[str] = []
@@ -503,6 +574,7 @@ def run_one_attempt(
             stderr=stderr_file,
             start_new_session=True,
         )
+        subprocess_pid = process.pid
         deadline = started + timeout_seconds
         while process.poll() is None and time.monotonic() < deadline:
             table = _process_table()
@@ -578,6 +650,7 @@ def run_one_attempt(
         residual_descendants=residual_payload,
         cleanup_actions=cleanup_actions,
         log_evidence=log_evidence,
+        subprocess_pid=subprocess_pid,
     )
     _write_json(attempt_dir / "attempt.json", record)
     return record

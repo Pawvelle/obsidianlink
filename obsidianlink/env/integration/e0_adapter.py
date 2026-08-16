@@ -7,6 +7,7 @@ projection. It does not import drivers, evaluators, or model agents.
 
 from __future__ import annotations
 
+import traceback
 from typing import Any, Callable, Mapping
 
 from obsidianlink.env.integration.e0_cleanup import (
@@ -79,6 +80,8 @@ class MineRLE0LifecycleAdapter:
         self._opened = False
         self._open_succeeded = False
         self._close_returned = False
+        self._reset_failure_traceback: str | None = None
+        self._reset_failure_chain: list[dict[str, str]] = []
         self._cleanup = inspect_minerl_cleanup(None, close_returned=False)
         self._compatibility_task = self._build_compatibility_task(self.episode_id)
 
@@ -124,6 +127,14 @@ class MineRLE0LifecycleAdapter:
             result[name] = value
         return result
 
+    def reset_failure_diagnostics(self) -> dict[str, object]:
+        """Return failure-only Python diagnostics without changing reset logic."""
+
+        return {
+            "traceback": self._reset_failure_traceback,
+            "exception_chain": list(self._reset_failure_chain),
+        }
+
     def _resolve_backend_cls(self) -> type:
         if self._backend_cls is not None:
             return self._backend_cls
@@ -146,13 +157,30 @@ class MineRLE0LifecycleAdapter:
         self._open_succeeded = True
 
     def reset(self) -> Mapping[str, dict[str, object]]:
+        self._reset_failure_traceback = None
+        self._reset_failure_chain = []
         if not self._opened:
             self.open()
         backend = self._ensure_backend()
         reset = getattr(backend, "reset", None)
         if not callable(reset):
             raise RuntimeError("MineRL backend reset is not callable")
-        raw = reset(self._compatibility_task)
+        try:
+            raw = reset(self._compatibility_task)
+        except Exception as error:
+            self._reset_failure_traceback = traceback.format_exc()
+            current: BaseException | None = error
+            seen: set[int] = set()
+            while current is not None and id(current) not in seen:
+                seen.add(id(current))
+                self._reset_failure_chain.append(
+                    {
+                        "type": type(current).__name__,
+                        "message": str(current),
+                    }
+                )
+                current = current.__cause__ or current.__context__
+            raise
         return public_initial_state(raw, episode_id=self.episode_id)
 
     def close(self) -> None:

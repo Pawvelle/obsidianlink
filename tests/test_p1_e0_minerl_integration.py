@@ -274,6 +274,12 @@ class AdapterLifecycleTests(unittest.TestCase):
         self.assertTrue(result.closed)
         self.assertIn("close", backend.calls)
         self.assertIn("reset exploded", result.error or "")
+        diagnostics = adapter.reset_failure_diagnostics()
+        self.assertIn("RuntimeError: reset exploded", diagnostics["traceback"] or "")
+        self.assertEqual(
+            diagnostics["exception_chain"],
+            [{"type": "RuntimeError", "message": "reset exploded"}],
+        )
 
     def test_missing_initial_state_fails_closed(self) -> None:
         factory = MineRLE0LifecycleAdapter.lifecycle_factory(

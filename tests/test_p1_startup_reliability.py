@@ -12,6 +12,7 @@ from obsidianlink.env.integration.startup_reliability import (
     build_attempt_record,
     classify_failure,
     create_unique_run_dir,
+    extract_jvm_crash_details,
     load_child_evidence,
 )
 
@@ -107,7 +108,10 @@ class ClassificationTests(unittest.TestCase):
             timed_out=False,
             exit_code=1,
         )
-        self.assertEqual(result[:3], ("minecraft_startup", "minecraft_native_crash", FINGERPRINT_NATIVE))
+        self.assertEqual(
+            result[:3],
+            ("minecraft_startup", "minecraft_native_crash", FINGERPRINT_NATIVE),
+        )
 
     def test_malmo_eof_fingerprint(self) -> None:
         result = classify_failure(
@@ -128,6 +132,40 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(result[1], "minecraft_native_crash")
         self.assertIn("malmo_eof", result[3])
 
+    def test_hs_err_fields_are_normalized(self) -> None:
+        details = extract_jvm_crash_details(
+            '# SIGSEGV\n# Problematic frame:\n# C  [liblwjgl_stb.dylib+0x4c158]\n'
+            'Current thread (0x1): JavaThread "Sound engine" daemon'
+        )
+        self.assertEqual(details["signal"], "SIGSEGV")
+        self.assertEqual(details["problematic_frame"], "liblwjgl_stb.dylib+0x4c158")
+        self.assertEqual(details["native_library"], "liblwjgl_stb.dylib")
+        self.assertEqual(details["thread_name"], "Sound engine")
+
+    def test_java_pid_and_environment_port_are_preserved(self) -> None:
+        result = build_attempt_record(
+            attempt_id="attempt-006",
+            episode_id="startup-006",
+            started_at="2026-08-16T00:00:00Z",
+            finished_at="2026-08-16T00:00:02Z",
+            duration_seconds=2.0,
+            exit_code=1,
+            timed_out=False,
+            child=_child(success=False, reset=False),
+            child_error=None,
+            combined_text="reset failed",
+            subprocess_pid=100,
+            tracked_descendants=[
+                {
+                    "pid": 200,
+                    "command": "java -XstartOnFirstThread -jar mcprec-6.13.jar --envPort=9573",
+                }
+            ],
+        )
+        self.assertEqual(result["subprocess_pid"], 100)
+        self.assertEqual(result["launch_processes"][0]["pid"], 200)
+        self.assertEqual(result["launch_processes"][0]["environment_port"], 9573)
+
     def test_mission_xml_does_not_create_false_malmo_eof(self) -> None:
         result = classify_failure(
             "ProjectMalmo <AllowPassageOfTime>false</AllowPassageOfTime>",
@@ -137,6 +175,17 @@ class ClassificationTests(unittest.TestCase):
         )
         self.assertEqual(result[1], "reset_failure")
         self.assertNotIn("malmo_eof", result[3])
+
+    def test_malmo_mission_reply_none_uses_specific_fingerprint(self) -> None:
+        child = _child(success=False, reset=False)
+        child["error_traceback"] = (
+            "File minerl/env/_multiagent.py, in _send_mission\n"
+            "TypeError: a bytes-like object is required, not 'NoneType'"
+        )
+        result = _record(child=child)
+        self.assertEqual(result["failure_stage"], "reset")
+        self.assertEqual(result["failure_class"], "reset_failure")
+        self.assertEqual(result["failure_fingerprint"], "malmo_mission_reply_missing")
 
     def test_timeout(self) -> None:
         result = _record(timed_out=True, exit_code=-15)
