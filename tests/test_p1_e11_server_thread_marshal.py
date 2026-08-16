@@ -15,6 +15,7 @@ ENVSERVER_PATCH = PATCHES / "obsidianlink-envserver.patch"
 DRAW_PATCH = PATCHES / "e10-drawing-decorator.patch"
 E11_PATCH = PATCHES / "e11-drawing-decorator-obsidian.patch"
 MARSHAL_PATCH = PATCHES / "e11-server-thread-marshal.patch"
+NONBLOCKING_PATCH = PATCHES / "e11-server-thread-marshal-nonblocking.patch"
 DIAG_PATCH = PATCHES / "e11-portal-activation-diagnostic.patch"
 SITE_MCP = Path(
     "/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/MCP-Reborn"
@@ -122,6 +123,91 @@ class E11ServerThreadMarshalPatchTests(unittest.TestCase):
                 self.assertNotIn(marker, env_text, marker)
 
 
+class E11NonblockingServerThreadMarshalPatchTests(unittest.TestCase):
+    def test_nonblocking_patch_does_not_wait_inside_execactions(self) -> None:
+        text = NONBLOCKING_PATCH.read_text(encoding="utf-8")
+        self.assertIn("src/main/java/com/minerl/multiagent/env/EnvServer.java", text)
+        self.assertNotIn("SoundEngine.java", text)
+        self.assertNotIn("AbstractFireBlock.java", text)
+        self.assertNotIn("PortalSize.java", text)
+        self.assertNotIn("NetherPortalBlock.java", text)
+        self.assertNotIn("FlintAndSteelItem.java", text)
+        self.assertIn("queueFlintAndSteelUseToServerThread", text)
+        self.assertIn("awaitPendingFlintAndSteelMarshal", text)
+        self.assertIn("server.execute(() -> {", text)
+        self.assertIn("func_219441_a", text)
+        self.assertIn("Items.FLINT_AND_STEEL", text)
+        self.assertIn("stripUseMouseButton", text)
+        self.assertIn("[E11-MARSHAL]", text)
+        self.assertNotIn("marshalFlintAndSteelUseToServerThread", text)
+        added = "\n".join(
+            line[1:]
+            for line in text.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        self.assertIn("ReplaySender.getInstance().addAction", text)
+        self.assertIn("done.get(30L, TimeUnit.SECONDS)", added)
+        self.assertNotIn("setBlockState", added)
+        queue_start = added.index("private static boolean queueFlintAndSteelUseToServerThread")
+        await_start = added.index("private static void awaitPendingFlintAndSteelMarshal")
+        queue_added = added[queue_start:await_start]
+        self.assertIn("server.execute(() -> {", queue_added)
+        self.assertNotIn("done.get(", queue_added)
+        self.assertNotIn(".join()", queue_added)
+        self.assertIn(
+            "execActions(actions, options);\n+        awaitPendingFlintAndSteelMarshal();\n         waitForNextObservation();",
+            text,
+        )
+        for marker in FORBIDDEN_RUNTIME:
+            self.assertNotIn(marker, text, marker)
+        digest = hashlib.sha256(NONBLOCKING_PATCH.read_bytes()).hexdigest()
+        self.assertEqual(
+            digest,
+            "19943570aca4b3b38b098cb103d332f7f65241b8756e241ea0d0084031fb720b",
+        )
+
+    def test_reconstructed_envserver_queues_then_awaits_after_addaction(self) -> None:
+        source = SITE_MCP / "src/main/java/com/minerl/multiagent/env/EnvServer.java"
+        self.assertTrue(source.is_file(), "P1 baseline EnvServer is missing")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env_dir = root / "src/main/java/com/minerl/multiagent/env"
+            env_dir.mkdir(parents=True)
+            shutil.copy(source, env_dir / "EnvServer.java")
+            _apply(ENVSERVER_PATCH, root)
+            _apply(DRAW_PATCH, root)
+            _apply(E11_PATCH, root)
+            _apply(NONBLOCKING_PATCH, root)
+            env_text = (env_dir / "EnvServer.java").read_text(encoding="utf-8")
+            self.assertIn("queueFlintAndSteelUseToServerThread", env_text)
+            self.assertNotIn("marshalFlintAndSteelUseToServerThread", env_text)
+            step = env_text[
+                env_text.index("private void stepClient") : env_text.index(
+                    "private Stream<Object> getAgentHandlers"
+                )
+            ]
+            self.assertIn("execActions(actions, options);", step)
+            self.assertIn("awaitPendingFlintAndSteelMarshal();", step)
+            self.assertLess(
+                step.index("execActions(actions, options);"),
+                step.index("awaitPendingFlintAndSteelMarshal();"),
+            )
+            self.assertLess(
+                step.index("awaitPendingFlintAndSteelMarshal();"),
+                step.index("waitForNextObservation();"),
+            )
+            exec_start = env_text.index("public static void execActions")
+            exec_end = env_text.index("private static void awaitPendingFlintAndSteelMarshal")
+            exec_chunk = env_text[exec_start:exec_end]
+            self.assertIn("ReplaySender.getInstance().addAction", exec_chunk)
+            self.assertNotIn("done.get(", exec_chunk)
+            self.assertNotIn(".join()", exec_chunk)
+            self.assertIn("Blocks.OBSIDIAN.getDefaultState()", env_text)
+            self.assertNotIn("Blocks.NETHER_PORTAL", env_text)
+            for marker in FORBIDDEN_RUNTIME:
+                self.assertNotIn(marker, env_text, marker)
+
+
 class RecordedE11ServerThreadMarshalLiveTests(unittest.TestCase):
     HISTORY = ROOT / "runs" / "history" / "p1-e11-live-20260817-001"
 
@@ -200,6 +286,58 @@ class RecordedE11ServerThreadMarshalLiveTests(unittest.TestCase):
         inspection = replay_recorded_evaluator(live)
         self.assertEqual(inspection.outcome, PORTAL_ACTIVATION_NOT_OBSERVED)
         self.assertEqual(inspection.after_portal_block_count, 0)
+
+
+class RecordedE11NonblockingMarshalLiveTests(unittest.TestCase):
+    HISTORY = ROOT / "runs" / "history" / "p1-e11-live-20260817-002"
+    LIVE002 = ROOT / "runs" / "history" / "p1-e11-live-20260817-001"
+
+    def test_recorded_nonblocking_live_queued_then_timed_out(self) -> None:
+        payload = json.loads((self.HISTORY / "result.json").read_text(encoding="utf-8"))
+        review = json.loads((self.HISTORY / "run_review.json").read_text(encoding="utf-8"))
+        identity = json.loads(
+            (self.HISTORY / "runtime_identity.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(payload["episode_id"], "p1-e11-live-003")
+        self.assertFalse(payload["success"])
+        self.assertEqual(payload["outcome"], "truth_identity_mismatch")
+        self.assertEqual(payload["tested_action_count"], 0)
+        self.assertIsNone(payload["translated_action_accepted"])
+        self.assertIsNone(payload["after_block_truth"])
+        self.assertTrue(payload["reset_completed"])
+        self.assertFalse(payload["integration_verified"])
+        self.assertEqual(payload["before_dimension"], "minecraft:overworld")
+        self.assertEqual(
+            review["failure_stage"],
+            "flint_and_steel_server_thread_marshal_timeout_after_queue",
+        )
+        self.assertFalse(review["verification"]["e11_real_activation_reviewed_success"])
+        self.assertFalse(review["verification"]["e12_started"])
+        self.assertFalse(review["verification"]["second_patch_round"])
+        self.assertEqual(
+            identity["run_jar_sha256"],
+            "286e496396b65856bc13ec45034b4b58056bfe5cbf7d47648d606edacbc3c71b",
+        )
+        self.assertEqual(
+            identity["production_jar_restored_after_failure"],
+            "836cb5ac6f89edca3cec255dd895e791212b04794d3349eb13a1b2b313416b6f",
+        )
+
+    def test_jvm_log_queued_but_process_right_click_never_ran(self) -> None:
+        text = (self.HISTORY / "e11_marshal_jvm.log").read_text(encoding="utf-8")
+        self.assertIn(
+            "[E11-MARSHAL] queued flint_and_steel processRightClickBlock from thread=EnvServerSocketHandler",
+            text,
+        )
+        self.assertNotIn("processRightClickBlock thread=", text)
+        self.assertIn("flint_and_steel server-thread marshal timed out", text)
+        self.assertIn("Saving and pausing game", text)
+        self.assertIn("awaitPendingFlintAndSteelMarshal", text)
+        live002 = (self.LIVE002 / "e11_marshal_jvm.log").read_text(encoding="utf-8")
+        self.assertNotIn("[E11-MARSHAL]", live002)
+        live002_result = json.loads((self.LIVE002 / "result.json").read_text(encoding="utf-8"))
+        self.assertEqual(live002_result["episode_id"], "p1-e11-live-002")
+        self.assertEqual(live002_result["tested_action_count"], 0)
 
 
 if __name__ == "__main__":
