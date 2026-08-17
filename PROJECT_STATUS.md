@@ -34,7 +34,7 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须同时观察
 
 ## P1 E0–E12 active status
 
-E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `process_release_proven=false` remains. `p1_validation_manifest()` stays `not_run`. The ordered E0–E12 suite orchestrator and OS-level process-release inspection are `unit_verified` only; no authorized full-suite live pilot has been run.
+E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `process_release_proven=false` remains. `p1_validation_manifest()` stays `not_run`. The ordered E0–E12 suite orchestrator, OS-level process-release inspection, and explicit already-built JAR mapping (E0–E10 canonical `684c20ec…`, E11 completion-barrier `6b5705e4…`, E12 portal fixture `f459c36b…`) are `unit_verified` only; no authorized full-suite live pilot has been run.
 
 - E0 lifecycle: `runs/p1_e0_reset_close/e0-live-20260813-130313`; E1 RGB: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`.
 - E2 inventory: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`; E3 selected item: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`; E4 camera: `runs/p1_e4_camera_control/e4-live-20260814-001`.
@@ -68,7 +68,7 @@ P1 Hard Gate 尚未通过。一次 E12 成功不是 Hard Gate。进入 P2 前必
 
 ## 下一精确任务
 
-Startup reliability post-audio validation remains 20/20 observed first-attempt success (`max_reset_attempts=1`); the finite sample does not prove absolute reliability. `process_release_proven=false`. The E0–E12 suite orchestrator can now inspect OS PID-tree release, but that gate is unproven until an authorized live pilot.
+Startup reliability post-audio validation remains 20/20 observed first-attempt success (`max_reset_attempts=1`); the finite sample does not prove absolute reliability. `process_release_proven=false`. The E0–E12 suite orchestrator can now inspect OS PID-tree release and switch the already-built canonical / E11-barrier / E12-fixture JARs by SHA-256 before each step, but that gate is unproven until an authorized live pilot.
 
 E12 authorized fixture JAR `f459c36b…` was staged from canonical `684c20ec…` plus `e12-drawing-decorator-portal.patch`, built once with `shadowJar -x jaxb`, and kept out of `CANONICAL_PATCHES`. Semantic diff vs canonical is only `EnvServer.class` + `version.properties`; PortalSize / NetherPortalBlock / FlintAndSteelItem / Entity / ServerPlayerEntity / ReplaySender / ServerPlayNetHandler are byte-identical; E11 completion-barrier markers are absent. The authorized real run `p1-e12-dimension-transition-20260817-001` used one fresh process, one reset, one accepted `move(forward=1, duration_ticks=8)`, and zero retry; before dimension=`minecraft:overworld`, after=`minecraft:the_nether`, before portal=6/6, frame=14/14, `truth_missing_count=0`, outcome `dimension_transition_ok`. Evidence: `runs/p1_e12_dimension_transition/e12-live-20260817-001/`. This is not Agent-built portal construction and does not set `integration_verified`.
 

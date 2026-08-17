@@ -130,6 +130,8 @@ E0–E12 contract / adapter / offline runtime / live bridge 为 `unit_verified`�
 
 The suite is orchestration only. It reuses `P1_VALIDATION_CASES`, the existing authorized E0–E12 runners, `E0CleanupStatus`, and the startup-reliability PID-tree inspection. It does not wrap each case in a new class or duplicate case logic.
 
+Before each live step it selects one already-built `mcprec-6.13.jar` by frozen SHA-256: E0–E10 use canonical `684c20ec…`, E11 uses the completion-barrier runtime `6b5705e4…`, and E12 uses the portal-fixture runtime `f459c36b…`. The helper verifies the candidate from the deployed slot or `build/libs/backups/`, copies that JAR into place, and records the verified identity in suite evidence. It does not run Gradle. A missing or mismatched JAR is `runtime_not_verified` and stops the suite before that Minecraft case launches.
+
 Ordered steps: E0–E6, E7 water, E7 lava, E8, E9 water, E9 lava, E10–E12.
 
 Aggregate verdicts, first blocking issue in order:

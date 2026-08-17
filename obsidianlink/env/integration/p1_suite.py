@@ -24,6 +24,13 @@ from obsidianlink.env.integration.e0_cleanup import (
     residual_descendants,
     tracked_descendants,
 )
+from obsidianlink.env.integration.p1_suite_runtime import (
+    P1SuiteRuntimeError,
+    activate_required_runtime,
+    failed_runtime_record,
+    is_verified_runtime,
+    required_runtime,
+)
 from obsidianlink.env.validation.contract import P1_VALIDATION_CASES
 from obsidianlink.env.validation.result import UNIT_VERIFIED
 
@@ -168,6 +175,7 @@ class P1CaseSummary:
     process_release: ProcessReleaseStatus
     real_execution_performed: bool
     integration_verified: bool = False
+    runtime: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.check_id not in {case.check_id.value for case in P1_VALIDATION_CASES}:
@@ -186,6 +194,17 @@ class P1CaseSummary:
             type(self.truth_missing_count) is not int or self.truth_missing_count < 0
         ):
             raise ValueError("truth_missing_count must be a non-negative int or None")
+        if self.success:
+            runtime = self.runtime
+            if not is_verified_runtime(runtime):
+                raise ValueError("success requires verified runtime identity")
+            name, sha256 = required_runtime(self.check_id)
+            if (
+                runtime.get("check_id") != self.check_id
+                or runtime.get("runtime") != name
+                or runtime.get("sha256") != sha256
+            ):
+                raise ValueError("verified runtime does not match the required mapping")
 
     @property
     def step_key(self) -> str:
@@ -201,6 +220,7 @@ class P1CaseSummary:
             "process_release": self.process_release.as_dict(),
             "real_execution_performed": self.real_execution_performed,
             "requires_server_truth": self.requires_server_truth,
+            "runtime": dict(self.runtime) if isinstance(self.runtime, Mapping) else None,
             "success": self.success,
             "truth_missing_count": self.truth_missing_count,
             "variant": self.variant,
@@ -233,22 +253,35 @@ def case_summary_from_payload(
     payload: Mapping[str, Any],
     step: P1SuiteStep,
     process_release: ProcessReleaseStatus,
+    runtime: Mapping[str, Any] | None = None,
 ) -> P1CaseSummary:
     truth_missing_count = payload.get("truth_missing_count")
     if truth_missing_count is not None and type(truth_missing_count) is not int:
         raise ValueError("truth_missing_count must be a non-negative int or None")
+    success = bool(payload.get("success"))
+    outcome = str(payload.get("outcome") or "runtime_error")
+    name, sha256 = required_runtime(step.check_id)
+    if success and (
+        not is_verified_runtime(runtime)
+        or runtime.get("check_id") != step.check_id
+        or runtime.get("runtime") != name
+        or runtime.get("sha256") != sha256
+    ):
+        success = False
+        outcome = "runtime_not_verified"
     return P1CaseSummary(
         check_id=step.check_id,
         name=step.name,
         variant=step.variant,
-        success=bool(payload.get("success")),
-        outcome=str(payload.get("outcome") or "runtime_error"),
+        success=success,
+        outcome=outcome,
         requires_server_truth=step.requires_server_truth,
         truth_missing_count=truth_missing_count,
         cleanup_failed=_cleanup_failed_from_payload(payload),
         process_release=process_release,
         real_execution_performed=bool(payload.get("real_execution_performed")),
         integration_verified=False,
+        runtime=runtime,
     )
 
 
@@ -493,6 +526,8 @@ def check_p1_suite() -> dict[str, Any]:
                 "execution_mode": step.execution_mode,
                 "module": step.module,
                 "name": step.name,
+                "required_runtime": required_runtime(step.check_id)[0],
+                "required_runtime_sha256": required_runtime(step.check_id)[1],
                 "requires_server_truth": step.requires_server_truth,
                 "runs_root_relative": step.runs_root_relative,
                 "variant": step.variant,
@@ -732,8 +767,28 @@ def run_authorized_p1_suite(
     stopped_after: str | None = None
     for step in steps:
         episode_id = f"p1-suite-{step.step_key.replace(':', '-').lower()}"
+        try:
+            runtime = activate_required_runtime(step.check_id)
+        except P1SuiteRuntimeError as error:
+            cases.append(
+                P1CaseSummary(
+                    check_id=step.check_id,
+                    name=step.name,
+                    variant=step.variant,
+                    success=False,
+                    outcome="runtime_not_verified",
+                    requires_server_truth=step.requires_server_truth,
+                    truth_missing_count=None,
+                    cleanup_failed=False,
+                    process_release=inspect_os_process_release(subprocess_exited=False),
+                    real_execution_performed=False,
+                    runtime=failed_runtime_record(step.check_id, error),
+                )
+            )
+            stopped_after = step.step_key
+            break
         payload, release = runner(step, output_dir, episode_id)
-        summary = case_summary_from_payload(payload, step, release)
+        summary = case_summary_from_payload(payload, step, release, runtime=runtime)
         cases.append(summary)
         issue = _case_issue(summary)
         if issue is not None:

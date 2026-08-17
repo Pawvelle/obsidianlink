@@ -50,6 +50,7 @@ from obsidianlink.env.integration.p1_suite import (
     reset_authorized_p1_suite_process_guards_for_tests,
     run_authorized_p1_suite,
 )
+from obsidianlink.env.integration.p1_suite_runtime import required_runtime
 from obsidianlink.env.validation import P1_VALIDATION_CASES, p1_validation_manifest
 
 
@@ -61,6 +62,20 @@ def _release(*, proven: bool) -> object:
             subprocess_exited=True,
         )
     return inspect_os_process_release(subprocess_exited=True)
+
+
+def _runtime(check_id: str) -> dict:
+    name, sha256 = required_runtime(check_id)
+    return {
+        "already_active": True,
+        "check_id": check_id,
+        "gradle_invoked": False,
+        "jar_path": "/tmp/fake-mcprec-6.13.jar",
+        "runtime": name,
+        "sha256": sha256,
+        "source_path": "/tmp/fake-mcprec-6.13.jar",
+        "verified": True,
+    }
 
 
 def _case(
@@ -85,6 +100,7 @@ def _case(
         cleanup_failed=cleanup_failed,
         process_release=_release(proven=proven),
         real_execution_performed=real,
+        runtime=_runtime(step.check_id),
     )
 
 
@@ -250,6 +266,12 @@ class AggregateVerdictTests(unittest.TestCase):
 class SuiteEntrypointTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_authorized_p1_suite_process_guards_for_tests()
+        patcher = patch(
+            "obsidianlink.env.integration.p1_suite.activate_required_runtime",
+            side_effect=lambda check_id, **kwargs: _runtime(check_id),
+        )
+        self.activate_runtime = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self) -> None:
         reset_authorized_p1_suite_process_guards_for_tests()
@@ -285,6 +307,7 @@ class SuiteEntrypointTests(unittest.TestCase):
             self.assertFalse(payload["real_execution_performed"])
             self.assertFalse(payload["p1_hard_gate_passed"])
             live.assert_not_called()
+            self.activate_runtime.assert_not_called()
             self.assertFalse(output_dir.exists())
 
     def test_injected_failure_stops_the_suite(self) -> None:
@@ -324,6 +347,11 @@ class SuiteEntrypointTests(unittest.TestCase):
             self.assertEqual(result.verdict, VERDICT_VALIDATION_FAILED)
             self.assertEqual(result.stopped_after, "E4")
             self.assertEqual(called, ["E0", "E1", "E2", "E3", "E4"])
+            self.assertEqual(
+                [call.args[0] for call in self.activate_runtime.call_args_list],
+                ["E0", "E1", "E2", "E3", "E4"],
+            )
+            self.assertTrue(all(case.runtime["verified"] for case in result.cases))
             self.assertFalse(result.p1_hard_gate_passed)
             self.assertFalse(result.integration_verified)
             self.assertTrue((output_dir / "p1_suite.json").is_file())

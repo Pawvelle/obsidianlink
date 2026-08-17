@@ -4,6 +4,8 @@ Date: 2026-08-17
 
 Status: canonical deployed for E0–E11; authorized E12 fixture JAR is separate and excluded from this allowlist.
 
+The P1 E0–E12 suite selects among these already-built JARs by SHA-256 before each live step: E0–E10 canonical `684c20ec…`, E11 completion-barrier `6b5705e4…`, E12 portal fixture `f459c36b…`. Switching copies from the deployed `mcprec-6.13.jar` slot or `build/libs/backups/`; it does not rebuild.
+
 ## Reproducible source and build
 
 `scripts/build_p1_canonical_runtime.py` requires the frozen generated
