@@ -8,6 +8,12 @@ from obsidianlink.benchmark.evidence import (
     VerificationLevel,
 )
 from obsidianlink.benchmark.metrics import MetricName, MetricRecord
+from obsidianlink.benchmark.run_record import (
+    BenchmarkRunRecord,
+    load_run_record,
+    run_benchmark,
+    write_run_record,
+)
 from obsidianlink.benchmark.runner import BenchmarkRunner, RunnerResult
 from obsidianlink.benchmark.splits import BenchmarkSplit
 from obsidianlink.benchmark.task import (
@@ -18,6 +24,7 @@ from obsidianlink.benchmark.task import (
 )
 
 __all__ = [
+    "BenchmarkRunRecord",
     "BenchmarkRunner",
     "BenchmarkSplit",
     "BenchmarkSuite",
@@ -33,4 +40,7 @@ __all__ = [
     "RunnerResult",
     "TaskIdentity",
     "VerificationLevel",
+    "load_run_record",
+    "run_benchmark",
+    "write_run_record",
 ]
