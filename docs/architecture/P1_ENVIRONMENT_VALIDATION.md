@@ -122,7 +122,7 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 E0–E12 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 runtime geometry deployed / real verified = **YES**；real E11 reviewed success = **YES** (`p1-e11-completion-barrier-20260817-004`, `portal_activation_ok`, `tested_action_count=1`, retry=0, portal=6/6, `truth_missing_count=0`)；`integration_verified` = **NO**。E12 real reviewed success = **YES** (`p1-e12-dimension-transition-20260817-001`, `dimension_transition_ok`, before=`minecraft:overworld`, after=`minecraft:the_nether`, `tested_action_count=1`, retry=0, `truth_missing_count=0`)；`integration_verified` = **NO**。一次 E12 成功不是 Hard Gate。E8/E9/E10/E11/E12 evaluator-only truth 与 Agent-visible observation 保持隔离。P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
-当前最小未验证点：P1 Hard Gate。授权 full-suite live pilot `p1-e0-e12-suite-20260817-001` 在 E1 因 OS `process_release_not_proven` 停止。每次真实运行与每次 Gradle 构建仍需用户单独明确授权。
+当前最小未验证点：P1 Hard Gate。`p1-e0-e12-suite-20260817-001` 在 E1 因 OS `process_release_not_proven` 停止。第二次授权 live pilot `p1-e0-e12-suite-20260817-002` 在 E4 因 `truth_missing` 停止（E4 `camera_ok` 但未写出 `truth_missing_count`）。每次真实运行与每次 Gradle 构建仍需用户单独明确授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。
 
@@ -157,6 +157,8 @@ Encoded Hard Gate conditions for one complete suite run:
 A passing Hard Gate still does not set `integration_verified` or change `p1_validation_manifest()` from `not_run`. Offline `--check` / `--preflight-only` cannot pass the Hard Gate.
 
 Authorized live pilot `p1-e0-e12-suite-20260817-001` (2026-08-17) executed E0 then E1 and stopped. Canonical runtime SHA-256 `684c20ec…` was verified for both steps; Gradle was not invoked. E0: `lifecycle_ok`, OS `process_release_proven=true`. E1: `rgb_ok`, `real_execution_performed=true`, but tracked JVM command was `(java)`, which does not count as an observed MineRL/Minecraft/JVM command line, so OS `process_release_proven=false`. Suite verdict `process_release_not_proven`; `p1_hard_gate_passed=false`; no human intervention; no retry. Evidence: `runs/p1_validation_suite/p1-e0-e12-suite-20260817-001/`. This is one failed Hard Gate attempt, not `integration_verified`. Later observer tracking retains a previously seen `java ...` identity across degraded `(java)` snapshots; that historical pilot is not rewritten as success.
+
+Second authorized live pilot `p1-e0-e12-suite-20260817-002` executed E0–E4 and stopped. Canonical `684c20ec…` was verified for all four completed steps; Gradle was not invoked. E0–E3 succeeded with OS `process_release_proven=true`. E1 this time retained `java -Xmx4G ... -jar ...`. E4: `camera_ok`, `real_execution_performed=true`, OS `process_release_proven=true`, but the live record has no `truth_missing_count` while `requires_server_truth=true`, so the suite verdict is `truth_missing`. `p1_hard_gate_passed=false`; no retry; E5–E12 not launched. Evidence: `runs/p1_validation_suite/p1-e0-e12-suite-20260817-002/`. This does not set `integration_verified`.
 
 Offline-safe check:
 

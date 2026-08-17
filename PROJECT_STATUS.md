@@ -34,7 +34,7 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须同时观察
 
 ## P1 E0–E12 active status
 
-E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `p1_validation_manifest()` stays `not_run`. The ordered E0–E12 suite orchestrator, OS-level process-release inspection, and explicit already-built JAR mapping remain `unit_verified`. One authorized full-suite live pilot has now been run: `p1-e0-e12-suite-20260817-001`. It stopped after E1 with verdict `process_release_not_proven`. P1 Hard Gate: NOT PASSED.
+E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `p1_validation_manifest()` stays `not_run`. The ordered E0–E12 suite orchestrator, OS-level process-release inspection, and explicit already-built JAR mapping remain `unit_verified`. Historical full-suite live pilot `p1-e0-e12-suite-20260817-001` stopped after E1 (`process_release_not_proven`). Second authorized live pilot `p1-e0-e12-suite-20260817-002` stopped after E4 (`truth_missing`). P1 Hard Gate: NOT PASSED.
 
 - E0 lifecycle: `runs/p1_e0_reset_close/e0-live-20260813-130313`; E1 RGB: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`.
 - E2 inventory: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`; E3 selected item: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`; E4 camera: `runs/p1_e4_camera_control/e4-live-20260814-001`.
@@ -59,7 +59,7 @@ None of E0–E12 is `integration_verified`; `process_release_proven=false`. Type
 
 ## 尚未验证
 
-- E0–E12 各有一次审查过的真实 success，全部 `integration_verified`: NO；授权 full-suite live pilot `p1-e0-e12-suite-20260817-001` 在 E1 因 OS `process_release_not_proven` 停止，未跑完 E2–E12；
+- E0–E12 各有一次审查过的真实 success，全部 `integration_verified`: NO；`p1-e0-e12-suite-20260817-001` 在 E1 因 OS `process_release_not_proven` 停止；`p1-e0-e12-suite-20260817-002` 在 E4 因 `truth_missing` 停止（E4 `camera_ok` 但记录未带 `truth_missing_count`）；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
 
 ## P1 hard gate
@@ -70,6 +70,8 @@ P1 Hard Gate 尚未通过。一次 E12 成功不是 Hard Gate。进入 P2 前必
 
 Startup reliability post-audio validation remains 20/20 observed first-attempt success (`max_reset_attempts=1`); the finite sample does not prove absolute reliability.
 
-Authorized P1 full-suite live pilot `p1-e0-e12-suite-20260817-001` ran once, with no retry and no Gradle. Canonical JAR `684c20ec…` was verified and activated before E0. E0 succeeded (`lifecycle_ok`, OS `process_release_proven=true`, residual PIDs none). E1 succeeded scientifically (`rgb_ok`, `real_execution_performed=true`, same canonical SHA verified) but OS inspection recorded tracked child command `(java)` rather than a `java …` command line, so `minerl_runtime_observed=false` and `process_release_proven=false`. The suite stopped after E1; E2–E12 were not launched. Verdict `process_release_not_proven`. `p1_hard_gate_passed=false`. No human intervention. No leftover Java/Minecraft processes after the run. Evidence: `runs/p1_validation_suite/p1-e0-e12-suite-20260817-001/`. This does not set `integration_verified`.
+Authorized P1 full-suite live pilot `p1-e0-e12-suite-20260817-001` remains historical failed evidence: it stopped after E1 with `process_release_not_proven`. It is not rewritten.
 
-Next: OS process-release tracking now retains a previously observed `java ...` identity when a later snapshot degrades to `(java)`; residual release still requires the tracked PID to disappear. The historical pilot `p1-e0-e12-suite-20260817-001` remains failed evidence and is not rewritten. Do not rerun that pilot. A new authorized Full Suite Pilot may be requested. Do not start P2. P1 Hard Gate: NOT PASSED. P2: NOT STARTED.
+Second authorized live pilot `p1-e0-e12-suite-20260817-002` ran once, with no retry and no Gradle. Canonical JAR `684c20ec…` was verified for E0–E4 (`already_active=true`). E0–E3 succeeded (`lifecycle_ok` / `rgb_ok` / `inventory_ok` / `selected_item_ok`) with OS `process_release_proven=true` and no residual PIDs. E1 retained a full `java -Xmx4G ... -jar ...` identity (the prior `(java)` overwrite did not recur). E4 succeeded scientifically (`camera_ok`, `real_execution_performed=true`, OS `process_release_proven=true`) but `requires_server_truth=true` while the E4 record omitted `truth_missing_count`, so the suite treated it as `truth_missing` and stopped. E5–E12 were not launched. Verdict `truth_missing`. `p1_hard_gate_passed=false`. No human intervention. Evidence: `runs/p1_validation_suite/p1-e0-e12-suite-20260817-002/`. This does not set `integration_verified`.
+
+Next: diagnose why the E4 live record does not emit `truth_missing_count` despite `requires_server_truth`, as a separate task. Do not rerun this failed pilot. Do not rewrite `20260817-001`. Do not start P2. P1 Hard Gate: NOT PASSED. P2: NOT STARTED.
