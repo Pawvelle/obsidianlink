@@ -24,7 +24,6 @@ from obsidianlink.env.integration.e12_run import (
     EXECUTION_MODE_AUTHORIZED_LIVE_E12,
     E12AuthorizationError,
     E12MineRLRunRecord,
-    NEEDS_E12_RUNTIME_PORTAL_FIXTURE_AUTHORIZATION,
     main,
     preflight_authorized_e12,
     reset_authorized_e12_process_guards_for_tests,
@@ -182,26 +181,10 @@ class E12LiveGateTests(unittest.TestCase):
         self.assertTrue(payload["obsidian_frame_preplaced"])
         self.assertTrue(payload["portal_preplaced"])
         self.assertFalse(payload["fire_preplaced"])
-        self.assertTrue(payload["needs_e12_runtime_portal_fixture_authorization"])
-        self.assertFalse(payload["runtime_applies_active_portal_draw_blocks"])
+        self.assertFalse(payload["needs_e12_runtime_portal_fixture_authorization"])
+        self.assertTrue(payload["runtime_applies_active_portal_draw_blocks"])
         self.assertEqual(payload["stimulus"]["action_type"], "move")
         self.assertEqual(payload["verification_level"], "unit_verified")
-
-    def test_live_refuses_until_portal_fixture_jar_is_authorized(self):
-        self.assertTrue(NEEDS_E12_RUNTIME_PORTAL_FIXTURE_AUTHORIZATION)
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "p1_e12_dimension_transition"
-            root.mkdir()
-            with patch("obsidianlink.env.integration.e12_run.FORMAL_E12_RUNS_ROOT", root.resolve()), patch(
-                "obsidianlink.env.integration.e12_run._production_backend_cls"
-            ) as production:
-                with self.assertRaisesRegex(E12AuthorizationError, "NEEDS_E12_RUNTIME_PORTAL_FIXTURE_AUTHORIZATION"):
-                    run_authorized_e12_minerl(
-                        execution_mode=EXECUTION_MODE_AUTHORIZED_LIVE_E12,
-                        authorized_live_run=AUTHORIZED_LIVE_E12_RUN_VALUE,
-                        output_dir=root / "e12-live-blocked",
-                    )
-                production.assert_not_called()
 
     def test_missing_wrong_mode_and_token_refuse_before_backend(self):
         attempts = (
@@ -235,7 +218,7 @@ class E12LiveGateTests(unittest.TestCase):
         self.assertEqual(payload["probe_world_cells"], [list(cell) for cell in E12_PROBE_WORLD_CELLS])
         self.assertEqual(payload["probe_grid_cells"], [list(cell) for cell in E12_PROBE_GRID_CELLS])
         self.assertFalse(payload["integration_verified"])
-        self.assertTrue(payload["needs_e12_runtime_portal_fixture_authorization"])
+        self.assertFalse(payload["needs_e12_runtime_portal_fixture_authorization"])
 
     def test_stub_success_writes_narrow_evidence_and_one_step(self):
         record, output, cls, temporary = self.run_stub()

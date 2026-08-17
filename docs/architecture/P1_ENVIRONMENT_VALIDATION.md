@@ -101,7 +101,9 @@ E12 只验证：已激活的 Nether portal fixture + 一次有界 `move(forward=
 - 成功必须：before dimension=`minecraft:overworld`，after dimension=`minecraft:the_nether`，before portal=6/6，frame=14/14，`truth_missing_count=0`
 - 成功 outcome：`dimension_transition_ok`
 
-Mission XML 使用 `allow_active_portal_fixture=True`。Canonical DrawingDecorator 仍拒绝 portal；`patches/minerl/e12-drawing-decorator-portal.patch` 不进入 `CANONICAL_PATCHES`。Live E12 在用户授权 Gradle 与真实 MineRL 运行之前保持 `NEEDS_E12_RUNTIME_PORTAL_FIXTURE_AUTHORIZATION=True`。
+Mission XML 使用 `allow_active_portal_fixture=True`。Canonical DrawingDecorator 仍拒绝 portal；`patches/minerl/e12-drawing-decorator-portal.patch` 不进入 `CANONICAL_PATCHES`。Authorized E12 fixture JAR SHA-256 `f459c36b7aaacd7e5f98ff9bbe001f1d54e77b73740537c24d5c5540290d36f4` maps Malmo `portal` to `Blocks.NETHER_PORTAL` and still rejects fire/end portal. Vanilla PortalSize / NetherPortalBlock / transition classes are unchanged.
+
+One reviewed real E12 transition: `p1-e12-dimension-transition-20260817-001`, outcome `dimension_transition_ok`. Before: dimension=`minecraft:overworld`, 14/14 obsidian, 6/6 `nether_portal`. Stimulus: exactly one accepted `move(forward=1, duration_ticks=8)`, retry=0. After: dimension=`minecraft:the_nether`, `truth_missing_count=0`. Evidence: `runs/p1_e12_dimension_transition/e12-live-20260817-001/`. This is not Agent construction, not E11 ignition, and does not set `integration_verified`.
 
 FakeBackend / offline stub success 不能证明真实 Minecraft 维度切换。E12 `unit_verified` 不把 `integration_verified` 设为 true。
 
@@ -118,8 +120,8 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 ## Authorization and hard gate
 
-E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 runtime geometry deployed / real verified = **YES**；real E11 reviewed success = **YES** (`p1-e11-completion-barrier-20260817-004`, `portal_activation_ok`, `tested_action_count=1`, retry=0, portal=6/6, `truth_missing_count=0`)；`integration_verified` = **NO**。E12 contract / adapter / offline runtime / live gate 为 `unit_verified`；real E12 = **NOT RUN**；canonical JAR 不含 portal DrawBlock；`integration_verified` = **NO**。E8/E9/E10/E11/E12 evaluator-only truth 与 Agent-visible observation 保持隔离。P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
+E0–E12 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 runtime geometry deployed / real verified = **YES**；real E11 reviewed success = **YES** (`p1-e11-completion-barrier-20260817-004`, `portal_activation_ok`, `tested_action_count=1`, retry=0, portal=6/6, `truth_missing_count=0`)；`integration_verified` = **NO**。E12 real reviewed success = **YES** (`p1-e12-dimension-transition-20260817-001`, `dimension_transition_ok`, before=`minecraft:overworld`, after=`minecraft:the_nether`, `tested_action_count=1`, retry=0, `truth_missing_count=0`)；`integration_verified` = **NO**。一次 E12 成功不是 Hard Gate。E8/E9/E10/E11/E12 evaluator-only truth 与 Agent-visible observation 保持隔离。P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
-当前最小未验证点：E12 真实 Overworld → Nether。每次真实运行与每次 Gradle 构建仍需用户单独明确授权。
+当前最小未验证点：P1 Hard Gate 剩余要求（稳定重复成功 / process release）。每次真实运行与每次 Gradle 构建仍需用户单独明确授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。

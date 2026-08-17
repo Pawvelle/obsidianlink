@@ -34,7 +34,7 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须同时观察
 
 ## P1 E0–E12 active status
 
-All E0–E9 contracts, offline runtimes, and MineRL adapters are `unit_verified`; each has at least one reviewed real success, but none is `integration_verified` and `process_release_proven=false` remains. E10 contract/offline runtime/MineRL bridge is `unit_verified`; E10 geometry real verified: YES; E10 real conversion reviewed success: YES; `integration_verified`: NO. E11 contract/offline runtime/MineRL bridge is `unit_verified`; E11 runtime geometry deployed / real verified: YES. The clean canonical E11 completion-barrier runtime preserves normal client→server interaction, waits for `ServerPlayNetHandler.processTryUseItemOnBlock` to complete the vanilla flint-and-steel action, and avoids ReplaySender blocking the integrated-server tick while that acknowledgement is pending. The authorized real validation (`p1-e11-completion-barrier-20260817-004`) used one fresh process, one reset, zero retry, and one accepted `use_item(flint_and_steel)`; before was 14/14 obsidian, 6/6 interior air, 0 portal, `truth_missing_count=0`; after server truth was 6/6 `nether_portal`, `truth_missing_count=0`, outcome `portal_activation_ok`. Real reviewed success: YES; `integration_verified`: NO.
+E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `process_release_proven=false` remains. `p1_validation_manifest()` stays `not_run`.
 
 - E0 lifecycle: `runs/p1_e0_reset_close/e0-live-20260813-130313`; E1 RGB: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`.
 - E2 inventory: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`; E3 selected item: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`; E4 camera: `runs/p1_e4_camera_control/e4-live-20260814-001`.
@@ -44,9 +44,9 @@ All E0–E9 contracts, offline runtimes, and MineRL adapters are `unit_verified`
 - E8 block truth: historical attempt `p1-e8-live-001` failed before validation with the E5 `liblwjgl_stb` / Sound engine / `STBVorbis` fingerprint; `p1-e8-live-002` produced `block_truth_ok` with `truth_missing_count=0`.
 - E9 fluid truth: historical WATER attempt `p1-e9-water-live-001` failed before validation with the same native fingerprint; `p1-e9-water-live-002` and `p1-e9-lava-live-001` produced `fluid_truth_ok`, preserving source/flowing distinction with `truth_missing_count=0`.
 - Detailed calibration fields remain in the referenced run evidence and [P1 Environment Validation](docs/architecture/P1_ENVIRONMENT_VALIDATION.md); startup failure diagnosis is preserved in [P1 startup reliability root cause](docs/architecture/P1_STARTUP_RELIABILITY_ROOT_CAUSE.md).
-- E10: contract/offline runtime/MineRL bridge implemented / `unit_verified`；controlled Mission geometry deployment: VERIFIED；real conversion reviewed success: YES (`p1-e10-live-001`, `obsidian_conversion_ok`)；before water=`air/none`, target=`lava/source`；stimulus 1 × `use_item(water_bucket)`；after water=`water/source`, target=`obsidian`；`truth_missing_count=0`；`integration_verified`: NO.
-- E11: `unit_verified`；geometry VERIFIED；real reviewed success YES (`p1-e11-completion-barrier-20260817-004`, `portal_activation_ok`, portal=6/6)；`integration_verified`: NO。
-- E12: contract/offline runtime/MineRL bridge `unit_verified`；real Overworld → Nether 未跑；canonical JAR 仍拒绝 portal DrawBlock。P1 Hard Gate: NOT PASSED; P2: NOT STARTED.
+- E10: `unit_verified`；geometry VERIFIED；real conversion reviewed success YES (`p1-e10-live-001`, `obsidian_conversion_ok`)；`integration_verified`: NO.
+- E11: `unit_verified`；geometry VERIFIED；real reviewed success YES (`p1-e11-completion-barrier-20260817-004`, `portal_activation_ok`, portal=6/6, retry=0, `tested_action_count=1`, `truth_missing_count=0`)；`integration_verified`: NO.
+- E12: `unit_verified`；authorized fixture JAR SHA-256 `f459c36b…`；real reviewed success YES (`p1-e12-dimension-transition-20260817-001`, `dimension_transition_ok`)；before=`minecraft:overworld`，after=`minecraft:the_nether`，retry=0，`tested_action_count=1`，`truth_missing_count=0`；`integration_verified`: NO.
 
 None of E0–E12 is `integration_verified`; `process_release_proven=false`. Typed evaluator truth never enters Agent-visible surfaces. Imports, `--check`, and unit tests do not start MineRL.
 
@@ -59,22 +59,17 @@ None of E0–E12 is `integration_verified`; `process_release_proven=false`. Type
 
 ## 尚未验证
 
-- E0–E5 各有一次审查过的真实 success evidence，但稳定重复性与 OS-level process release 未证明，`integration_verified`: NO；
-- E6: `unit_verified`; one reviewed real success (`p1-e6-live-001`, `placement_ok`); `integration_verified`: NO；
-- E7: `unit_verified`; water/lava calibrations offline verified; adapter/live bridge implemented / offline tested; one reviewed WATER real success (`p1-e7-water-live-001`, `bucket_ok`); one reviewed LAVA real success (`p1-e7-lava-live-001`, `bucket_ok`); real calibration coverage WATER + LAVA complete; `integration_verified`: NO；
-- E8: `unit_verified`; #1 `p1-e8-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1; #2 `p1-e8-live-002` `block_truth_ok`; reviewed real success: YES; `integration_verified`: NO；
-- E9: `unit_verified`; WATER #1 `p1-e9-water-live-001` `reset_failed` SAME_FINGERPRINT native crash as E5 #1 / E8 #1; WATER #2 `p1-e9-water-live-002` `fluid_truth_ok`; LAVA #1 `p1-e9-lava-live-001` `fluid_truth_ok`; real calibration coverage WATER + LAVA complete; reviewed real success: YES; `integration_verified`: NO；
-- E10: `unit_verified`；geometry VERIFIED；real conversion reviewed success YES (`p1-e10-live-001`, `obsidian_conversion_ok`)；`integration_verified`: NO；
-- E11: `unit_verified`；runtime geometry YES；real reviewed success YES (`p1-e11-completion-barrier-20260817-004`)：one fresh process, one reset, retry=0, `tested_action_count=1`，server completion acknowledgement, after truth portal=6/6，`truth_missing_count=0`，`portal_activation_ok`；`integration_verified`: NO；
-- E12: `unit_verified` offline；real dimension transition unverified；`integration_verified`: NO；P1 Hard Gate: NOT PASSED；P2: NOT STARTED；
+- E0–E12 各有一次审查过的真实 success，但稳定重复性与 OS-level process release 未证明，全部 `integration_verified`: NO；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
 
 ## P1 hard gate
 
-P1 Hard Gate 尚未通过。进入 P2 前必须完成真实环境 validation suite，并达到稳定重复成功、`truth_missing=0`、无人工干预。规划建议至少 20 个 fresh episodes。每次真实 MineRL/Minecraft 运行与每次 Gradle 构建仍需用户单独授权。
+P1 Hard Gate 尚未通过。一次 E12 成功不是 Hard Gate。进入 P2 前必须完成真实环境 validation suite 的稳定重复成功、`truth_missing=0`、无人工干预。规划建议至少 20 个 fresh episodes。每次真实 MineRL/Minecraft 运行与每次 Gradle 构建仍需用户单独授权。
 
 ## 下一精确任务
 
-Before audio mitigation, P1 startup reliability calibration completed 20 fresh-process attempts: 18 success / 2 infrastructure failures (90% first-attempt success). Attempt-006 was a confirmed `liblwjgl_stb` / `Sound engine` SIGSEGV; attempt-014 was a separate unresolved mission/reset reply failure. After deploying the narrowly scoped `disable-client-audio.patch`, the independent post-mitigation validation completed 20 fresh-process attempts: 20 success / 0 failure (100% observed first-attempt success rate), with `max_reset_attempts=1` and no validation action. Failure fingerprints: none. Native crashes: 0; Malmo EOF: 0; timeouts: 0; cleanup failures: 0. No startup infrastructure failure was observed in these 20 post-mitigation attempts, but this finite sample does not prove absolute reliability. `process_release_proven=false` remains for all attempts.
+Startup reliability post-audio validation remains 20/20 observed first-attempt success (`max_reset_attempts=1`); the finite sample does not prove absolute reliability. `process_release_proven=false`.
 
-E10 real conversion reviewed success: YES (`p1-e10-live-001`). `integration_verified`: NO. E11 real reviewed success: YES (`p1-e11-completion-barrier-20260817-004`). The isolated completion-barrier runtime (`6b5705e4…`) was built from canonical baseline `684c20ec…` with `shadowJar -x jaxb`; 177 frozen JAXB generated sources were present and the E11 change does not regenerate them. Semantic diff is clean: the only executable changes are `EnvServer`、`ReplaySender`、`ServerPlayNetHandler`; nested `EnvServer$1` / `ReplaySender$Mode` changes are line-number metadata only. PortalSize、FlintAndSteelItem、Entity、ServerPlayerEntity、audio、E12 and evaluator/geometry code are unchanged. The condition barrier arms for the exact flint-and-steel action, allows the normal client→server packet path to run, and releases only when `processTryUseItemOnBlock` completes. The real run used one fresh process / one reset / zero retry / one accepted `use_item(flint_and_steel)`; before was 14/14 obsidian, 6/6 air, portal=0, `truth_missing_count=0`; after truth was portal=6/6, `truth_missing_count=0`, `portal_activation_ok`. E12 offline contract is `unit_verified`; real Overworld → Nether and the E12 portal DrawBlock JAR still need authorization. P1 Hard Gate: NOT PASSED. P2: NOT STARTED.
+E12 authorized fixture JAR `f459c36b…` was staged from canonical `684c20ec…` plus `e12-drawing-decorator-portal.patch`, built once with `shadowJar -x jaxb`, and kept out of `CANONICAL_PATCHES`. Semantic diff vs canonical is only `EnvServer.class` + `version.properties`; PortalSize / NetherPortalBlock / FlintAndSteelItem / Entity / ServerPlayerEntity / ReplaySender / ServerPlayNetHandler are byte-identical; E11 completion-barrier markers are absent. The authorized real run `p1-e12-dimension-transition-20260817-001` used one fresh process, one reset, one accepted `move(forward=1, duration_ticks=8)`, and zero retry; before dimension=`minecraft:overworld`, after=`minecraft:the_nether`, before portal=6/6, frame=14/14, `truth_missing_count=0`, outcome `dimension_transition_ok`. Evidence: `runs/p1_e12_dimension_transition/e12-live-20260817-001/`. This is not Agent-built portal construction and does not set `integration_verified`.
+
+Next: P1 Hard Gate remaining work (stable repeated suite success / process release). Do not start P2. P1 Hard Gate: NOT PASSED. P2: NOT STARTED.

@@ -2,7 +2,7 @@
 
 Date: 2026-08-17
 
-Status: deployed; E11 real reviewed success; E12 portal DrawBlock not in canonical JAR.
+Status: canonical deployed for E0–E11; authorized E12 fixture JAR is separate and excluded from this allowlist.
 
 ## Reproducible source and build
 
@@ -28,7 +28,8 @@ Production source changes, in order:
 
 `e12-drawing-decorator-portal.patch` exists for the authorized E12 fixture JAR
 and is excluded from this canonical allowlist. Canonical live JARs still reject
-portal DrawBlocks.
+portal DrawBlocks. The authorized E12 JAR SHA-256 is
+`f459c36b7aaacd7e5f98ff9bbe001f1d54e77b73740537c24d5c5540290d36f4`.
 
 The E11 completion-barrier runtime is staged from that canonical baseline and
 adds only `p1-e11-action-completion-barrier.patch`. It does not use
@@ -68,3 +69,23 @@ server tick can handle the client packet. `ServerPlayNetHandler` acknowledges
 only after `processTryUseItemOnBlock` has completed vanilla interaction; the
 EnvServer condition then releases evaluator after-truth. This is an action
 completion condition, not an observation-window extension or sleep.
+
+## Authorized E12 fixture JAR
+
+The E12 fixture runtime is staged from the same canonical baseline and adds only
+`e12-drawing-decorator-portal.patch`. It is not in `CANONICAL_PATCHES` and does
+not include the E11 completion barrier. Against canonical `684c20ec…`, semantic
+changes are only `EnvServer.class` and `version.properties`. `EnvServer` maps
+Malmo `portal` DrawBlocks to `Blocks.NETHER_PORTAL` and still rejects fire and
+end portal. PortalSize, NetherPortalBlock, FlintAndSteelItem, Entity,
+ServerPlayerEntity, ReplaySender, ServerPlayNetHandler, IntegratedServer, and
+SoundEngine are byte-identical.
+
+Episode `p1-e12-dimension-transition-20260817-001` used one fresh process, one
+reset, one accepted `move(forward=1, duration_ticks=8)`, and zero retry.
+Evaluator-only before dimension was `minecraft:overworld`; after was
+`minecraft:the_nether`; `truth_missing_count=0`; outcome
+`dimension_transition_ok`. This E12 fixture JAR is the currently deployed
+production `mcprec-6.13.jar`; the E11 completion-barrier JAR remains at backup
+`6b5705e4…`. This does not change canonical runtime policy and does not set
+`integration_verified`.

@@ -197,7 +197,7 @@ class E12MineRLIntegrationTests(unittest.TestCase):
         self.assertIs(task.scenario_parameters["agent_built_portal"], False)
         self.assertIs(task.scenario_parameters["portal_preplaced"], True)
         self.assertIs(task.scenario_parameters["fire_preplaced"], False)
-        self.assertIs(task.scenario_parameters["needs_e12_runtime_portal_fixture_authorization"], True)
+        self.assertIs(task.scenario_parameters["needs_e12_runtime_portal_fixture_authorization"], False)
         self.assertEqual(len(E12_FRAME_BLOCKS), 14)
         self.assertEqual(len(E12_INTERIOR_CELLS), 6)
         self.assertEqual(len(E12_PROBE_WORLD_CELLS), 22)

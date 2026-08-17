@@ -91,7 +91,7 @@ def build_e12_compatibility_task(episode_id: str) -> TaskInstance:
                 "obsidian_frame_preplaced": True,
                 "portal_preplaced": True,
                 "fire_preplaced": False,
-                "needs_e12_runtime_portal_fixture_authorization": True,
+                "needs_e12_runtime_portal_fixture_authorization": False,
             },
         }
     )

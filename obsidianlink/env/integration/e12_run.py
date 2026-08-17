@@ -51,7 +51,10 @@ FORMAL_E12_RUNS_ROOT = (ROOT / "runs" / "p1_e12_dimension_transition").resolve()
 RUNTIME_LOGS_ROOT = (ROOT / "logs").resolve()
 EXECUTION_MODE_AUTHORIZED_LIVE_E12 = "authorized_live_e12"
 AUTHORIZED_LIVE_E12_RUN_VALUE = "e12_dimension_transition"
-NEEDS_E12_RUNTIME_PORTAL_FIXTURE_AUTHORIZATION = True
+DEPLOYED_E12_FIXTURE_JAR_SHA256 = (
+    "f459c36b7aaacd7e5f98ff9bbe001f1d54e77b73740537c24d5c5540290d36f4"
+)
+NEEDS_E12_RUNTIME_PORTAL_FIXTURE_AUTHORIZATION = False
 
 _PROCESS_LIVE_RUN_STARTED = False
 _PROCESS_LIVE_RUN_LOCK = threading.Lock()
@@ -208,6 +211,7 @@ def check_e12_live_runner() -> dict[str, Any]:
         "authorized_live_run_required": AUTHORIZED_LIVE_E12_RUN_VALUE,
         "calibration_only": True,
         "check_id": "E12",
+        "deployed_jar_sha256": DEPLOYED_E12_FIXTURE_JAR_SHA256,
         "execution_mode_required": EXECUTION_MODE_AUTHORIZED_LIVE_E12,
         "frame_cell_count": len(E12_FRAME_BLOCKS),
         "gradle_authorized": False,
