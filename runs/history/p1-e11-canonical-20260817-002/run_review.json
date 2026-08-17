@@ -1,0 +1,41 @@
+{
+  "after": {
+    "fire_count": 1,
+    "interior_air_count": 5,
+    "nether_portal_count": 0,
+    "truth_missing_count": 0
+  },
+  "before": {
+    "dimension": "minecraft:overworld",
+    "frame_obsidian_count": 14,
+    "interior_air_count": 6,
+    "nether_portal_count": 0,
+    "truth_missing_count": 0
+  },
+  "episode_id": "p1-e11-canonical-runtime-20260817-002",
+  "failure_stage": "normal_client_interaction_server_activation_not_observed",
+  "fresh_process_count": 1,
+  "integrated_server_pause_observed": false,
+  "outcome": "portal_activation_not_observed",
+  "process_release_proven": false,
+  "reset_count": 1,
+  "retry_count": 0,
+  "stimulus": {
+    "action_type": "use_item",
+    "client_interaction_thread": "Render thread",
+    "duration_ticks": 1,
+    "integrated_server_behavior": "environment-mode IntegratedServer remained unpaused; no Saving and pausing game log",
+    "path": "MineRL use=1 -> EnvServer.execActions -> ReplaySender.addAction -> ReplaySender.tick/execMouseButtons -> MouseHelper mouseButtonCallbackImpl -> normal Minecraft client right-click interaction",
+    "server_side_packet_or_FlintAndSteelItem_execution_evidenced": false,
+    "target": "flint_and_steel",
+    "tested_action_count": 1,
+    "translated_action_accepted": true
+  },
+  "success": false,
+  "unique_current_blocker": "Normal client right-click produced client-visible fire, but no server-side vanilla portal activation was observed; evidence does not yet prove that the use-item packet reached and executed FlintAndSteelItem on the integrated server.",
+  "verification": {
+    "e11_real_reviewed_success": false,
+    "e12_started": false,
+    "p1_hard_gate_passed": false
+  }
+}

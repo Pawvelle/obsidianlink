@@ -1,0 +1,23 @@
+{
+  "build_task": "shadowJar",
+  "canonical_jar_sha256": "684c20ec533897b44e9f2f73340f66ab41a6f61e7c9ae7e0f1db6fae7430751e",
+  "deployed_jar_sha256_after_run": "684c20ec533897b44e9f2f73340f66ab41a6f61e7c9ae7e0f1db6fae7430751e",
+  "excluded_patch_families": [
+    "mcp_patch.diff",
+    "e11-diagnostic",
+    "e11-marshal",
+    "e11-paused-executor",
+    "e12"
+  ],
+  "isolated_tree": "/tmp/obsidianlink-p1-canonical-e11-20260817",
+  "launcher_sha256": "7e15699c0d0aea517f87680eb5d760d02519d9744285fa0d348f799e2ed77183",
+  "pre_canonical_jar_backup": "/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/MCP-Reborn/build/libs/backups/mcprec-6.13.jar.pre-p1-canonical-20260817-836cb5ac",
+  "pre_canonical_jar_sha256": "836cb5ac6f89edca3cec255dd895e791212b04794d3349eb13a1b2b313416b6f",
+  "production_patch_names": [
+    "obsidianlink-envserver.patch",
+    "p1-canonical-audio-source.patch",
+    "e10-drawing-decorator.patch",
+    "e11-drawing-decorator-obsidian.patch",
+    "p1-env-integrated-server-unpaused.patch"
+  ]
+}

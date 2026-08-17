@@ -1,0 +1,14 @@
+--- a/src/main/java/net/minecraft/server/integrated/IntegratedServer.java
++++ b/src/main/java/net/minecraft/server/integrated/IntegratedServer.java
+@@ -69,7 +69,10 @@
+ 
+    public void tick(BooleanSupplier hasTimeLeft) {
+       boolean flag = this.isGamePaused;
+-      this.isGamePaused = Minecraft.getInstance().getConnection() != null && Minecraft.getInstance().isGamePaused();
++      this.isGamePaused =
++              this.mc.gameSettings.envPort == 0
++              && Minecraft.getInstance().getConnection() != null
++              && Minecraft.getInstance().isGamePaused();
+       IProfiler iprofiler = this.getProfiler();
+       if (!flag && this.isGamePaused) {
+          iprofiler.startSection("autoSave");

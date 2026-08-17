@@ -1,0 +1,14 @@
+--- a/src/main/java/net/minecraft/client/audio/SoundEngine.java
++++ b/src/main/java/net/minecraft/client/audio/SoundEngine.java
+@@ -78,6 +78,11 @@ public class SoundEngine {
+ 
+    private synchronized void load() {
+       if (!this.loaded) {
++         if (Boolean.getBoolean("obsidianlink.disableClientAudio")) {
++            LOGGER.info(LOG_MARKER, "Sound engine disabled for ObsidianLink environment runtime");
++            return;
++         }
++
+          try {
+             this.sndSystem.init();
+             this.listener.init();
