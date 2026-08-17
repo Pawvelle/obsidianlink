@@ -6,7 +6,7 @@ Scope: reschedule `flint_and_steel` world mutation onto the integrated
 server thread **without** waiting inside `EnvServer.execActions()`.
 This is not E12 and not `integration_verified`.
 
-Status: **FAILED** / queued then still timed out / no second patch round
+Status: **FAILED** / live #3 queued-then-timeout; live #4 await-after-tick still timeout / no further patch round
 
 ## How scheduling avoided the live #2 deadlock (and what remained)
 
@@ -56,6 +56,33 @@ Episode `p1-e11-live-003`. Raw
 
 Live #1 remains `portal_activation_not_observed`. Live #2 remains the
 pre-`addAction` timeout. No second patch round.
+
+## Await-after-tick follow-up (`p1-e11-live-004`)
+
+`patches/minerl/e11-server-thread-marshal-await-after-tick.patch` only
+reorders `stepClient` to:
+
+```text
+execActions(...)
+waitForNextObservation()
+awaitPendingFlintAndSteelMarshal()
+```
+
+Episode `p1-e11-live-004`. Compact
+`runs/history/p1-e11-live-20260817-003/`. Stack is
+`stepClient(EnvServer.java:772)` = await after the observation wait.
+
+Queued YES. `processRightClickBlock` still never ran. One
+`waitForNextObservation` tick did **not** drain `server.execute` on the
+paused integrated server. `tested_action_count=0`. Outcome
+`truth_identity_mismatch`. 6/6 nether_portal: **NO**. No second patch
+round.
+
+Run JAR SHA-256:
+
+`fc2a36c36519b981444974848447be04a8393908528cdd179e81bc7f66efb1a2`
+
+Production restored afterward to `836cb5ac…`.
 
 ## Runtime identity
 

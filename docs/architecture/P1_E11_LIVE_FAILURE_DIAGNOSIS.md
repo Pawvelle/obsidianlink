@@ -115,6 +115,8 @@ Live #1 evidence is unchanged. Diagnostic run is not
 Authorized marshal live `p1-e11-live-002` timed out before `addAction`.
 Nonblocking live `p1-e11-live-003` queued `server.execute` after
 `addAction` then still timed out before `waitForNextObservation`.
-Do not auto-retry. Do not change geometry, evaluator success, or the
-observation window. Do not start E12. See
+Await-after-tick live `p1-e11-live-004` reached await after
+`waitForNextObservation` and still timed out; `processRightClickBlock`
+never ran. Do not auto-retry. Do not change geometry, evaluator success,
+or the observation window. Do not start E12. See
 [P1 E11 server-thread marshal](P1_E11_SERVER_THREAD_MARSHAL.md).
