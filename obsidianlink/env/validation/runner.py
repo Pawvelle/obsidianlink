@@ -283,6 +283,7 @@ def _result(
     reset_attempt_count: int | None = None,
     environment_launch_count: int | None = None,
     exception_traceback: str | None = None,
+    unknown_block_diagnostics: Mapping[str, object] | None = None,
 ) -> EnvironmentValidationResult:
     return EnvironmentValidationResult(
         check_id=case.check_id,
@@ -302,6 +303,9 @@ def _result(
         reset_attempt_count=reset_attempt_count,
         environment_launch_count=environment_launch_count,
         exception_traceback=exception_traceback,
+        unknown_block_diagnostics=(
+            unknown_block_diagnostics if case.check_id is EnvironmentValidationId.E8 else None
+        ),
         rgb_present=None if rgb is None else rgb.present,
         rgb_height=None if rgb is None else rgb.height,
         rgb_width=None if rgb is None else rgb.width,
@@ -1248,6 +1252,7 @@ class EnvironmentValidationRunner:
         reset_attempt_count: int | None = None
         environment_launch_count: int | None = None
         exception_traceback: str | None = None
+        unknown_block_diagnostics: Mapping[str, object] | None = None
 
         try:
             backend = backend_factory()
@@ -1697,6 +1702,9 @@ class EnvironmentValidationRunner:
                                 except (TypeError, ValueError) as exc:
                                     outcome = truth_error_outcome(exc)
                                     error = _format_error(exc)
+                                    captured = getattr(exc, "diagnostics", None)
+                                    if isinstance(captured, Mapping) and captured:
+                                        unknown_block_diagnostics = dict(captured)
                                 else:
                                     if candidate_before is None:
                                         outcome = TRUTH_SNAPSHOT_MISSING
@@ -1743,6 +1751,9 @@ class EnvironmentValidationRunner:
                                             except (TypeError, ValueError) as exc:
                                                 outcome = truth_error_outcome(exc)
                                                 error = _format_error(exc)
+                                                captured = getattr(exc, "diagnostics", None)
+                                                if isinstance(captured, Mapping) and captured:
+                                                    unknown_block_diagnostics = dict(captured)
                                             else:
                                                 if candidate_after is None:
                                                     outcome = TRUTH_SNAPSHOT_MISSING
@@ -2675,4 +2686,5 @@ class EnvironmentValidationRunner:
             reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
             environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
             exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
+            unknown_block_diagnostics=unknown_block_diagnostics if case.check_id is EnvironmentValidationId.E8 else None,
         )

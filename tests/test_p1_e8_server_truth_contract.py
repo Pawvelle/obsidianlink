@@ -197,6 +197,8 @@ class ServerTruthSnapshotContractTests(unittest.TestCase):
             self.assertEqual(inspect_public_inventory(inventory, episode_id="episode").outcome, "inventory_leak")
             self.assertEqual(inspect_public_selected_item(selected, episode_id="episode").outcome, "selected_item_leak")
             self.assertTrue(public_payload_leaks_evaluator_truth({key: "secret"}))
+        self.assertTrue(public_payload_leaks_evaluator_truth({"unknown_block_diagnostics": {"x": 1}}))
+        self.assertTrue(public_payload_leaks_evaluator_truth({"raw_block": "stone"}))
 
     def test_e8_snapshots_remain_valid_without_fluid_records(self):
         snapshot = _snapshot()

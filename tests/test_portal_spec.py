@@ -16,6 +16,8 @@ from obsidianlink.env.portal_spec import (
     PortalGridOriginObservation,
     PortalTransitionObservation,
     parse_mission_draw_blocks,
+    portal_grid_cell_from_flat_index,
+    portal_grid_flat_index,
 )
 
 
@@ -89,6 +91,35 @@ class PortalA0EnvSpecTests(unittest.TestCase):
         self.assertEqual(int(result[2]), PORTAL_GRID_BLOCKS.index("water"))
         self.assertEqual(int(result[3]), PORTAL_GRID_BLOCKS.index("lava"))
         self.assertEqual(result.dtype, np.int32)
+        handler = PortalGridObservation()
+        handler.from_hero({PORTAL_GRID_NAME: blocks})
+        self.assertEqual(handler.last_unknown_blocks, ("unexpected_block",))
+        self.assertEqual(
+            handler.last_unknown_block_cells,
+            (("unexpected_block", portal_grid_cell_from_flat_index(1)),),
+        )
+        self.assertEqual(
+            portal_grid_flat_index(portal_grid_cell_from_flat_index(1)),
+            1,
+        )
+
+    def test_unknown_block_cells_locate_probe_offsets(self) -> None:
+        probe = (0, 0, 1)
+        blocks = ["minecraft:air"] * PORTAL_GRID_SIZE
+        blocks[portal_grid_flat_index(probe)] = "minecraft:stone"
+        handler = PortalGridObservation()
+        encoded = handler.from_hero({PORTAL_GRID_NAME: blocks})
+        self.assertEqual(int(encoded[portal_grid_flat_index(probe)]), PORTAL_GRID_UNKNOWN_ID)
+        self.assertEqual(handler.last_unknown_blocks, ("stone",))
+        self.assertEqual(handler.last_unknown_block_cells, (("stone", probe),))
+        known = ["minecraft:air"] * PORTAL_GRID_SIZE
+        known[portal_grid_flat_index(probe)] = "minecraft:dirt"
+        known[portal_grid_flat_index((1, 0, 1))] = "minecraft:water"
+        known[portal_grid_flat_index((-1, 0, 1))] = "minecraft:lava"
+        clean = PortalGridObservation()
+        clean.from_hero({PORTAL_GRID_NAME: known})
+        self.assertEqual(clean.last_unknown_blocks, ())
+        self.assertEqual(clean.last_unknown_block_cells, ())
 
     def test_grid_origin_observation_preserves_world_anchor(self) -> None:
         result = PortalGridOriginObservation().from_hero(

@@ -7,6 +7,7 @@ from obsidianlink.env.validation.truth import (
     BlockTruthActionExecution,
     ServerBlockTruth,
     ServerTruthSnapshot,
+    UnknownBlockTruthError,
 )
 
 
@@ -162,7 +163,43 @@ class BlockTruthRunnerTests(unittest.TestCase):
         self.assertEqual(payload["probe_grid_cells"], [[0, 0, 1], [1, 0, 1], [-1, 0, 1]])
         self.assertEqual(payload["before_dimension"], "minecraft:overworld")
         self.assertEqual(payload["stimulus_action"]["target"], "dirt")
+        self.assertIsNone(payload["unknown_block_diagnostics"])
         for forbidden in ("rgb", "inventory", "messages", "portal_grid", "location_stats"):
+            self.assertNotIn(forbidden, payload)
+
+    def test_unknown_block_diagnostics_are_recorded_and_not_success(self):
+        diagnostics = {
+            "anchor_source": "portal_grid_origin",
+            "dimension": "minecraft:overworld",
+            "grid_anchor_world": [0, 4, 0],
+            "portal_grid_payload_present": True,
+            "position_world": [0.5, 4.0, 0.5],
+            "unknown_probe_cells": [
+                {
+                    "grid_cell": [0, 0, 1],
+                    "raw_block": "stone",
+                    "world_cell": [0, 4, 1],
+                }
+            ],
+            "unknown_raw_blocks": ["stone"],
+        }
+
+        class _DiagBackend(FakeBlockTruthBackend):
+            def server_truth_snapshot(self):
+                raise UnknownBlockTruthError(diagnostics)
+
+        result = self.run_backend(_DiagBackend())
+        self.assertFalse(result.success)
+        self.assertEqual(result.outcome, "truth_block_unknown")
+        self.assertEqual(result.tested_action_count, 0)
+        payload = result.as_dict()
+        self.assertEqual(payload["unknown_block_diagnostics"]["unknown_raw_blocks"], ["stone"])
+        self.assertEqual(
+            payload["unknown_block_diagnostics"]["unknown_probe_cells"][0]["world_cell"],
+            [0, 4, 1],
+        )
+        self.assertEqual(payload["unknown_block_diagnostics"]["anchor_source"], "portal_grid_origin")
+        for forbidden in ("portal_grid", "inventory", "messages", "rgb"):
             self.assertNotIn(forbidden, payload)
 
 

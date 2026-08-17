@@ -8,7 +8,7 @@ or reuse ``EvaluatorVerdict``. Offline results cannot claim
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from obsidianlink.env.validation.contract import EnvironmentValidationId
 from obsidianlink.env.validation.camera import CAMERA_OK, CAMERA_OUTCOMES, finite_angle
@@ -189,6 +189,27 @@ def _block_truth_records(
             }
         )
     return tuple(records)
+
+
+def _unknown_block_diagnostics_payload(
+    value: object, field_name: str
+) -> dict[str, object]:
+    if not isinstance(value, Mapping) or not value:
+        raise ValueError(f"{field_name} must be a non-empty mapping")
+    payload = dict(value)
+    if "unknown_probe_cells" in payload:
+        cells = payload["unknown_probe_cells"]
+        if not isinstance(cells, Sequence) or isinstance(cells, (str, bytes)):
+            raise ValueError(f"{field_name}.unknown_probe_cells must be a sequence")
+        payload["unknown_probe_cells"] = [
+            dict(item) for item in cells if isinstance(item, Mapping)
+        ]
+    if "unknown_raw_blocks" in payload:
+        names = payload["unknown_raw_blocks"]
+        if not isinstance(names, Sequence) or isinstance(names, (str, bytes)):
+            raise ValueError(f"{field_name}.unknown_raw_blocks must be a sequence")
+        payload["unknown_raw_blocks"] = [str(name) for name in names]
+    return payload
 
 
 def _fluid_truth_records(
@@ -380,6 +401,7 @@ class EnvironmentValidationResult:
     target_changed: bool | None = None
     target_expected_block_present: bool | None = None
     control_cells_unchanged: bool | None = None
+    unknown_block_diagnostics: Mapping[str, object] | None = None
     before_server_fluid_truth: tuple[Mapping[str, object], ...] | None = None
     after_server_fluid_truth: tuple[Mapping[str, object], ...] | None = None
     fluid_variant: str | None = None
@@ -793,6 +815,8 @@ class EnvironmentValidationResult:
             value is not None for value in e12_only_fields
         ):
             raise ValueError("dimension-transition metadata is only valid for E12 results")
+        if self.check_id is not EnvironmentValidationId.E8 and self.unknown_block_diagnostics is not None:
+            raise ValueError("unknown-block diagnostics are only valid for E8 results")
         if self.bucket_variant is not None:
             object.__setattr__(
                 self,
@@ -872,6 +896,14 @@ class EnvironmentValidationResult:
                     object.__setattr__(
                         self, "stimulus_target", _require_identifier(self.stimulus_target, "stimulus_target")
                     )
+            if self.unknown_block_diagnostics is not None:
+                object.__setattr__(
+                    self,
+                    "unknown_block_diagnostics",
+                    _unknown_block_diagnostics_payload(
+                        self.unknown_block_diagnostics, "unknown_block_diagnostics"
+                    ),
+                )
         if self.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12):
             if self.before_block_truth is not None:
                 object.__setattr__(
@@ -1526,6 +1558,7 @@ class EnvironmentValidationResult:
                     and self.target_changed is True
                     and self.target_expected_block_present is True
                     and self.control_cells_unchanged is True
+                    and self.unknown_block_diagnostics is None
                 ):
                     raise ValueError(
                         "E8 success requires one accepted stimulus plus complete region block-truth evidence"
@@ -2061,6 +2094,11 @@ class EnvironmentValidationResult:
                     "tested_step_id": self.tested_step_id,
                     "translated_action_accepted": self.translated_action_accepted,
                     "truth_missing_count": self.truth_missing_count,
+                    "unknown_block_diagnostics": (
+                        None
+                        if self.unknown_block_diagnostics is None
+                        else dict(self.unknown_block_diagnostics)
+                    ),
                 }
             )
         elif self.check_id is EnvironmentValidationId.E9:

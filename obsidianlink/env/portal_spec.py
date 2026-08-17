@@ -71,6 +71,48 @@ PORTAL_GRID_BLOCKS = (
 )
 PORTAL_GRID_UNKNOWN_ID = PORTAL_GRID_BLOCKS.index("other")
 PORTAL_GRID_MISSING_ID = PORTAL_GRID_BLOCKS.index("missing")
+PORTAL_GRID_X_SIZE = PORTAL_GRID_MAX[0] - PORTAL_GRID_MIN[0] + 1
+PORTAL_GRID_Y_SIZE = PORTAL_GRID_MAX[1] - PORTAL_GRID_MIN[1] + 1
+PORTAL_GRID_Z_SIZE = PORTAL_GRID_MAX[2] - PORTAL_GRID_MIN[2] + 1
+
+
+def portal_grid_flat_index(cell: tuple[int, int, int]) -> int:
+    """Return the Fortran-order flat index for a spawn-relative grid cell."""
+
+    if (
+        not isinstance(cell, tuple)
+        or len(cell) != 3
+        or any(type(value) is not int for value in cell)
+    ):
+        raise ValueError("portal grid cell must be an int (x, y, z) tuple")
+    x = cell[0] - PORTAL_GRID_MIN[0]
+    y = cell[1] - PORTAL_GRID_MIN[1]
+    z = cell[2] - PORTAL_GRID_MIN[2]
+    if (
+        x < 0
+        or x >= PORTAL_GRID_X_SIZE
+        or y < 0
+        or y >= PORTAL_GRID_Y_SIZE
+        or z < 0
+        or z >= PORTAL_GRID_Z_SIZE
+    ):
+        raise ValueError("portal grid cell is outside the evaluator grid")
+    return x + PORTAL_GRID_X_SIZE * z + PORTAL_GRID_X_SIZE * PORTAL_GRID_Z_SIZE * y
+
+
+def portal_grid_cell_from_flat_index(index: int) -> tuple[int, int, int]:
+    """Invert :func:`portal_grid_flat_index` without wrapping."""
+
+    if type(index) is not int or index < 0 or index >= PORTAL_GRID_SIZE:
+        raise ValueError("portal grid flat index is out of range")
+    x = index % PORTAL_GRID_X_SIZE
+    z = (index // PORTAL_GRID_X_SIZE) % PORTAL_GRID_Z_SIZE
+    y = index // (PORTAL_GRID_X_SIZE * PORTAL_GRID_Z_SIZE)
+    return (
+        x + PORTAL_GRID_MIN[0],
+        y + PORTAL_GRID_MIN[1],
+        z + PORTAL_GRID_MIN[2],
+    )
 PORTAL_INVENTORY = (
     {"type": "obsidian", "quantity": 14},
     {"type": "flint_and_steel", "quantity": 1},
@@ -204,6 +246,7 @@ class PortalGridObservation(KeymapTranslationHandler):
         self.at_spawn_value = "true" if at_spawn else "false"
         self.last_payload_present = False
         self.last_unknown_blocks: tuple[str, ...] = ()
+        self.last_unknown_block_cells: tuple[tuple[str, tuple[int, int, int]], ...] = ()
         self.last_hero_keys: tuple[str, ...] = ()
         super().__init__(
             hero_keys=[PORTAL_GRID_NAME],
@@ -264,6 +307,7 @@ class PortalGridObservation(KeymapTranslationHandler):
         self.last_payload_present = blocks is not None
         if blocks is None or isinstance(blocks, (str, bytes)):
             self.last_unknown_blocks = ()
+            self.last_unknown_block_cells = ()
             return np.full(
                 (PORTAL_GRID_SIZE,), PORTAL_GRID_MISSING_ID, dtype=np.int32
             )
@@ -271,11 +315,13 @@ class PortalGridObservation(KeymapTranslationHandler):
             block_values = list(blocks)
         except TypeError:
             self.last_unknown_blocks = ()
+            self.last_unknown_block_cells = ()
             return np.full(
                 (PORTAL_GRID_SIZE,), PORTAL_GRID_MISSING_ID, dtype=np.int32
             )
         if len(block_values) != PORTAL_GRID_SIZE:
             self.last_unknown_blocks = ()
+            self.last_unknown_block_cells = ()
             return np.full(
                 (PORTAL_GRID_SIZE,), PORTAL_GRID_MISSING_ID, dtype=np.int32
             )
@@ -284,8 +330,15 @@ class PortalGridObservation(KeymapTranslationHandler):
             str(block).removeprefix("minecraft:").split("[", 1)[0]
             for block in block_values
         ]
+        unknown_cells: list[tuple[str, tuple[int, int, int]]] = []
+        for flat_index, block in enumerate(normalized):
+            if block not in block_to_id:
+                unknown_cells.append(
+                    (block, portal_grid_cell_from_flat_index(flat_index))
+                )
+        self.last_unknown_block_cells = tuple(unknown_cells)
         self.last_unknown_blocks = tuple(
-            sorted({block for block in normalized if block not in block_to_id})
+            sorted({block for block, _cell in unknown_cells})
         )
         return np.asarray(
             [block_to_id.get(block, PORTAL_GRID_UNKNOWN_ID) for block in normalized],

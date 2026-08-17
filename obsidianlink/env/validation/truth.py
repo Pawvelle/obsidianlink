@@ -287,6 +287,8 @@ EVALUATOR_TRUTH_LEAK_KEYS = frozenset(
         "server_fluid_truth",
         "server_truth",
         "truth_snapshot",
+        "unknown_block_diagnostics",
+        "raw_block",
         "obsidian_present",
         "conversion_observed",
         "before_target_block",
@@ -331,6 +333,14 @@ _TRUTH_ERROR_MARKERS = (
     ("malformed fluid", TRUTH_FLUID_UNKNOWN),
     ("fluid truth is missing", TRUTH_FLUID_MISSING),
 )
+
+
+class UnknownBlockTruthError(ValueError):
+    """Fail-closed unknown-block parse with evaluator-only diagnostics."""
+
+    def __init__(self, diagnostics: Mapping[str, Any] | None = None) -> None:
+        super().__init__("unknown block truth")
+        self.diagnostics: dict[str, Any] = {} if diagnostics is None else dict(diagnostics)
 
 
 def _identifier(value: object, field_name: str) -> str:

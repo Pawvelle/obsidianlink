@@ -1747,6 +1747,22 @@ class MineRLEnvironmentBackend:
                     "world_cell": list(world_cell),
                 }
             )
+        debug = self._portal_grid_debug()
+        raw_by_grid: dict[tuple[int, int, int], str] = {}
+        for item in debug.get("portal_grid_unknown_block_cells") or ():
+            if not isinstance(item, Mapping):
+                continue
+            raw_name = item.get("raw_block")
+            grid = item.get("grid_cell")
+            if (
+                isinstance(raw_name, str)
+                and raw_name
+                and isinstance(grid, Sequence)
+                and not isinstance(grid, (str, bytes))
+                and len(grid) == 3
+                and all(type(value) is int for value in grid)
+            ):
+                raw_by_grid[tuple(grid)] = raw_name
         payload: dict[str, Any] = {
             "agent_id": "agent_1",
             "block_truth": records,
@@ -1797,6 +1813,37 @@ class MineRLEnvironmentBackend:
                     "position_world": None if position is None else list(position),
                 }
             )
+            unknown_cells = [
+                {
+                    "grid_cell": list(record["grid_cell"]),
+                    "raw_block": raw_by_grid.get(tuple(record["grid_cell"])),
+                    "world_cell": list(record["world_cell"]),
+                }
+                for record in records
+                if record["block"] == "other"
+            ]
+            if unknown_cells:
+                payload["unknown_block_diagnostics"] = {
+                    "anchor_source": anchor_source,
+                    "block_truth": [dict(item) for item in records],
+                    "dimension": dimension,
+                    "grid_anchor_world": list(anchor),
+                    "portal_grid_payload_present": bool(
+                        debug.get(
+                            "portal_grid_payload_present",
+                            "portal_grid" in raw,
+                        )
+                    ),
+                    "position_world": None if position is None else list(position),
+                    "unknown_probe_cells": unknown_cells,
+                    "unknown_raw_blocks": sorted(
+                        {
+                            item["raw_block"]
+                            for item in unknown_cells
+                            if isinstance(item["raw_block"], str) and item["raw_block"]
+                        }
+                    ),
+                }
         return payload
 
     def _server_position_from_latest(self) -> tuple[float, float, float] | None:
@@ -2042,6 +2089,10 @@ class MineRLEnvironmentBackend:
             if isinstance(observable, PortalGridObservation):
                 return {
                     "portal_grid_payload_present": observable.last_payload_present,
+                    "portal_grid_unknown_block_cells": [
+                        {"grid_cell": list(cell), "raw_block": name}
+                        for name, cell in observable.last_unknown_block_cells
+                    ],
                     "portal_grid_unknown_blocks": list(
                         observable.last_unknown_blocks
                     ),

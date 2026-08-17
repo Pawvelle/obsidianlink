@@ -27,10 +27,18 @@ from obsidianlink.env.portal_spec import (
     PORTAL_GRID_BLOCKS,
     PORTAL_GRID_MAX,
     PORTAL_GRID_MIN,
+    PORTAL_GRID_NAME,
     PORTAL_GRID_SIZE,
+    PortalGridObservation,
+    portal_grid_flat_index,
 )
 from obsidianlink.env.validation import E8_SERVER_BLOCK_TRUTH_CASE, EnvironmentValidationRunner
-from obsidianlink.env.validation.truth import BlockTruthActionExecution, inspect_block_truth
+from obsidianlink.env.validation.truth import (
+    BlockTruthActionExecution,
+    UnknownBlockTruthError,
+    inspect_block_truth,
+    public_payload_leaks_evaluator_truth,
+)
 from tests.helpers import sample_task
 from tests.test_minerl_backend import _ControlledMineRLEnv
 
@@ -188,6 +196,28 @@ class _TruthEnv(_ControlledMineRLEnv):
             "secret": "not-public",
         }
         return observation, 0.0, False, info
+
+
+class _HeroUnknownEnv(_TruthEnv):
+    def __init__(
+        self,
+        *,
+        raw_block: str = "stone",
+        unknown_grid_cell: tuple[int, int, int] = KNOWN_GRID[0],
+        grid_origin: tuple[int, int, int] | None = KNOWN_SPAWN,
+    ):
+        super().__init__(grid_origin=grid_origin)
+        self._raw_block = raw_block
+        self._unknown_grid_cell = unknown_grid_cell
+        self._grid_handler = PortalGridObservation()
+        self.task = SimpleNamespace(observables=(self._grid_handler,))
+
+    def _observation(self):
+        observation = super()._observation()
+        hero = ["minecraft:air"] * PORTAL_GRID_SIZE
+        hero[portal_grid_flat_index(self._unknown_grid_cell)] = f"minecraft:{self._raw_block}"
+        observation["portal_grid"] = self._grid_handler.from_hero({PORTAL_GRID_NAME: hero})
+        return observation
 
 
 class E8MineRLIntegrationTests(unittest.TestCase):
@@ -478,6 +508,72 @@ class E8MineRLIntegrationTests(unittest.TestCase):
         try:
             backend.reset(build_e8_compatibility_task(EPISODE))
             self.assertIsNone(backend.get_server_truth_snapshot(E8_PROBE_WORLD_CELLS))
+        finally:
+            backend.close()
+
+    def test_unknown_raw_block_diagnostics_locate_cell_and_do_not_leak(self):
+        env = _HeroUnknownEnv(raw_block="stone", unknown_grid_cell=KNOWN_GRID[2])
+        backend = MineRLEnvironmentBackend(env_factory=lambda task: env, reset_warmup_steps=0)
+        backend.open()
+        try:
+            observations = backend.reset(build_e8_compatibility_task(EPISODE))
+            observation = observations[E8_AGENT_ID]
+            self.assertIsInstance(observation, Observation)
+            self.assertFalse(hasattr(observation, "unknown_block_diagnostics"))
+            self.assertFalse(hasattr(observation, "portal_grid"))
+            self.assertFalse(hasattr(observation, "raw_block"))
+            payload = backend.get_server_truth_snapshot(E8_PROBE_WORLD_CELLS)
+            self.assertEqual(payload["block_truth"][0]["block"], "air")
+            self.assertEqual(payload["block_truth"][2]["block"], "other")
+            diagnostics = payload["unknown_block_diagnostics"]
+            self.assertEqual(diagnostics["unknown_raw_blocks"], ["stone"])
+            self.assertEqual(diagnostics["unknown_probe_cells"][0]["raw_block"], "stone")
+            self.assertEqual(diagnostics["unknown_probe_cells"][0]["world_cell"], [-1, 4, 1])
+            self.assertEqual(diagnostics["unknown_probe_cells"][0]["grid_cell"], [-1, 0, 1])
+            self.assertEqual(diagnostics["anchor_source"], "portal_grid_origin")
+            self.assertEqual(diagnostics["grid_anchor_world"], [0, 4, 0])
+            self.assertEqual(diagnostics["position_world"], [0.5, 4.0, 0.5])
+            self.assertEqual(diagnostics["dimension"], "minecraft:overworld")
+            self.assertTrue(diagnostics["portal_grid_payload_present"])
+            with self.assertRaises(UnknownBlockTruthError) as caught:
+                server_truth_snapshot(payload)
+            self.assertEqual(str(caught.exception), "unknown block truth")
+            self.assertEqual(caught.exception.diagnostics["unknown_raw_blocks"], ["stone"])
+            step = backend.step({E8_AGENT_ID: MacroAction("place_block", target="dirt")})
+            self.assertNotIn("unknown_block_diagnostics", step.info)
+            self.assertNotIn("portal_grid", step.info)
+            self.assertFalse(public_payload_leaks_evaluator_truth(step.info))
+        finally:
+            backend.close()
+
+    def test_known_blocks_do_not_emit_unknown_diagnostics(self):
+        env = _TruthEnv()
+        backend = MineRLEnvironmentBackend(env_factory=lambda task: env, reset_warmup_steps=0)
+        backend.open()
+        try:
+            backend.reset(build_e8_compatibility_task(EPISODE))
+            before = backend.get_server_truth_snapshot(E8_PROBE_WORLD_CELLS)
+            self.assertNotIn("unknown_block_diagnostics", before)
+            self.assertEqual(
+                [item["block"] for item in before["block_truth"]],
+                ["air", "air", "air"],
+            )
+            snapshot = server_truth_snapshot(before)
+            self.assertEqual([item.block for item in snapshot.block_truth], ["air", "air", "air"])
+        finally:
+            backend.close()
+
+    def test_unknown_diagnostics_record_spawn_fallback_anchor(self):
+        env = _HeroUnknownEnv(grid_origin=None)
+        backend = MineRLEnvironmentBackend(env_factory=lambda task: env, reset_warmup_steps=0)
+        backend.open()
+        try:
+            backend.reset(build_e8_compatibility_task(EPISODE))
+            payload = backend.get_server_truth_snapshot(E8_PROBE_WORLD_CELLS)
+            self.assertEqual(payload["anchor_source"], "expected_spawn_fallback")
+            diagnostics = payload["unknown_block_diagnostics"]
+            self.assertEqual(diagnostics["anchor_source"], "expected_spawn_fallback")
+            self.assertEqual(diagnostics["unknown_raw_blocks"], ["stone"])
         finally:
             backend.close()
 

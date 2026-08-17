@@ -32,6 +32,7 @@ from obsidianlink.env.validation.truth import (
     ServerBlockTruth,
     ServerFluidTruth,
     ServerTruthSnapshot,
+    UnknownBlockTruthError,
     classify_server_fluid,
     validate_anchor_source,
     validate_dimension,
@@ -80,7 +81,7 @@ def server_truth_snapshot(
         "block_truth",
         "truth_missing_count",
     }
-    optional = {"fluid_truth"}
+    optional = {"fluid_truth", "unknown_block_diagnostics"}
     extra = set(value) - required - optional
     if extra or not required.issubset(value):
         raise ValueError("server truth snapshot fields are missing or unknown")
@@ -107,6 +108,7 @@ def server_truth_snapshot(
     expected_cells = tuple(validate_target_cell(cell, "probe_world_cell") for cell in expected_cells)
     truths: list[ServerBlockTruth] = []
     missing_count = 0
+    unknown_cells: list[dict[str, object]] = []
     for record in records:
         if not isinstance(record, Mapping):
             raise ValueError("block_truth items must be mappings")
@@ -115,14 +117,41 @@ def server_truth_snapshot(
             missing_count += 1
             continue
         if block == "other":
-            raise ValueError("unknown block truth")
+            try:
+                world_cell = _cell_tuple(record.get("world_cell"), "world_cell")
+                grid_cell = _cell_tuple(record.get("grid_cell"), "grid_cell")
+            except ValueError:
+                world_cell = None
+                grid_cell = None
+            raw_block = _scalar(record.get("raw_block"))
+            unknown_cells.append(
+                {
+                    "grid_cell": None if grid_cell is None else list(grid_cell),
+                    "raw_block": raw_block if isinstance(raw_block, str) else None,
+                    "world_cell": None if world_cell is None else list(world_cell),
+                }
+            )
+            continue
         world_cell = _cell_tuple(record.get("world_cell"), "world_cell")
         grid_cell = _cell_tuple(record.get("grid_cell"), "grid_cell")
         try:
             name = validate_block_name(block, "block")
         except (TypeError, ValueError) as exc:
-            raise ValueError("unknown block truth") from exc
+            raise UnknownBlockTruthError(
+                _unknown_block_diagnostics(
+                    value,
+                    [
+                        {
+                            "grid_cell": list(grid_cell),
+                            "raw_block": block if isinstance(block, str) else None,
+                            "world_cell": list(world_cell),
+                        }
+                    ],
+                )
+            ) from exc
         truths.append(ServerBlockTruth(world_cell, grid_cell, name))
+    if unknown_cells:
+        raise UnknownBlockTruthError(_unknown_block_diagnostics(value, unknown_cells))
     observed_missing_count = missing_count
     reported_missing_count = _scalar(value["truth_missing_count"])
     if type(reported_missing_count) is not int or reported_missing_count < 0:
@@ -205,6 +234,35 @@ def _cell_component(value: object, index: int) -> object:
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and len(value) == 3:
         return value[index]
     raise ValueError("coordinate sequence is invalid")
+
+
+def _unknown_block_diagnostics(
+    value: Mapping[str, Any],
+    unknown_cells: Sequence[Mapping[str, object]],
+) -> dict[str, Any]:
+    provided = value.get("unknown_block_diagnostics")
+    if isinstance(provided, Mapping):
+        diagnostics = dict(provided)
+        if unknown_cells and "unknown_probe_cells" not in diagnostics:
+            diagnostics["unknown_probe_cells"] = [dict(item) for item in unknown_cells]
+        return diagnostics
+    raw_blocks = sorted(
+        {
+            str(item.get("raw_block"))
+            for item in unknown_cells
+            if isinstance(item.get("raw_block"), str) and item.get("raw_block")
+        }
+    )
+    return {
+        "anchor_source": value.get("anchor_source"),
+        "block_truth": list(value.get("block_truth") or ()),
+        "dimension": value.get("dimension"),
+        "grid_anchor_world": value.get("grid_anchor_world"),
+        "portal_grid_payload_present": None,
+        "position_world": value.get("position_world"),
+        "unknown_probe_cells": [dict(item) for item in unknown_cells],
+        "unknown_raw_blocks": raw_blocks,
+    }
 
 
 class MineRLE8BlockTruthAdapter(MineRLE0LifecycleAdapter):
