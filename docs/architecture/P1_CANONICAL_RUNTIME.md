@@ -55,7 +55,13 @@ reset, one accepted `use_item(flint_and_steel)`, and zero retry.
   `truth_missing_count=0`;
 - outcome: `portal_activation_not_observed`.
 
-No `Saving and pausing game` event occurred. The current minimal blocker is
-therefore no longer paused task execution: existing evidence does not prove
-that the normal client use-item packet reached and executed
-`FlintAndSteelItem` on the integrated server. No retry was made.
+No `Saving and pausing game` event occurred. The later authorized packet-chain
+diagnostic `p1-e11-packet-diagnostic-20260817-003` proves that the normal
+client packet reaches `ServerPlayNetHandler`, executes server-side
+`PlayerInteractionManager` / `FlintAndSteelItem`, obtains
+`canLightPortal=true`, and writes all six `nether_portal` cells through
+`placePortalBlocks`. Those server events occur only after ReplaySender logs
+that it is stopping replay, whereas the frozen evaluator has already observed
+fire + 0/6 portal. The remaining blocker is therefore action-delivery versus
+evaluator-observation ordering, not packet loss, server execution, or E11
+geometry. No retry or repair was made.

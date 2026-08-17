@@ -1,0 +1,17 @@
+{
+  "canonical_runtime_root": "/private/tmp/obsidianlink-p1-canonical-e11-20260817",
+  "diagnostic_log_markers": [
+    "client_send packet=CPlayerTryUseItemOnBlockPacket",
+    "server_received handler=processTryUseItemOnBlock",
+    "server_player_interaction flint_enter",
+    "flint_onItemUse light_fire",
+    "fire_onBlockAdded canLightPortal=",
+    "portal_place_enter"
+  ],
+  "diagnostic_only": true,
+  "diagnostic_patch": {
+    "name": "e11-packet-chain-diagnostic.patch",
+    "sha256": "5ee3a21615f8ac444d1acb204776386caf3333a7cc144a3567f538857d3cc56b"
+  },
+  "runtime_jar_sha256": "eca94147f84c0043d688adafcbed9aa5e669b1b8525ffec84d2e28ff9e39ca83"
+}

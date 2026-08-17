@@ -1,0 +1,29 @@
+{
+  "baseline_jar_sha256": "684c20ec533897b44e9f2f73340f66ab41a6f61e7c9ae7e0f1db6fae7430751e",
+  "candidate_jar_sha256": "eca94147f84c0043d688adafcbed9aa5e669b1b8525ffec84d2e28ff9e39ca83",
+  "changed_semantic_entries": [
+    "net/minecraft/block/AbstractFireBlock.class",
+    "net/minecraft/block/PortalSize.class",
+    "net/minecraft/client/multiplayer/PlayerController.class",
+    "net/minecraft/item/FlintAndSteelItem.class",
+    "net/minecraft/network/play/ServerPlayNetHandler$1.class",
+    "net/minecraft/network/play/ServerPlayNetHandler.class",
+    "net/minecraft/server/management/PlayerInteractionManager.class",
+    "version.properties"
+  ],
+  "expected_changed_entries": [
+    "net/minecraft/block/AbstractFireBlock.class",
+    "net/minecraft/block/PortalSize.class",
+    "net/minecraft/client/multiplayer/PlayerController.class",
+    "net/minecraft/item/FlintAndSteelItem.class",
+    "net/minecraft/network/play/ServerPlayNetHandler$1.class",
+    "net/minecraft/network/play/ServerPlayNetHandler.class",
+    "net/minecraft/server/management/PlayerInteractionManager.class",
+    "version.properties"
+  ],
+  "forbidden_marker_hits": {},
+  "missing_expected_changed_entries": [],
+  "missing_required_log_markers": [],
+  "semantic_diff_clean": true,
+  "unexpected_changed_entries": []
+}

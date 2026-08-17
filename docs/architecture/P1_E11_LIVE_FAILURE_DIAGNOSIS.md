@@ -104,8 +104,14 @@ Server-visible after-truth remained fire + 0/6 portal. That is Case F:
 the placement method completed, but the evaluator-visible world did
 not keep nether_portal blocks. Root cause is narrowed to the portal
 world-write / subsequent replacement path (including client Render
-thread vs unproven Server thread). Not proven: `world.isRemote()` /
-world class of `this.world` inside `placePortalBlocks`.
+thread vs unproven Server thread). The later packet-chain diagnostic
+`p1-e11-packet-diagnostic-20260817-003` resolved this residual uncertainty:
+the normal packet is received and the complete server-side chain executes on
+`net.minecraft.world.server.ServerWorld` with `isRemote=false`, including all
+six portal writes. Its timestamps show the handler runs only after ReplaySender
+stops replay, after the frozen evaluator has observed 0/6 portal. Thus the
+current root cause is ordering between delayed client-to-server delivery and
+the evaluator observation, not the portal write path.
 
 Live #1 evidence is unchanged. Diagnostic run is not
 `integration_verified`.
