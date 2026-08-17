@@ -130,7 +130,7 @@ P1 historical evidence is preserved unchanged: 4 pilots + Full Suite #5 + stabil
 
 Audit used current code as the only source of truth. No D1/L1/Multi-Agent work, no MineRL, no Gradle, no LLM/API.
 
-- **Git SHA (committed kernel):** `77c6c4e` (`fix(p2): handle terminated/truncated and close-failure in run_benchmark`). Freeze audit also includes an uncommitted one-line round-trip completeness fix: `BenchmarkRunRecord.as_dict()` now writes `verdict.identity.agent_id`. Canonical freeze SHA is the forthcoming commit that includes that fix.
+- **Git SHA:** `84c6c23` (`docs(p2): freeze audit mark Benchmark Kernel v2 FROZEN`). Includes the `BenchmarkRunRecord.as_dict()` `verdict.identity.agent_id` round-trip completeness fix on top of committed kernel `77c6c4e`.
 - **Schema version:** `p2.benchmark.run_record.v1`
 - **Core interfaces:** `TaskIdentity` (`suite` / `mode` / `level` / `layout` / `family`); `Evaluator` Protocol + `EvaluatorVerdict`; `EvidenceRecord` + `EvidenceIdentity` + `EvidenceChannel` (`AGENT_VISIBLE` / `EVALUATOR_ONLY`); `MetricRecord` + `MetricName`; `BenchmarkRunner` Protocol + `RunnerResult`; `VerificationLevel`; `BenchmarkSplit`; `BenchmarkRunRecord`; `run_benchmark` / `write_run_record` / `load_run_record`
 - **Tests:** `tests/test_p2_benchmark_kernel.py` (11 cases, all passing) plus `tests/test_v2_architecture.py` (kernel import / taxonomy / channel guards)
