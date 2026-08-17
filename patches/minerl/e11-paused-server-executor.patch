@@ -1,24 +1,54 @@
+--- a/src/main/java/com/minerl/multiagent/env/EnvServer.java
++++ b/src/main/java/com/minerl/multiagent/env/EnvServer.java
+@@ -24,6 +24,7 @@
+ import net.minecraft.item.Items;
+ import net.minecraft.entity.player.ServerPlayerEntity;
+ import net.minecraft.util.Hand;
++import net.minecraft.server.integrated.IntegratedServer;
+ import net.minecraft.util.math.BlockRayTraceResult;
+ import net.minecraft.util.math.RayTraceResult;
+ import net.minecraft.profiler.IResultableProfiler;
+@@ -980,7 +981,11 @@
+         LOGGER.info(
+                 "[E11-MARSHAL] queued flint_and_steel processRightClickBlock from thread={}",
+                 Thread.currentThread().getName());
+-        server.execute(() -> {
++        if (!(server instanceof IntegratedServer)) {
++            throw new IllegalStateException(
++                    "flint_and_steel requires MineRL's integrated server");
++        }
++        ((IntegratedServer) server).executeObsidianLinkE11Task(() -> {
+             try {
+                 boolean applied = false;
+                 for (ServerPlayerEntity player : server.getPlayerList().getPlayers()) {
 --- a/src/main/java/net/minecraft/server/integrated/IntegratedServer.java
 +++ b/src/main/java/net/minecraft/server/integrated/IntegratedServer.java
-@@ -25,5 +25,6 @@
+@@ -27,6 +27,7 @@
+ import net.minecraft.server.SessionLockManager;
  import net.minecraft.server.management.PlayerProfileCache;
  import net.minecraft.util.SharedConstants;
 +import net.minecraft.util.concurrent.TickDelayedTask;
  import net.minecraft.util.registry.DynamicRegistries;
  import net.minecraft.world.GameType;
  import net.minecraft.world.chunk.listener.IChunkStatusListenerFactory;
-@@ -93,7 +94,17 @@
+@@ -89,6 +90,22 @@
        }
     }
  
++   /** Queues the single explicitly authorized E11 server interaction. */
++   public void executeObsidianLinkE11Task(Runnable runnable) {
++      this.enqueue(new ObsidianLinkE11Task(this.getTickCounter(), runnable));
++   }
++
 +   protected boolean canRun(TickDelayedTask runnable) {
-+      // In MineRL's syncIntegratedServer mode the Render thread calls
-+      // runSyncTick. While the client is paused, tick() intentionally skips
-+      // super.tick(), so tickCounter cannot advance to release execute()
-+      // tasks under MinecraftServer's normal three-tick delay. The sync tick
-+      // still drains this executor; permit that drain without advancing world
-+      // simulation.
-+      return this.isGamePaused || super.canRun(runnable);
++      return this.isGamePaused && runnable instanceof ObsidianLinkE11Task
++              || super.canRun(runnable);
++   }
++
++   private static final class ObsidianLinkE11Task extends TickDelayedTask {
++      private ObsidianLinkE11Task(int scheduledTime, Runnable runnable) {
++         super(scheduledTime, runnable);
++      }
 +   }
 +
     public boolean allowLoggingRcon() {

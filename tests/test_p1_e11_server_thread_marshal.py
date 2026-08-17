@@ -289,16 +289,32 @@ class E11AwaitAfterTickMarshalPatchTests(unittest.TestCase):
 
 
 class E11PausedServerExecutorPatchTests(unittest.TestCase):
-    def test_patch_releases_only_integrated_server_executor_tasks_while_paused(self) -> None:
+    def test_patch_releases_only_marked_e11_tasks_while_paused(self) -> None:
         text = PAUSED_SERVER_EXECUTOR_PATCH.read_text(encoding="utf-8")
         self.assertIn("IntegratedServer.java", text)
+        self.assertIn("executeObsidianLinkE11Task", text)
+        self.assertIn("ObsidianLinkE11Task", text)
         self.assertIn("protected boolean canRun(TickDelayedTask runnable)", text)
-        self.assertIn("return this.isGamePaused || super.canRun(runnable);", text)
+        self.assertIn(
+            "this.isGamePaused && runnable instanceof ObsidianLinkE11Task", text
+        )
+        self.assertNotIn("this.isGamePaused || super.canRun", text)
         self.assertNotIn("setBlockState", text)
         self.assertNotIn("Blocks.NETHER_PORTAL", text)
         self.assertNotIn("placePortalBlocks", text)
 
-    def test_reconstructed_runtime_uses_paused_executor_drain(self) -> None:
+    def test_ordinary_tasks_keep_the_original_paused_gate(self) -> None:
+        text = PAUSED_SERVER_EXECUTOR_PATCH.read_text(encoding="utf-8")
+        expression = (
+            "+      return this.isGamePaused && runnable instanceof ObsidianLinkE11Task\n"
+            "+              || super.canRun(runnable);"
+        )
+        self.assertIn(expression, text)
+        self.assertNotIn("this.isGamePaused || super.canRun", text)
+        self.assertIn("this.enqueue(new ObsidianLinkE11Task", text)
+        self.assertIn("-        server.execute(() -> {", text)
+
+    def test_reconstructed_runtime_marks_only_e11_for_paused_executor_drain(self) -> None:
         source_root = SITE_MCP / "src/main/java"
         self.assertTrue(source_root.is_dir(), "P1 MCP-Reborn source is missing")
         with tempfile.TemporaryDirectory() as directory:
@@ -335,12 +351,16 @@ class E11PausedServerExecutorPatchTests(unittest.TestCase):
                 step.index("awaitPendingFlintAndSteelMarshal();"),
             )
             self.assertIn("queueFlintAndSteelUseToServerThread", env_text)
-            self.assertIn("server.execute(() -> {", env_text)
+            self.assertIn("executeObsidianLinkE11Task(() -> {", env_text)
             self.assertNotIn("Blocks.NETHER_PORTAL", env_text)
             self.assertIn("import net.minecraft.util.concurrent.TickDelayedTask;", server_text)
             self.assertIn(
-                "return this.isGamePaused || super.canRun(runnable);", server_text
+                "this.isGamePaused && runnable instanceof ObsidianLinkE11Task",
+                server_text,
             )
+            self.assertIn("return this.isGamePaused && runnable instanceof", server_text)
+            self.assertIn("|| super.canRun(runnable);", server_text)
+            self.assertNotIn("this.isGamePaused || super.canRun", server_text)
 
 
 class RecordedE11ServerThreadMarshalLiveTests(unittest.TestCase):
