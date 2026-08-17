@@ -125,3 +125,48 @@ E0–E12 contract / adapter / offline runtime / live bridge 为 `unit_verified`�
 当前最小未验证点：P1 Hard Gate 剩余要求（稳定重复成功 / process release）。每次真实运行与每次 Gradle 构建仍需用户单独明确授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。
+
+## Full E0–E12 suite and process-release gate
+
+The suite is orchestration only. It reuses `P1_VALIDATION_CASES`, the existing authorized E0–E12 runners, `E0CleanupStatus`, and the startup-reliability PID-tree inspection. It does not wrap each case in a new class or duplicate case logic.
+
+Ordered steps: E0–E6, E7 water, E7 lava, E8, E9 water, E9 lava, E10–E12.
+
+Aggregate verdicts, first blocking issue in order:
+
+- `validation_failed`
+- `truth_missing`
+- `cleanup_failed`
+- `process_release_not_proven`
+- `hard_gate_success`
+
+OS-level process release is separate from `env.close()`. `E0CleanupStatus.process_release_proven` remains false for object-level cleanup. `ProcessReleaseStatus.process_release_proven` is true only when a MineRL/Minecraft/JVM child was observed in the OS process table, the case subprocess exited, and those tracked PIDs are gone.
+
+Encoded Hard Gate conditions for one complete suite run:
+
+1. every required step present in that order;
+2. every step succeeded;
+3. `truth_missing_count == 0` where `requires_server_truth`;
+4. no explicit cleanup failure;
+5. OS `process_release_proven` for every step;
+6. `real_execution_performed`;
+7. no human intervention.
+
+A passing Hard Gate still does not set `integration_verified` or change `p1_validation_manifest()` from `not_run`. Offline `--check` / `--preflight-only` cannot pass the Hard Gate.
+
+Offline-safe check:
+
+```bash
+conda run -n mc-agent python -m obsidianlink.env.integration.p1_suite --check
+```
+
+Future authorized single pilot (do not run without a separate live MineRL authorization):
+
+```bash
+conda run -n mc-agent python -m obsidianlink.env.integration.p1_suite \
+  --execution-mode authorized_live_p1_suite \
+  --authorized-live-run p1_e0_e12_validation_suite \
+  --output-dir runs/p1_validation_suite/<unique-pilot-id>
+```
+
+Use `--preflight-only` with those flags to validate authorization without launching MineRL.

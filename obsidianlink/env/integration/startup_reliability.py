@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from obsidianlink.env.integration.e0_adapter import MineRLE0LifecycleAdapter
+from obsidianlink.env.integration.e0_cleanup import descendant_pids, snapshot_process_table
 from obsidianlink.env.validation import E0_LIFECYCLE_CASE, EnvironmentValidationRunner
 
 
@@ -252,42 +253,6 @@ def _run_child(attempt_dir: Path, attempt_id: str, episode_id: str) -> int:
     _write_json(attempt_dir / "child_evidence.json", payload)
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 0 if success else 1
-
-
-def _process_table() -> dict[int, tuple[int, str]]:
-    try:
-        completed = subprocess.run(
-            ["ps", "-axo", "pid=,ppid=,command="],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return {}
-    result: dict[int, tuple[int, str]] = {}
-    for line in completed.stdout.splitlines():
-        parts = line.strip().split(None, 2)
-        if len(parts) < 3:
-            continue
-        try:
-            result[int(parts[0])] = (int(parts[1]), parts[2])
-        except ValueError:
-            continue
-    return result
-
-
-def _descendants(root_pid: int, table: Mapping[int, tuple[int, str]]) -> set[int]:
-    found = {root_pid}
-    changed = True
-    while changed:
-        changed = False
-        for pid, (ppid, _) in table.items():
-            if ppid in found and pid not in found:
-                found.add(pid)
-                changed = True
-    found.discard(root_pid)
-    return found
 
 
 def _snapshot_runtime_logs() -> dict[str, tuple[int, int]]:
@@ -577,8 +542,8 @@ def run_one_attempt(
         subprocess_pid = process.pid
         deadline = started + timeout_seconds
         while process.poll() is None and time.monotonic() < deadline:
-            table = _process_table()
-            for pid in _descendants(process.pid, table):
+            table = snapshot_process_table()
+            for pid in descendant_pids(process.pid, table):
                 tracked[pid] = table[pid][1]
             time.sleep(0.25)
         if process.poll() is None:
@@ -597,7 +562,7 @@ def run_one_attempt(
     residual: dict[int, str] = {}
     release_deadline = time.monotonic() + 5.0
     while time.monotonic() < release_deadline:
-        table = _process_table()
+        table = snapshot_process_table()
         residual = {
             pid: command_text
             for pid, command_text in tracked.items()

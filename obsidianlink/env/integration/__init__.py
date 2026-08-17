@@ -6,7 +6,11 @@ Importing these modules never starts MineRL or Minecraft.
 """
 
 from obsidianlink.env.integration.e0_adapter import MineRLE0LifecycleAdapter
-from obsidianlink.env.integration.e0_cleanup import E0CleanupStatus
+from obsidianlink.env.integration.e0_cleanup import (
+    E0CleanupStatus,
+    ProcessReleaseStatus,
+    inspect_os_process_release,
+)
 from obsidianlink.env.integration.e0_run import (
     AUTHORIZED_LIVE_RUN_VALUE,
     EXECUTION_MODE_AUTHORIZED_LIVE_E0,
@@ -202,6 +206,7 @@ __all__ = [
     "E11MineRLRunRecord",
     "E12AuthorizationError",
     "E12MineRLRunRecord",
+    "ProcessReleaseStatus",
     "MineRLE0LifecycleAdapter",
     "MineRLE1RGBAdapter",
     "MineRLE2InventoryAdapter",
@@ -215,6 +220,7 @@ __all__ = [
     "MineRLE10ObsidianAdapter",
     "MineRLE11PortalActivationAdapter",
     "MineRLE12DimensionTransitionAdapter",
+    "inspect_os_process_release",
     "preflight_authorized_e0",
     "preflight_authorized_e1",
     "preflight_authorized_e2",

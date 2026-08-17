@@ -44,6 +44,7 @@ def _check_project_files() -> dict[str, bool]:
         "obsidianlink/benchmark/evaluator.py",
         "obsidianlink/benchmark/evidence.py",
         "obsidianlink/env/validation/contract.py",
+        "obsidianlink/env/integration/p1_suite.py",
         "obsidianlink/core/task_catalog.py",
         "benchmark/catalog/tasks.json",
         "benchmark/schemas/task_catalog.schema.json",

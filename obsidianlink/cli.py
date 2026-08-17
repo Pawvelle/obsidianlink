@@ -14,6 +14,7 @@ from obsidianlink.benchmark.task import (
 )
 from obsidianlink.core.task_catalog import load_task_catalog, validate_catalog_references
 from obsidianlink.env.validation import P1_VALIDATION_CASES, p1_validation_manifest
+from obsidianlink.env.integration.p1_suite import check_p1_suite
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,6 +64,13 @@ def _offline_contract_check() -> dict[str, object]:
             "real_execution_performed": False,
             "integration_verified": False,
             "cases": list(p1_validation_manifest()),
+            "suite": {
+                "contract_ready": True,
+                "p1_hard_gate_passed": False,
+                "process_release_proven": False,
+                "real_execution_performed": False,
+                "steps": check_p1_suite()["step_keys"],
+            },
         },
         "note": (
             "Offline v2 schema, registry, kernel boundary, and P1 E0-E12 manifest "
