@@ -148,7 +148,7 @@ Encoded Hard Gate conditions for one complete suite run:
 
 1. every required step present in that order;
 2. every step succeeded;
-3. `truth_missing_count == 0` where `requires_server_truth`;
+3. `truth_missing_count == 0` for E8–E12; E4–E7 fail closed via case-specific evaluator outcomes rather than that count;
 4. no explicit cleanup failure;
 5. OS `process_release_proven` for every step;
 6. `real_execution_performed`;
@@ -158,7 +158,7 @@ A passing Hard Gate still does not set `integration_verified` or change `p1_vali
 
 Authorized live pilot `p1-e0-e12-suite-20260817-001` (2026-08-17) executed E0 then E1 and stopped. Canonical runtime SHA-256 `684c20ec…` was verified for both steps; Gradle was not invoked. E0: `lifecycle_ok`, OS `process_release_proven=true`. E1: `rgb_ok`, `real_execution_performed=true`, but tracked JVM command was `(java)`, which does not count as an observed MineRL/Minecraft/JVM command line, so OS `process_release_proven=false`. Suite verdict `process_release_not_proven`; `p1_hard_gate_passed=false`; no human intervention; no retry. Evidence: `runs/p1_validation_suite/p1-e0-e12-suite-20260817-001/`. This is one failed Hard Gate attempt, not `integration_verified`. Later observer tracking retains a previously seen `java ...` identity across degraded `(java)` snapshots; that historical pilot is not rewritten as success.
 
-Second authorized live pilot `p1-e0-e12-suite-20260817-002` executed E0–E4 and stopped. Canonical `684c20ec…` was verified for all four completed steps; Gradle was not invoked. E0–E3 succeeded with OS `process_release_proven=true`. E1 this time retained `java -Xmx4G ... -jar ...`. E4: `camera_ok`, `real_execution_performed=true`, OS `process_release_proven=true`, but the live record has no `truth_missing_count` while `requires_server_truth=true`, so the suite verdict is `truth_missing`. `p1_hard_gate_passed=false`; no retry; E5–E12 not launched. Evidence: `runs/p1_validation_suite/p1-e0-e12-suite-20260817-002/`. This does not set `integration_verified`.
+Second authorized live pilot `p1-e0-e12-suite-20260817-002` executed E0–E4 and stopped. Canonical `684c20ec…` was verified for all four completed steps; Gradle was not invoked. E0–E3 succeeded with OS `process_release_proven=true`. E1 this time retained `java -Xmx4G ... -jar ...`. E4: `camera_ok`, `real_execution_performed=true`, OS `process_release_proven=true`, but the live record has no `truth_missing_count` while `requires_server_truth=true`, so the suite verdict is `truth_missing`. `p1_hard_gate_passed=false`; no retry; E5–E12 not launched. Evidence: `runs/p1_validation_suite/p1-e0-e12-suite-20260817-002/`. This does not set `integration_verified`. The later suite aggregator requires counted `truth_missing_count` only for E8–E12; that historical pilot is not rewritten as success.
 
 Offline-safe check:
 

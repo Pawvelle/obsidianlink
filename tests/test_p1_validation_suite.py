@@ -52,6 +52,7 @@ from obsidianlink.env.integration.p1_suite import (
     main,
     p1_suite_steps,
     preflight_authorized_p1_suite,
+    requires_counted_server_truth,
     reset_authorized_p1_suite_process_guards_for_tests,
     run_authorized_p1_suite,
 )
@@ -93,7 +94,9 @@ def _case(
     proven: bool = True,
     real: bool = True,
 ) -> P1CaseSummary:
-    missing = truth_missing_count if step.requires_server_truth else None
+    missing = (
+        truth_missing_count if requires_counted_server_truth(step.check_id) else None
+    )
     return P1CaseSummary(
         check_id=step.check_id,
         name=step.name,
@@ -337,6 +340,83 @@ class AggregateVerdictTests(unittest.TestCase):
         )
         result = aggregate_p1_suite(prefix, real_execution_performed=True)
         self.assertEqual(result.verdict, VERDICT_TRUTH_MISSING)
+
+    def test_e4_through_e7_success_does_not_require_truth_missing_count(self) -> None:
+        for check_id in ("E4", "E5", "E6", "E7"):
+            self.assertFalse(requires_counted_server_truth(check_id))
+            self.assertTrue(requires_counted_server_truth("E8"))
+        cases = _all_ok()
+        typed = [case for case in cases if case.check_id in {"E4", "E5", "E6", "E7"}]
+        self.assertTrue(typed)
+        self.assertTrue(all(case.truth_missing_count is None for case in typed))
+        result = aggregate_p1_suite(cases, real_execution_performed=True)
+        self.assertEqual(result.verdict, VERDICT_HARD_GATE_SUCCESS)
+        self.assertFalse(result.truth_missing)
+
+    def test_e4_camera_ok_without_count_is_not_truth_missing(self) -> None:
+        cases = _all_ok()
+        e4 = next(step for step in p1_suite_steps() if step.check_id == "E4")
+        cases[4] = _case(e4, outcome="camera_ok")
+        self.assertIsNone(cases[4].truth_missing_count)
+        result = aggregate_p1_suite(cases, real_execution_performed=True)
+        self.assertEqual(result.verdict, VERDICT_HARD_GATE_SUCCESS)
+        self.assertFalse(result.truth_missing)
+
+    def test_e4_orientation_missing_is_validation_failure(self) -> None:
+        cases = _all_ok()
+        e4 = next(step for step in p1_suite_steps() if step.check_id == "E4")
+        cases[4] = _case(e4, success=False, outcome="orientation_before_missing")
+        result = aggregate_p1_suite(cases, real_execution_performed=True)
+        self.assertEqual(result.verdict, VERDICT_VALIDATION_FAILED)
+        self.assertFalse(result.truth_missing)
+
+    def test_e5_e7_truth_absence_outcomes_fail_closed(self) -> None:
+        failures = (
+            ("E5", "position_before_missing"),
+            ("E6", "block_before_missing"),
+            ("E7", "fluid_before_missing"),
+        )
+        for check_id, outcome in failures:
+            cases = _all_ok()
+            step = next(step for step in p1_suite_steps() if step.check_id == check_id)
+            index = next(
+                i for i, item in enumerate(p1_suite_steps()) if item.check_id == check_id
+            )
+            cases[index] = _case(step, success=False, outcome=outcome)
+            result = aggregate_p1_suite(cases, real_execution_performed=True)
+            self.assertEqual(result.verdict, VERDICT_VALIDATION_FAILED, check_id)
+            self.assertFalse(result.truth_missing, check_id)
+
+    def test_e8_success_with_nonzero_count_is_truth_missing(self) -> None:
+        cases = _all_ok()
+        e8 = next(step for step in p1_suite_steps() if step.check_id == "E8")
+        index = [step.step_key for step in p1_suite_steps()].index("E8")
+        cases[index] = _case(
+            e8, success=True, outcome="block_truth_ok", truth_missing_count=1
+        )
+        result = aggregate_p1_suite(cases, real_execution_performed=True)
+        self.assertEqual(result.verdict, VERDICT_TRUTH_MISSING)
+        self.assertTrue(result.truth_missing)
+
+    def test_e8_success_with_missing_count_is_truth_missing(self) -> None:
+        cases = _all_ok()
+        e8 = next(step for step in p1_suite_steps() if step.check_id == "E8")
+        index = [step.step_key for step in p1_suite_steps()].index("E8")
+        cases[index] = _case(
+            e8, success=True, outcome="block_truth_ok", truth_missing_count=None
+        )
+        result = aggregate_p1_suite(cases, real_execution_performed=True)
+        self.assertEqual(result.verdict, VERDICT_TRUTH_MISSING)
+        self.assertTrue(result.truth_missing)
+
+    def test_e12_zero_count_does_not_block_hard_gate(self) -> None:
+        cases = _all_ok()
+        e12 = next(step for step in p1_suite_steps() if step.check_id == "E12")
+        self.assertEqual(cases[-1].check_id, "E12")
+        self.assertEqual(cases[-1].truth_missing_count, 0)
+        cases[-1] = _case(e12, outcome="dimension_transition_ok", truth_missing_count=0)
+        result = aggregate_p1_suite(cases, real_execution_performed=True)
+        self.assertEqual(result.verdict, VERDICT_HARD_GATE_SUCCESS)
 
 
 class SuiteEntrypointTests(unittest.TestCase):

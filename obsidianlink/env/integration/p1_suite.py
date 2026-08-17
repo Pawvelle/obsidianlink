@@ -286,8 +286,14 @@ def case_summary_from_payload(
     )
 
 
+def requires_counted_server_truth(check_id: str) -> bool:
+    """E8--E12 record ``truth_missing_count``; E4--E7 do not."""
+
+    return check_id in {"E8", "E9", "E10", "E11", "E12"}
+
+
 def _case_issue(summary: P1CaseSummary) -> str | None:
-    if summary.requires_server_truth and (
+    if requires_counted_server_truth(summary.check_id) and (
         summary.truth_missing_count is None or summary.truth_missing_count != 0
     ):
         return VERDICT_TRUTH_MISSING
@@ -382,7 +388,7 @@ def aggregate_p1_suite(
     observed = tuple(case.step_key for case in cases)
     complete = observed == expected
     truth_missing = any(
-        case.requires_server_truth
+        requires_counted_server_truth(case.check_id)
         and (case.truth_missing_count is None or case.truth_missing_count != 0)
         for case in cases
     )
@@ -506,7 +512,7 @@ def check_p1_suite() -> dict[str, Any]:
         "hard_gate_conditions": [
             "complete ordered E0-E12 suite including E7 water/lava and E9 water/lava",
             "every required case success",
-            "truth_missing_count==0 where requires_server_truth",
+            "truth_missing_count==0 for E8-E12; E4-E7 fail closed via case outcomes",
             "no explicit cleanup failure",
             "OS process_release_proven for every case",
             "real_execution_performed",
