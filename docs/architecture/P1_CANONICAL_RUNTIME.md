@@ -2,7 +2,7 @@
 
 Date: 2026-08-17
 
-Status: deployed; E11 real calibration failed; E12 not started.
+Status: deployed; E11 real reviewed success; E12 not started.
 
 ## Reproducible source and build
 
@@ -26,42 +26,41 @@ Production source changes, in order:
 5. `p1-env-integrated-server-unpaused.patch`: an environment process
    (`envPort != 0`) does not pause its integrated server.
 
-The build does not use `mcp_patch.diff`, any E11 marshal or diagnostic patch,
-the paused-executor patch, or E12 code. Canonical JAR SHA-256:
-`684c20ec533897b44e9f2f73340f66ab41a6f61e7c9ae7e0f1db6fae7430751e`.
+The E11 completion-barrier runtime is staged from that canonical baseline and
+adds only `p1-e11-action-completion-barrier.patch`. It does not use
+`mcp_patch.diff`, any E11 marshal or diagnostic patch, the paused-executor
+patch, or E12 code. Deployed JAR SHA-256:
+`6b5705e49220f5af33b5b0d06f7c162afef501a849d54cf57b242933bfd3ef72`.
 
 ## Semantic diff
 
-Against the previous production JAR (`836cb5ac…`), changed semantic entries
-are only:
+Against canonical baseline (`684c20ec…`), executable changes are only:
 
-- `net/minecraft/server/integrated/IntegratedServer.class`;
+- `com/minerl/multiagent/env/EnvServer.class`;
+- `net/minecraft/client/ReplaySender.class`;
+- `net/minecraft/network/play/ServerPlayNetHandler.class`;
 - `version.properties`.
 
-EnvServer, SoundEngine, AbstractFireBlock, NetherPortalBlock, PortalSize,
-FlintAndSteelItem, Entity, and ServerPlayerEntity are byte-identical.
-Forbidden marshal/diagnostic/E12 markers are absent.
+`EnvServer$1` and `ReplaySender$Mode` differ only in compiler line-number
+metadata. SoundEngine, AbstractFireBlock, NetherPortalBlock, PortalSize,
+FlintAndSteelItem, Entity, and ServerPlayerEntity are byte-identical. Forbidden
+marshal/diagnostic/E12 markers are absent.
 
 ## Real E11 result
 
-Episode `p1-e11-canonical-runtime-20260817-002` used one fresh process, one
+Episode `p1-e11-completion-barrier-20260817-004` used one fresh process, one
 reset, one accepted `use_item(flint_and_steel)`, and zero retry.
 
 - before: 14/14 obsidian, 6/6 air, 0 portal, overworld,
   `truth_missing_count=0`;
 - execution: MineRL `use=1` → EnvServer → ReplaySender → normal Minecraft
   client right-click on the Render thread;
-- after: one fire, five air, 0/6 nether portal,
-  `truth_missing_count=0`;
-- outcome: `portal_activation_not_observed`.
+- after: 6/6 nether portal, `truth_missing_count=0`;
+- outcome: `portal_activation_ok`.
 
-No `Saving and pausing game` event occurred. The later authorized packet-chain
-diagnostic `p1-e11-packet-diagnostic-20260817-003` proves that the normal
-client packet reaches `ServerPlayNetHandler`, executes server-side
-`PlayerInteractionManager` / `FlintAndSteelItem`, obtains
-`canLightPortal=true`, and writes all six `nether_portal` cells through
-`placePortalBlocks`. Those server events occur only after ReplaySender logs
-that it is stopping replay, whereas the frozen evaluator has already observed
-fire + 0/6 portal. The remaining blocker is therefore action-delivery versus
-evaluator-observation ordering, not packet loss, server execution, or E11
-geometry. No retry or repair was made.
+The barrier arms only for the exact E11 flint-and-steel action. While it is
+pending, ReplaySender returns from its empty-queue wait so the normal integrated
+server tick can handle the client packet. `ServerPlayNetHandler` acknowledges
+only after `processTryUseItemOnBlock` has completed vanilla interaction; the
+EnvServer condition then releases evaluator after-truth. This is an action
+completion condition, not an observation-window extension or sleep.

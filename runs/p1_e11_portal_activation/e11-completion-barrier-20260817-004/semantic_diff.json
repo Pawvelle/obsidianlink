@@ -1,0 +1,27 @@
+{
+  "baseline_jar_sha256": "684c20ec533897b44e9f2f73340f66ab41a6f61e7c9ae7e0f1db6fae7430751e",
+  "candidate_jar_sha256": "6b5705e49220f5af33b5b0d06f7c162afef501a849d54cf57b242933bfd3ef72",
+  "changed_semantic_entries": [
+    "com/minerl/multiagent/env/EnvServer$1.class",
+    "com/minerl/multiagent/env/EnvServer.class",
+    "net/minecraft/client/ReplaySender$Mode.class",
+    "net/minecraft/client/ReplaySender.class",
+    "net/minecraft/network/play/ServerPlayNetHandler$1.class",
+    "net/minecraft/network/play/ServerPlayNetHandler.class",
+    "version.properties"
+  ],
+  "expected_changed_entries": [
+    "com/minerl/multiagent/env/EnvServer$1.class",
+    "com/minerl/multiagent/env/EnvServer.class",
+    "net/minecraft/client/ReplaySender$Mode.class",
+    "net/minecraft/client/ReplaySender.class",
+    "net/minecraft/network/play/ServerPlayNetHandler$1.class",
+    "net/minecraft/network/play/ServerPlayNetHandler.class",
+    "version.properties"
+  ],
+  "forbidden_marker_hits": {},
+  "missing_expected_changed_entries": [],
+  "missing_required_markers": [],
+  "semantic_diff_clean": true,
+  "unexpected_changed_entries": []
+}

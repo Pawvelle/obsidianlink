@@ -98,7 +98,7 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 ## Authorization and hard gate
 
-E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 runtime geometry deployed / real verified = **YES**；canonical real E11 attempted = **YES** (`p1-e11-canonical-runtime-20260817-002`, `portal_activation_not_observed`, `tested_action_count=1`, retry=0, portal=0/6)；E11 real reviewed success = **NO**；`integration_verified` = **NO**。E8/E9/E10/E11 evaluator-only truth 与 Agent-visible observation 保持隔离。E12 为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
+E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 runtime geometry deployed / real verified = **YES**；real E11 reviewed success = **YES** (`p1-e11-completion-barrier-20260817-004`, `portal_activation_ok`, `tested_action_count=1`, retry=0, portal=6/6, `truth_missing_count=0`)；`integration_verified` = **NO**。E8/E9/E10/E11 evaluator-only truth 与 Agent-visible observation 保持隔离。E12 为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
 当前唯一最小 blocker：ReplaySender 的正常客户端右键路径已执行并产生 fire，integrated server 也未暂停，但现有证据尚未证明 use-item packet 到达并在 server side 执行 vanilla `FlintAndSteelItem`。不要自动重试，不要改 geometry/evaluator/window，不要开始 E12。每次真实运行仍需用户单独明确授权。
 

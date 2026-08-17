@@ -1,0 +1,139 @@
+--- a/src/main/java/com/minerl/multiagent/env/EnvServer.java
++++ b/src/main/java/com/minerl/multiagent/env/EnvServer.java
+@@ -21,6 +21,7 @@
+ import net.minecraft.inventory.EquipmentSlotType;
+ import net.minecraft.item.Item;
+ import net.minecraft.item.ItemStack;
++import net.minecraft.item.Items;
+ import net.minecraft.profiler.IResultableProfiler;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.util.ResourceLocation;
+@@ -69,10 +70,73 @@
+     // the episode. Helps to render scene more fully and avoid unrendered chunks
+     // TODO peterz validate this is actually still necessary, given the sync chunk loading
+     private static final int DEFAULT_SKIP_FIRST_FRAMES = 20;
++    private static final Object E11_ACTION_COMPLETION_MONITOR = new Object();
++    private static final long E11_ACTION_COMPLETION_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(30L);
++    private static long e11ActionCompletionGeneration;
++    private static long e11ActionCompletionPendingGeneration;
++    private static long e11ActionCompletionCompletedGeneration;
+ 
+     private int envTickCounter = -1;
+     private MissionInit missionInit;
+ 
++    private static boolean requiresE11FlintAndSteelCompletionBarrier(String actions) {
++        Minecraft mc = Minecraft.getInstance();
++        return mc.gameSettings.envPort != 0
++                && mc.player != null
++                && mc.player.getHeldItemMainhand().getItem() == Items.FLINT_AND_STEEL
++                && Arrays.stream(actions.split("\\n"))
++                        .map(String::trim)
++                        .anyMatch(action -> action.equals("use 1"));
++    }
++
++    private static long armE11FlintAndSteelCompletionBarrier() {
++        synchronized (E11_ACTION_COMPLETION_MONITOR) {
++            if (e11ActionCompletionPendingGeneration != 0L) {
++                throw new IllegalStateException("E11 flint-and-steel completion barrier is already pending");
++            }
++            e11ActionCompletionPendingGeneration = ++e11ActionCompletionGeneration;
++            return e11ActionCompletionPendingGeneration;
++        }
++    }
++
++    public static boolean isE11FlintAndSteelCompletionBarrierPending() {
++        synchronized (E11_ACTION_COMPLETION_MONITOR) {
++            return e11ActionCompletionPendingGeneration != 0L;
++        }
++    }
++
++    public static void completeE11FlintAndSteelCompletionBarrier() {
++        synchronized (E11_ACTION_COMPLETION_MONITOR) {
++            if (e11ActionCompletionPendingGeneration != 0L) {
++                e11ActionCompletionCompletedGeneration = e11ActionCompletionPendingGeneration;
++                e11ActionCompletionPendingGeneration = 0L;
++                E11_ACTION_COMPLETION_MONITOR.notifyAll();
++            }
++        }
++    }
++
++    private static void awaitE11FlintAndSteelCompletionBarrier(long generation) {
++        long deadline = System.nanoTime() + E11_ACTION_COMPLETION_TIMEOUT_NANOS;
++        synchronized (E11_ACTION_COMPLETION_MONITOR) {
++            while (e11ActionCompletionCompletedGeneration < generation) {
++                long remaining = deadline - System.nanoTime();
++                if (remaining <= 0L) {
++                    if (e11ActionCompletionPendingGeneration == generation) {
++                        e11ActionCompletionPendingGeneration = 0L;
++                        E11_ACTION_COMPLETION_MONITOR.notifyAll();
++                    }
++                    throw new IllegalStateException("E11 flint-and-steel server action completion timed out");
++                }
++                try {
++                    TimeUnit.NANOSECONDS.timedWait(E11_ACTION_COMPLETION_MONITOR, remaining);
++                } catch (InterruptedException exception) {
++                    Thread.currentThread().interrupt();
++                    throw new RuntimeException("E11 flint-and-steel completion barrier interrupted", exception);
++                }
++            }
++        }
++    }
++
+     private int port;
+     private String version;
+     public EnvServer(int port, String version) {
+@@ -759,7 +823,14 @@
+         int options =  Character.getNumericValue(command.charAt(stepServerTagLength - 2));
+         boolean withInfo = options == 0 || options == 2;
+         envTickCounter = PlayRecorder.getInstance().getTickCounter();
++        boolean requiresE11CompletionBarrier = requiresE11FlintAndSteelCompletionBarrier(actions);
++        long completionGeneration = requiresE11CompletionBarrier
++                ? armE11FlintAndSteelCompletionBarrier()
++                : 0L;
+         execActions(actions, options);
++        if (requiresE11CompletionBarrier) {
++            awaitE11FlintAndSteelCompletionBarrier(completionGeneration);
++        }
+         waitForNextObservation();
+         byte[] obs = getPOVObservation();
+         boolean done = mc.player == null || !mc.player.isAlive() || (this.doneOnDeath && mc.isHasPlayerRespawned());
+--- a/src/main/java/net/minecraft/client/ReplaySender.java
++++ b/src/main/java/net/minecraft/client/ReplaySender.java
+@@ -3,6 +3,7 @@
+ import com.google.gson.Gson;
+ import com.google.gson.JsonObject;
+ import com.minerl.multiagent.RandomHelper;
++import com.minerl.multiagent.env.EnvServer;
+ import com.minerl.multiagent.recorder.ZipUtil;
+ import net.minecraft.client.gui.screen.DirtMessageScreen;
+ import net.minecraft.client.gui.screen.MainMenuScreen;
+@@ -90,6 +91,9 @@
+             try {
+                 synchronized (this) {
+                     while (mode == Mode.EXEC_CMD && actions.size() == 0) {
++                        if (EnvServer.isE11FlintAndSteelCompletionBarrierPending()) {
++                            return;
++                        }
+                         this.wait();
+                     }
+                 }
+--- a/src/main/java/net/minecraft/network/play/ServerPlayNetHandler.java
++++ b/src/main/java/net/minecraft/network/play/ServerPlayNetHandler.java
+@@ -3,6 +3,7 @@
+ import com.google.common.collect.Lists;
+ import com.google.common.primitives.Doubles;
+ import com.google.common.primitives.Floats;
++import com.minerl.multiagent.env.EnvServer;
+ import com.mojang.brigadier.ParseResults;
+ import com.mojang.brigadier.StringReader;
+ import io.netty.util.concurrent.Future;
+@@ -966,6 +967,9 @@
+ 
+       this.player.connection.sendPacket(new SChangeBlockPacket(serverworld, blockpos));
+       this.player.connection.sendPacket(new SChangeBlockPacket(serverworld, blockpos.offset(direction)));
++      if (itemstack.getItem() == Items.FLINT_AND_STEEL) {
++         EnvServer.completeE11FlintAndSteelCompletionBarrier();
++      }
+    }
+ 
+    public void processTryUseItem(CPlayerTryUseItemPacket packetIn) {

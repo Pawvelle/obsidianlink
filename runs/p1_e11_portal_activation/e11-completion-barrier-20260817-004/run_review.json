@@ -1,0 +1,29 @@
+{
+  "barrier": {
+    "acknowledged": true,
+    "completion_point": "ServerPlayNetHandler.processTryUseItemOnBlock after vanilla interaction",
+    "mechanism": "condition notification; no tick-count or sleep gate",
+    "replay_sender_unblocked_integrated_server_tick": true
+  },
+  "build": {
+    "baseline_jar_sha256": "684c20ec533897b44e9f2f73340f66ab41a6f61e7c9ae7e0f1db6fae7430751e",
+    "candidate_jar_sha256": "6b5705e49220f5af33b5b0d06f7c162afef501a849d54cf57b242933bfd3ef72",
+    "command": "./gradlew --no-daemon shadowJar -x jaxb",
+    "jaxb_generated_source_count": 177,
+    "semantic_diff_clean": true
+  },
+  "constraints": {
+    "fresh_process_count": 1,
+    "max_reset_attempts": 1,
+    "retry_count": 0,
+    "tested_action_count": 1
+  },
+  "outcome": "portal_activation_ok",
+  "truth": {
+    "after_nether_portal_count": 6,
+    "before_nether_portal_count": 0,
+    "frame_obsidian_count": 14,
+    "interior_air_count_before": 6,
+    "truth_missing_count": 0
+  }
+}

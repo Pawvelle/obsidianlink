@@ -1,0 +1,14 @@
+{
+  "agent_built_portal": false,
+  "authorized_live_run": "e11_portal_activation",
+  "catalog_live_run_allowed_remains_false": true,
+  "execution_mode": "authorized_live_e11",
+  "gradle_authorized": false,
+  "integration_verified": false,
+  "model_api_authorized": false,
+  "needs_e11_runtime_geometry_authorization": false,
+  "planned_tested_stimulus_count": 1,
+  "portal_preplaced": false,
+  "prebuilt_frame_is_calibration_fixture": true,
+  "runtime_applies_obsidian_draw_blocks": true
+}
