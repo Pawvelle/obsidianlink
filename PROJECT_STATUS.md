@@ -34,7 +34,7 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须同时观察
 
 ## P1 E0–E12 active status
 
-E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `process_release_proven=false` remains. `p1_validation_manifest()` stays `not_run`. The ordered E0–E12 suite orchestrator, OS-level process-release inspection, and explicit already-built JAR mapping (E0–E10 canonical `684c20ec…`, E11 completion-barrier `6b5705e4…`, E12 portal fixture `f459c36b…`) are `unit_verified` only; no authorized full-suite live pilot has been run.
+E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `p1_validation_manifest()` stays `not_run`. The ordered E0–E12 suite orchestrator, OS-level process-release inspection, and explicit already-built JAR mapping remain `unit_verified`. One authorized full-suite live pilot has now been run: `p1-e0-e12-suite-20260817-001`. It stopped after E1 with verdict `process_release_not_proven`. P1 Hard Gate: NOT PASSED.
 
 - E0 lifecycle: `runs/p1_e0_reset_close/e0-live-20260813-130313`; E1 RGB: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`.
 - E2 inventory: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`; E3 selected item: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`; E4 camera: `runs/p1_e4_camera_control/e4-live-20260814-001`.
@@ -59,7 +59,7 @@ None of E0–E12 is `integration_verified`; `process_release_proven=false`. Type
 
 ## 尚未验证
 
-- E0–E12 各有一次审查过的真实 success，但稳定重复性与 OS-level process release 未证明，全部 `integration_verified`: NO；完整 E0–E12 suite live pilot 尚未授权运行；
+- E0–E12 各有一次审查过的真实 success，全部 `integration_verified`: NO；授权 full-suite live pilot `p1-e0-e12-suite-20260817-001` 在 E1 因 OS `process_release_not_proven` 停止，未跑完 E2–E12；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
 
 ## P1 hard gate
@@ -68,8 +68,8 @@ P1 Hard Gate 尚未通过。一次 E12 成功不是 Hard Gate。进入 P2 前必
 
 ## 下一精确任务
 
-Startup reliability post-audio validation remains 20/20 observed first-attempt success (`max_reset_attempts=1`); the finite sample does not prove absolute reliability. `process_release_proven=false`. The E0–E12 suite orchestrator can now inspect OS PID-tree release and switch the already-built canonical / E11-barrier / E12-fixture JARs by SHA-256 before each step, but that gate is unproven until an authorized live pilot.
+Startup reliability post-audio validation remains 20/20 observed first-attempt success (`max_reset_attempts=1`); the finite sample does not prove absolute reliability.
 
-E12 authorized fixture JAR `f459c36b…` was staged from canonical `684c20ec…` plus `e12-drawing-decorator-portal.patch`, built once with `shadowJar -x jaxb`, and kept out of `CANONICAL_PATCHES`. Semantic diff vs canonical is only `EnvServer.class` + `version.properties`; PortalSize / NetherPortalBlock / FlintAndSteelItem / Entity / ServerPlayerEntity / ReplaySender / ServerPlayNetHandler are byte-identical; E11 completion-barrier markers are absent. The authorized real run `p1-e12-dimension-transition-20260817-001` used one fresh process, one reset, one accepted `move(forward=1, duration_ticks=8)`, and zero retry; before dimension=`minecraft:overworld`, after=`minecraft:the_nether`, before portal=6/6, frame=14/14, `truth_missing_count=0`, outcome `dimension_transition_ok`. Evidence: `runs/p1_e12_dimension_transition/e12-live-20260817-001/`. This is not Agent-built portal construction and does not set `integration_verified`.
+Authorized P1 full-suite live pilot `p1-e0-e12-suite-20260817-001` ran once, with no retry and no Gradle. Canonical JAR `684c20ec…` was verified and activated before E0. E0 succeeded (`lifecycle_ok`, OS `process_release_proven=true`, residual PIDs none). E1 succeeded scientifically (`rgb_ok`, `real_execution_performed=true`, same canonical SHA verified) but OS inspection recorded tracked child command `(java)` rather than a `java …` command line, so `minerl_runtime_observed=false` and `process_release_proven=false`. The suite stopped after E1; E2–E12 were not launched. Verdict `process_release_not_proven`. `p1_hard_gate_passed=false`. No human intervention. No leftover Java/Minecraft processes after the run. Evidence: `runs/p1_validation_suite/p1-e0-e12-suite-20260817-001/`. This does not set `integration_verified`.
 
-Next: authorized single P1 E0–E12 suite live pilot (process release / Hard Gate). Do not start P2. P1 Hard Gate: NOT PASSED. P2: NOT STARTED.
+Next: diagnose the E1 OS process-table capture of `(java)` versus a full `java -jar` command, as a separate task. Do not rerun this failed pilot. Do not start P2. P1 Hard Gate: NOT PASSED. P2: NOT STARTED.
