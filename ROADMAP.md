@@ -28,6 +28,8 @@
 
 **Goal**：实现与 solver 解耦的 Task/Observation/Action/Runner/Evaluator/Metrics/Evidence/Splits 内核。
 
+**Kernel contract:** FROZEN 2026-08-18 (offline `unit_verified`, schema `p2.benchmark.run_record.v1`). Remaining deliverables below are not started. P3 is not started.
+
 **Deliverables**：v2 task schema、registry、统一 runner 生命周期、evaluator versioning、evidence storage、split contract、replay。
 
 **Exit criteria**：fail-closed kernel integration tests；Agent-visible/evaluator-only 渠道隔离；P1 verified backend 可接入而不依赖某个 policy。

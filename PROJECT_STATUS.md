@@ -1,6 +1,6 @@
 # ObsidianLink v2.0 项目状态
 
-更新时间：2026-08-17
+更新时间：2026-08-18
 
 ## Scope decision
 
@@ -34,7 +34,7 @@ E10 是 calibration，不是正式 benchmark task。Evaluator 必须同时观察
 
 ## P1 E0–E12 active status
 
-E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `p1_validation_manifest()` stays `not_run`. The ordered E0–E12 suite orchestrator, OS-level process-release inspection, and explicit already-built JAR mapping remain `unit_verified`. Historical full-suite live pilots: `p1-e0-e12-suite-20260817-001` stopped after E1 (`process_release_not_proven`); `p1-e0-e12-suite-20260817-002` stopped after E4 (`truth_missing`); `p1-e0-e12-suite-20260817-003` stopped after E8 (`truth_missing` / E8 `truth_block_unknown`). Fourth authorized live pilot `p1-e0-e12-suite-20260817-004` completed all 15 steps with suite verdict `hard_gate_success`. This is one real complete P1 suite success; it does not set `integration_verified`. Stability campaign `p1-stability-20260817`: 0/20 full-suite successes, all 20 stopped at E0 `reset_failed`. Repeatability required to leave P1 is still open. P2: step 1 (Benchmark Kernel freeze) complete; remaining P2 steps not started.
+E0–E12 contracts / offline runtimes / MineRL adapters are `unit_verified`. Each now has at least one reviewed real success. None is `integration_verified`; `p1_validation_manifest()` stays `not_run`. The ordered E0–E12 suite orchestrator, OS-level process-release inspection, and explicit already-built JAR mapping remain `unit_verified`. Historical full-suite live pilots: `p1-e0-e12-suite-20260817-001` stopped after E1 (`process_release_not_proven`); `p1-e0-e12-suite-20260817-002` stopped after E4 (`truth_missing`); `p1-e0-e12-suite-20260817-003` stopped after E8 (`truth_missing` / E8 `truth_block_unknown`). Fourth authorized live pilot `p1-e0-e12-suite-20260817-004` completed all 15 steps with suite verdict `hard_gate_success`. This is one real complete P1 suite success; it does not set `integration_verified`. Stability campaign `p1-stability-20260817`: 0/20 full-suite successes, all 20 stopped at E0 `reset_failed`. Repeatability required to leave P1 is still open. P2 Benchmark Kernel v2 = FROZEN; remaining P2 steps not started.
 
 - E0 lifecycle: `runs/p1_e0_reset_close/e0-live-20260813-130313`; E1 RGB: `runs/p1_e1_rgb_observation/e1-live-20260813-162733`.
 - E2 inventory: `runs/p1_e2_inventory_observation/e2-live-20260813-232125`; E3 selected item: `runs/p1_e3_selected_item_observation/e3-live-20260814-001`; E4 camera: `runs/p1_e4_camera_control/e4-live-20260814-001`.
@@ -61,11 +61,11 @@ None of E0–E12 is `integration_verified`. Object-level `E0CleanupStatus.proces
 
 - E0–E12 各有一次审查过的真实 success，全部 `integration_verified`: NO；`p1-e0-e12-suite-20260817-001` 在 E1 因 OS `process_release_not_proven` 停止；`p1-e0-e12-suite-20260817-002` 在 E4 因 `truth_missing` 停止（E4 `camera_ok` 但记录未带 `truth_missing_count`）；`p1-e0-e12-suite-20260817-003` 在 E8 因 `truth_missing` 停止（E8 `truth_block_unknown`，`truth_missing_count` 为空）；`p1-e0-e12-suite-20260817-004` 是一次真实完整 E0→E12 成功，仍不设 `integration_verified`；stability campaign `p1-stability-20260817` 为 0/20 完整 suite success，20/20 在 E0 `reset_failed`；
 - L1–L4、Diagnostic instances、Generalization/Recovery 与 Multi-Agent gameplay 尚未实现；没有 `benchmark_evaluated` 结果。
-- P2 step 1 (Benchmark Kernel freeze) 仅完成 offline kernel contract；尚未在 `integration_verified` 或 `benchmark_evaluated` 等级上验证；`p1_validation_manifest()` 仍为 `not_run`。
+- P2 Benchmark Kernel v2 已 FROZEN（offline `unit_verified`）；尚未在 `integration_verified` 或 `benchmark_evaluated` 等级上验证；`p1_validation_manifest()` 仍为 `not_run`。
 
 ## P1 hard gate
 
-Pilot #4 的 suite 字段为 `verdict=hard_gate_success`、`p1_hard_gate_passed=true`。这只证明当前冻结版本获得一次真实完整 P1 suite 成功运行，不把 E0–E12 提升为 `integration_verified`，也不关闭进入 P2 所需的重复性要求。Stability campaign `p1-stability-20260817` 在同一冻结 commit 上得到 0/20 完整 suite success。进入 P2 前必须完成真实环境 validation suite 的稳定重复成功、`truth_missing=0`、无人工干预。仓库尚未冻结数值通过阈值（`repeatability_threshold_not_frozen`）。规划建议至少 20 个 fresh episodes。P2 Roadmap 在 step 1（offline kernel freeze）已部分开始；该步骤不依赖 P1 hard gate，也未把任何 E0–E12 标为 `integration_verified`。完整 P2 推进仍以 P1 重复性要求为准。每次真实 MineRL/Minecraft 运行与每次 Gradle 构建仍需用户单独授权。
+Pilot #4 的 suite 字段为 `verdict=hard_gate_success`、`p1_hard_gate_passed=true`。这只证明当前冻结版本获得一次真实完整 P1 suite 成功运行，不把 E0–E12 提升为 `integration_verified`，也不关闭进入 P2 所需的重复性要求。Stability campaign `p1-stability-20260817` 在同一冻结 commit 上得到 0/20 完整 suite success。进入完整 P2 task instance / Multi-Agent / L1–L4 推进前必须完成真实环境 validation suite 的稳定重复成功、`truth_missing=0`、无人工干预。仓库尚未冻结数值通过阈值（`repeatability_threshold_not_frozen`）。规划建议至少 20 个 fresh episodes。P2 Benchmark Kernel v2 已 offline FROZEN；该步骤不依赖 P1 hard gate，也未把任何 E0–E12 标为 `integration_verified`。完整 P2 推进仍以 P1 重复性要求为准。每次真实 MineRL/Minecraft 运行与每次 Gradle 构建仍需用户单独授权。
 
 ## 下一精确任务
 
@@ -83,11 +83,11 @@ Fourth authorized live pilot `p1-e0-e12-suite-20260817-004` ran once, with no re
 
 Authorized P1 full-suite stability campaign `p1-stability-20260817` ran 20 new fresh suites on frozen git `28583f8`, with Pilot #4 excluded. No retry, no Gradle, no production-code change, no human intervention. All 20 stopped at E0 with `reset_failed` / `validation_failed`. The identical error was `MineRL reset failed after 1 attempts: a bytes-like object is required, not 'NoneType'`. Canonical runtime SHA `684c20ec…` verified on every E0. Executed-step OS `process_release_proven=true` and residual PIDs empty on all 20; suite-level `process_release_proven` is false because the 15-step contract was incomplete. E1–E12 were never launched. E8 `truth_block_unknown` did not recur because E8 was not reached. Empirical full-suite success rate 0/20. Longest success streak 0. Repeatability threshold is not frozen (`repeatability_threshold_not_frozen`). This does not set `integration_verified` and does not start P2. Evidence: `runs/p1_stability_campaign/p1-stability-20260817/` and `runs/p1_validation_suite/p1-stability-20260817-001` through `-020`. Historical Pilot #1–#4 are not rewritten.
 
-当前完整 P1 suite 仍只有 Pilot #4 一次真实完整成功。本次 20-run campaign 未产生任何完整 suite success。Next: 不要开始 P2；不要把 E0–E12 标为 `integration_verified`；不要发明通过阈值。若要调查 E0 `NoneType` reset 或授权新的 campaign，必须另开任务，不得并入本次样本。P2: NOT STARTED.
+当前完整 P1 suite 仍只有 Pilot #4 一次真实完整成功。本次 20-run campaign 未产生任何完整 suite success。Next: 不要开始 D1 / P3 / 真实 Agent / MineRL attach；不要把 E0–E12 标为 `integration_verified`；不要发明通过阈值。若要调查 E0 `NoneType` reset 或授权新的 campaign，必须另开任务，不得并入本次样本。该 campaign 当时未开始 P2 task instances；P2 Benchmark Kernel 现已独立 offline FROZEN。下一工程任务回到 P1 suite repeatability Hard Gate。
 
 ## P2 — Benchmark Kernel v2
 
-P2 Roadmap phase is `IN PROGRESS`. Step 1 froze the minimal v2 Benchmark Kernel and did not start any D1–D6 diagnostic task instance, any L1–L4 end-to-end task instance, or any Multi-Agent task instance. The kernel freeze is offline-only; no LLM, no MineRL/Minecraft, no Gradle, no paid API.
+**P2 Benchmark Kernel v2 = FROZEN** (2026-08-18 freeze audit). Remaining P2 Roadmap work (D1–D6 / L1–L4 / Multi-Agent / real-backend attach) is not started and is not the next engineering task. The kernel freeze is offline-only; no LLM, no MineRL/Minecraft, no Gradle, no paid API. P3 is not started.
 
 ### P2 step 1 — minimal kernel freeze (commit `a5131dc`)
 
@@ -126,9 +126,25 @@ No new abstract base class, registry, plugin system, dependency-injection contai
 
 P1 historical evidence is preserved unchanged: 4 pilots + Full Suite #5 + stability campaign `p1-stability-20260817` 0/20 + campaign-path recheck `campaign-path-recheck-20260817-001` + single-Full-Suite recheck `p1-e0-e12-suite-20260817-005` are all untouched in `runs/`. None of these are reclassified as `integration_verified`. None of the P1 E0–E12 contracts, runtime switching, process-release observer, evaluator truth rules, or hard-gate logic were modified. P1 hard gate is still open (stability repeatability not frozen).
 
-### P2 next steps (not started)
+### P2 freeze audit (2026-08-18) — FROZEN
+
+Audit used current code as the only source of truth. No D1/L1/Multi-Agent work, no MineRL, no Gradle, no LLM/API.
+
+- **Git SHA (committed kernel):** `77c6c4e` (`fix(p2): handle terminated/truncated and close-failure in run_benchmark`). Freeze audit also includes an uncommitted one-line round-trip completeness fix: `BenchmarkRunRecord.as_dict()` now writes `verdict.identity.agent_id`. Canonical freeze SHA is the forthcoming commit that includes that fix.
+- **Schema version:** `p2.benchmark.run_record.v1`
+- **Core interfaces:** `TaskIdentity` (`suite` / `mode` / `level` / `layout` / `family`); `Evaluator` Protocol + `EvaluatorVerdict`; `EvidenceRecord` + `EvidenceIdentity` + `EvidenceChannel` (`AGENT_VISIBLE` / `EVALUATOR_ONLY`); `MetricRecord` + `MetricName`; `BenchmarkRunner` Protocol + `RunnerResult`; `VerificationLevel`; `BenchmarkSplit`; `BenchmarkRunRecord`; `run_benchmark` / `write_run_record` / `load_run_record`
+- **Tests:** `tests/test_p2_benchmark_kernel.py` (11 cases, all passing) plus `tests/test_v2_architecture.py` (kernel import / taxonomy / channel guards)
+- **Information boundary:** `run_benchmark` writes observation/action on `AGENT_VISIBLE` and runner_error / close_error / verdict on `EVALUATOR_ONLY`; observation evidence is a whitelist projection; `initial_evaluator_state` is forwarded only to the evaluator; `obsidianlink.benchmark` does not import `obsidianlink.core.types`, P1 validation types, MineRL, or agents
+- **Fail-closed guarantees:** `EvaluatorVerdict.success` requires `evidence_complete`; `BenchmarkRunRecord` rejects `success` unless `runner_status == 'completed'`; unsupported `schema_version` refused on load; agent contract violation → `runner_status='failed'` + `runner_error`; `close()` failure downgrades `completed` → `failed` and records `close_error`; dishonest success after close failure is rejected by record construction; `terminated` / `truncated` stop the step loop without another `backend.step()`
+- **Not claimed:** `integration_verified`, `benchmark_evaluated`, P1 hard-gate close, E0–E12 reclassification, D1–D6 / L1–L4 / Multi-Agent instances, replay helper, or real-backend attach
+
+### P2 remaining steps (not started; not next)
+
+Do not start D1, P3, real Agent, or MineRL attach until P1 repeatability Hard Gate is closed.
 
 - Freeze one minimal D1 perception task instance and register it in the catalog.
 - Drive that D1 instance through the same `run_benchmark` with a stub oracle and with a real Agent (no MineRL yet).
 - Connect the kernel to a real MineRL adapter (`MineRLEnvironmentBackend`) and re-run the D1 instance under `VerificationLevel.INTEGRATION_VERIFIED` (requires P1 hard gate).
 - Add a replay helper that consumes a `BenchmarkRunRecord` and reconstructs the agent-visible trace.
+
+Next engineering task: return to P1 and close the suite repeatability Hard Gate. E10 remains calibration (`unit_verified`, reviewed real success YES, `integration_verified` NO); the open gate is full E0–E12 suite stability, not a new E10 feature.

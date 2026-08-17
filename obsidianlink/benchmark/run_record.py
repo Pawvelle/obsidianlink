@@ -127,6 +127,7 @@ class BenchmarkRunRecord:
             "task": self.task.as_dict(),
             "verification_level": self.verification_level.value,
             "verdict": {
+                "agent_id": self.verdict.identity.agent_id,
                 "episode_id": self.verdict.identity.episode_id,
                 "evidence_complete": self.verdict.evidence_complete,
                 "outcome": self.verdict.outcome,

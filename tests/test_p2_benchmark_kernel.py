@@ -248,6 +248,29 @@ class BenchmarkKernelSmokeTest(TestCase):
             self.assertEqual(loaded.schema_version, record.schema_version)
             self.assertEqual(loaded.verification_level, record.verification_level)
 
+    def test_verdict_agent_id_round_trips(self) -> None:
+        record = BenchmarkRunRecord(
+            task=self.task,
+            runner_status="completed",
+            verdict=EvaluatorVerdict(
+                identity=EvidenceIdentity(
+                    episode_id=EPISODE_ID, step_id=0, agent_id="agent_1"
+                ),
+                success=True,
+                outcome="kernel_smoke_ok",
+                evidence_complete=True,
+            ),
+            evidence=(),
+            metrics=(),
+            verification_level=VerificationLevel.UNIT_VERIFIED,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run_record.json"
+            write_run_record(record, path)
+            loaded = load_run_record(path)
+            self.assertEqual(loaded.verdict.identity.agent_id, "agent_1")
+            self.assertEqual(loaded.verdict, record.verdict)
+
     def test_metrics_hook_can_attach_diagnostic_metrics(self) -> None:
         def hook(step_id: int, state: Mapping[str, Any]) -> tuple[MetricRecord, ...]:
             return (
@@ -357,54 +380,65 @@ class BenchmarkKernelSmokeTest(TestCase):
         self.assertEqual(len(error_records), 1)
         self.assertEqual(error_records[0].channel, EvidenceChannel.EVALUATOR_ONLY)
 
-    def test_terminated_observation_stops_step_loop(self) -> None:
-        # Backend terminates after the first step; the driver must not call
+    def test_terminated_or_truncated_observation_stops_step_loop(self) -> None:
+        # Backend ends after the first step; the driver must not call
         # backend.step() again even though max_steps would allow more.
-        terminating_backend = type("TerminatingBackend", (StubBackend,), {})()
-        step_calls = {"n": 0}
+        for terminated, truncated in ((True, False), (False, True)):
+            with self.subTest(terminated=terminated, truncated=truncated):
+                ending_backend = type("EndingBackend", (StubBackend,), {})()
+                step_calls = {"n": 0}
 
-        def _terminating_step(self, actions):  # type: ignore[no-redef]
-            step_calls["n"] += 1
-            return BackendStep(
-                episode_id=EPISODE_ID,
-                step_id=step_calls["n"],
-                observations={
-                    "agent_1": Observation(
+                def _ending_step(
+                    self,
+                    actions,
+                    *,
+                    _terminated=terminated,
+                    _truncated=truncated,
+                    _step_calls=step_calls,
+                ):  # type: ignore[no-redef]
+                    _step_calls["n"] += 1
+                    return BackendStep(
                         episode_id=EPISODE_ID,
-                        agent_id="agent_1",
-                        step_id=step_calls["n"],
-                        timestamp=float(step_calls["n"]),
-                        frame=None,
-                        visible_inventory={"dirt": 1},
-                        selected_item="dirt",
-                        messages=(),
-                        workflow_stage="step",
+                        step_id=_step_calls["n"],
+                        observations={
+                            "agent_1": Observation(
+                                episode_id=EPISODE_ID,
+                                agent_id="agent_1",
+                                step_id=_step_calls["n"],
+                                timestamp=float(_step_calls["n"]),
+                                frame=None,
+                                visible_inventory={"dirt": 1},
+                                selected_item="dirt",
+                                messages=(),
+                                workflow_stage="step",
+                            )
+                        },
+                        rewards={"agent_1": 0.0},
+                        terminated=_terminated,
+                        truncated=_truncated,
+                        info={},
                     )
-                },
-                rewards={"agent_1": 0.0},
-                terminated=True,
-                truncated=False,
-                info={},
-            )
 
-        type(terminating_backend).step = _terminating_step  # type: ignore[method-assign]
+                type(ending_backend).step = _ending_step  # type: ignore[method-assign]
 
-        record = run_benchmark(
-            episode_id=EPISODE_ID,
-            task=self.task,
-            backend=terminating_backend,
-            agent=self.agent,
-            evaluator=self.evaluator,
-            max_steps=10,
-        )
-        self.assertEqual(record.runner_status, "completed")
-        observation_events = [
-            ev for ev in record.evidence if ev.event_type == "observation"
-        ]
-        action_events = [ev for ev in record.evidence if ev.event_type == "action"]
-        self.assertEqual(len(observation_events), 1)
-        self.assertEqual(len(action_events), 1)
-        self.assertEqual(step_calls["n"], 1)
+                record = run_benchmark(
+                    episode_id=EPISODE_ID,
+                    task=self.task,
+                    backend=ending_backend,
+                    agent=StubAgent([]),
+                    evaluator=self.evaluator,
+                    max_steps=10,
+                )
+                self.assertEqual(record.runner_status, "completed")
+                observation_events = [
+                    ev for ev in record.evidence if ev.event_type == "observation"
+                ]
+                action_events = [
+                    ev for ev in record.evidence if ev.event_type == "action"
+                ]
+                self.assertEqual(len(observation_events), 1)
+                self.assertEqual(len(action_events), 1)
+                self.assertEqual(step_calls["n"], 1)
 
     def test_close_failure_downgrades_runner_status(self) -> None:
         # Backend whose close() raises. The driver must record the close
