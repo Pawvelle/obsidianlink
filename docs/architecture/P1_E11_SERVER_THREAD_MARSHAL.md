@@ -20,9 +20,12 @@ a fresh E11 run. Historical live #1--#4 evidence is unchanged.
 The narrowed follow-up replaces the broad predicate with a private
 `ObsidianLinkE11Task` marker and an explicit
 `executeObsidianLinkE11Task` enqueue path. Offline reconstruction proves
-ordinary tasks retain `super.canRun`. Its isolated build nevertheless
-had a `SoundEngine.class` semantic difference from production, so that
-runtime is also not approved for deployment or a live run.
+ordinary tasks retain `super.canRun`. A rebuilt baseline with
+`disable-client-audio.patch` restored byte-identical `SoundEngine.class`
+and launcher properties, but the final JAR still differed from production
+in `Entity`, `Entity$1`, `ServerPlayerEntity`, and their synthetic
+counterparts. Those are outside E11 scheduling, so the runtime is not
+approved for deployment or a live run.
 
 ## How scheduling avoided the live #2 deadlock (and what remained)
 
