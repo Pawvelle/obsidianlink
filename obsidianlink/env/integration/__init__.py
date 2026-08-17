@@ -1,4 +1,4 @@
-"""P1 E0--E11 MineRL integration boundary.
+"""P1 E0--E12 MineRL integration boundary.
 
 This package may depend on the validation core and on the MineRL backend.
 The solver-independent validation core must not import this package.
@@ -130,6 +130,15 @@ from obsidianlink.env.integration.e11_run import (
     preflight_authorized_e11,
     run_authorized_e11_minerl,
 )
+from obsidianlink.env.integration.e12_adapter import MineRLE12DimensionTransitionAdapter
+from obsidianlink.env.integration.e12_run import (
+    AUTHORIZED_LIVE_E12_RUN_VALUE,
+    EXECUTION_MODE_AUTHORIZED_LIVE_E12,
+    E12AuthorizationError,
+    E12MineRLRunRecord,
+    preflight_authorized_e12,
+    run_authorized_e12_minerl,
+)
 
 __all__ = [
     "AUTHORIZED_LIVE_E1_RUN_VALUE",
@@ -147,6 +156,7 @@ __all__ = [
     "AUTHORIZED_LIVE_E10_RUN_VALUE",
     "AUTHORIZED_LIVE_E11_GEOMETRY_RUN_VALUE",
     "AUTHORIZED_LIVE_E11_RUN_VALUE",
+    "AUTHORIZED_LIVE_E12_RUN_VALUE",
     "AUTHORIZED_LIVE_RUN_VALUE",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E0",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E1",
@@ -164,6 +174,7 @@ __all__ = [
     "EXECUTION_MODE_AUTHORIZED_LIVE_E10_GEOMETRY",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E11",
     "EXECUTION_MODE_AUTHORIZED_LIVE_E11_GEOMETRY",
+    "EXECUTION_MODE_AUTHORIZED_LIVE_E12",
     "E0AuthorizationError",
     "E0CleanupStatus",
     "E0MineRLRunRecord",
@@ -189,6 +200,8 @@ __all__ = [
     "E10MineRLRunRecord",
     "E11AuthorizationError",
     "E11MineRLRunRecord",
+    "E12AuthorizationError",
+    "E12MineRLRunRecord",
     "MineRLE0LifecycleAdapter",
     "MineRLE1RGBAdapter",
     "MineRLE2InventoryAdapter",
@@ -201,6 +214,7 @@ __all__ = [
     "MineRLE9FluidTruthAdapter",
     "MineRLE10ObsidianAdapter",
     "MineRLE11PortalActivationAdapter",
+    "MineRLE12DimensionTransitionAdapter",
     "preflight_authorized_e0",
     "preflight_authorized_e1",
     "preflight_authorized_e2",
@@ -215,6 +229,7 @@ __all__ = [
     "preflight_authorized_e10_geometry",
     "preflight_authorized_e11",
     "preflight_authorized_e11_geometry",
+    "preflight_authorized_e12",
     "run_authorized_e0_minerl",
     "run_authorized_e1_minerl",
     "run_authorized_e2_minerl",
@@ -229,4 +244,5 @@ __all__ = [
     "run_authorized_e10_geometry_smoke",
     "run_authorized_e11_geometry_smoke",
     "run_authorized_e11_minerl",
+    "run_authorized_e12_minerl",
 ]

@@ -1,11 +1,13 @@
-"""MineRL-independent P1 E8/E9/E10/E11 evaluator-only server-truth contract.
+"""MineRL-independent P1 E8/E9/E10/E11/E12 evaluator-only server-truth contract.
 
 E8 validates the block-truth portion of ServerTruthSnapshot. E9 extends
 the same snapshot with typed fluid truth, including the source/flowing
 distinction that E7 deliberately collapsed. E10 reuses both channels to
 observe a vanilla water-lava → obsidian conversion. E11 reuses block
-truth to observe vanilla flint-and-steel portal activation. None of
-these channels is Agent-visible or a benchmark task.
+truth to observe vanilla flint-and-steel portal activation. E12 reuses
+before-grid truth plus evaluator-only dimension truth to observe a
+vanilla Overworld → Nether portal transition. None of these channels is
+Agent-visible or a benchmark task.
 """
 
 from __future__ import annotations
@@ -65,6 +67,8 @@ INVALID_INITIAL_FRAME = "invalid_initial_frame"
 IGNITION_EFFECT_NOT_OBSERVED = "ignition_effect_not_observed"
 PORTAL_ACTIVATION_NOT_OBSERVED = "portal_activation_not_observed"
 PORTAL_PATTERN_INCOMPLETE = "portal_pattern_incomplete"
+DIMENSION_TRANSITION_OK = "dimension_transition_ok"
+DIMENSION_TRANSITION_NOT_OBSERVED = "dimension_transition_not_observed"
 
 BLOCK_TRUTH_OUTCOMES = frozenset(
     {
@@ -191,6 +195,34 @@ PORTAL_ACTIVATION_OUTCOMES = frozenset(
         TRUTH_CALIBRATION_MISMATCH,
     }
 )
+DIMENSION_TRANSITION_OUTCOMES = frozenset(
+    {
+        DIMENSION_TRANSITION_OK,
+        DIMENSION_TRANSITION_NOT_OBSERVED,
+        INVALID_INITIAL_FRAME,
+        INVALID_INITIAL_STATE,
+        INFRASTRUCTURE_FAILURE,
+        TRUTH_SNAPSHOT_MISSING,
+        TRUTH_IDENTITY_MISMATCH,
+        TRUTH_POSITION_MISSING,
+        TRUTH_POSITION_INVALID,
+        TRUTH_DIMENSION_MISSING,
+        TRUTH_DIMENSION_INVALID,
+        TRUTH_WRONG_DIMENSION,
+        TRUTH_ANCHOR_MISMATCH,
+        TRUTH_REGION_EMPTY,
+        TRUTH_DUPLICATE_CELL,
+        TRUTH_CELL_OUT_OF_BOUNDS,
+        TRUTH_BLOCK_MISSING,
+        TRUTH_BLOCK_UNKNOWN,
+        TRUTH_STIMULUS_REJECTED,
+        TRUTH_TEST_ACTION_NOT_EXECUTED,
+        TRUTH_MULTIPLE_TEST_ACTIONS,
+        TRUTH_LEAK,
+        TRUTH_WRONG_ACTION_TYPE,
+        TRUTH_CALIBRATION_MISMATCH,
+    }
+)
 
 ALLOWED_DIMENSIONS = frozenset(
     {
@@ -203,8 +235,11 @@ E8_REQUIRED_DIMENSION = "minecraft:overworld"
 E9_REQUIRED_DIMENSION = "minecraft:overworld"
 E10_REQUIRED_DIMENSION = "minecraft:overworld"
 E11_REQUIRED_DIMENSION = "minecraft:overworld"
+E12_REQUIRED_BEFORE_DIMENSION = "minecraft:overworld"
+E12_REQUIRED_AFTER_DIMENSION = "minecraft:the_nether"
 E10_STIMULUS_ITEM = "water_bucket"
 E11_STIMULUS_ITEM = "flint_and_steel"
+E12_STIMULUS_ACTION_TYPE = "move"
 E11_PORTAL_BLOCK = "nether_portal"
 PORTAL_BLOCK_ALIASES = frozenset({"nether_portal", "portal"})
 E10_EXPECTED_BEFORE_BLOCK = "lava"
@@ -272,6 +307,8 @@ EVALUATOR_TRUTH_LEAK_KEYS = frozenset(
         "interior_cells",
         "expected_frame_cells",
         "observed_frame_cells",
+        "active_portal_before",
+        "dimension_transition_observed",
     }
 )
 
@@ -2234,5 +2271,404 @@ def inspect_portal_activation(
     return PortalActivationInspection(
         IGNITION_EFFECT_NOT_OBSERVED,
         "E11 flint_and_steel produced no fire or portal in the observation window",
+        **evidence,  # type: ignore[arg-type]
+    )
+
+
+@dataclass(frozen=True)
+class DimensionTruthSnapshot:
+    """Evaluator-only dimension and position after a possible portal transition.
+
+    After Nether entry the Overworld portal grid is not a reliable after
+    truth source. Dimension comes from the same ``portal_dimension``
+    channel already used by E8--E11 before-snapshots.
+    """
+
+    episode_id: str
+    agent_id: str
+    step_id: int
+    dimension: str
+    position_world: tuple[float, float, float]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "episode_id", _identifier(self.episode_id, "episode_id"))
+        object.__setattr__(self, "agent_id", _identifier(self.agent_id, "agent_id"))
+        if type(self.step_id) is not int or self.step_id < 0:
+            raise ValueError("step_id must be a non-negative int")
+        object.__setattr__(self, "dimension", validate_dimension(self.dimension))
+        object.__setattr__(
+            self, "position_world", validate_position_world(self.position_world)
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "agent_id": self.agent_id,
+            "dimension": self.dimension,
+            "episode_id": self.episode_id,
+            "position_world": list(self.position_world),
+            "step_id": self.step_id,
+        }
+
+
+@dataclass(frozen=True)
+class DimensionTransitionActionExecution:
+    """Observed backend response to the single bounded E12 entry stimulus."""
+
+    episode_id: str
+    agent_id: str
+    step_id: int
+    action_type: str
+    duration_ticks: int
+    translated_action_accepted: bool
+    tested_action_count: int
+    observation_wait_count: int = 0
+    dimension_transition_observed_at_step: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "episode_id", _identifier(self.episode_id, "episode_id"))
+        object.__setattr__(self, "agent_id", _identifier(self.agent_id, "agent_id"))
+        object.__setattr__(self, "action_type", _identifier(self.action_type, "action_type"))
+        if type(self.step_id) is not int or self.step_id < 0:
+            raise ValueError("step_id must be a non-negative int")
+        if type(self.duration_ticks) is not int or self.duration_ticks < 1:
+            raise ValueError("duration_ticks must be a positive int")
+        if type(self.translated_action_accepted) is not bool:
+            raise ValueError("translated_action_accepted must be bool")
+        if type(self.tested_action_count) is not int or self.tested_action_count < 0:
+            raise ValueError("tested_action_count must be a non-negative int")
+        if type(self.observation_wait_count) is not int or self.observation_wait_count < 0:
+            raise ValueError("observation_wait_count must be a non-negative int")
+        if self.dimension_transition_observed_at_step is not None and (
+            type(self.dimension_transition_observed_at_step) is not int
+            or self.dimension_transition_observed_at_step < 1
+        ):
+            raise ValueError(
+                "dimension_transition_observed_at_step must be a positive int or None"
+            )
+
+
+@dataclass(frozen=True)
+class DimensionTransitionInspection:
+    outcome: str
+    error: str | None
+    before_snapshot: ServerTruthSnapshot | None = None
+    after_dimension_snapshot: DimensionTruthSnapshot | None = None
+    before_dimension: str | None = None
+    after_dimension: str | None = None
+    frame_valid_before: bool | None = None
+    frame_block_count: int | None = None
+    expected_frame_cells: tuple[tuple[int, int, int], ...] | None = None
+    observed_frame_cells: tuple[tuple[int, int, int], ...] | None = None
+    interior_cells: tuple[tuple[int, int, int], ...] | None = None
+    before_portal_block_count: int | None = None
+    active_portal_before: bool | None = None
+    dimension_transition_observed: bool | None = None
+    dimension_transition_observed_at_step: int | None = None
+    identity_valid: bool | None = None
+    truth_missing_count: int | None = None
+    observation_wait_count: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.outcome not in DIMENSION_TRANSITION_OUTCOMES:
+            raise ValueError(f"unknown dimension-transition outcome: {self.outcome!r}")
+        if self.error is not None:
+            if not isinstance(self.error, str) or not self.error.strip():
+                raise ValueError("error must be None or a non-empty string")
+        for field_name in (
+            "frame_valid_before",
+            "active_portal_before",
+            "dimension_transition_observed",
+            "identity_valid",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and type(value) is not bool:
+                raise ValueError(f"{field_name} must be bool or None")
+        for field_name in ("before_dimension", "after_dimension"):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(self, field_name, validate_dimension(value, field_name))
+        for field_name in (
+            "frame_block_count",
+            "before_portal_block_count",
+            "dimension_transition_observed_at_step",
+            "truth_missing_count",
+            "observation_wait_count",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and (type(value) is not int or value < 0):
+                raise ValueError(f"{field_name} must be a non-negative int or None")
+
+    @property
+    def valid(self) -> bool:
+        return self.outcome == DIMENSION_TRANSITION_OK and self.error is None
+
+
+def inspect_dimension_transition_precondition(
+    before: ServerTruthSnapshot,
+    *,
+    probe_world_cells: Sequence[tuple[int, int, int]],
+    probe_grid_cells: Sequence[tuple[int, int, int]],
+    frame_world_cells: Sequence[tuple[int, int, int]],
+    interior_world_cells: Sequence[tuple[int, int, int]],
+    control_world_cells: Sequence[tuple[int, int, int]],
+    expected_before_dimension: str = E12_REQUIRED_BEFORE_DIMENSION,
+    position_min: tuple[float, float, float] | None = None,
+    position_max: tuple[float, float, float] | None = None,
+) -> DimensionTransitionInspection | None:
+    """Return a failure inspection, or None when the active portal may be entered."""
+
+    probes = validate_world_cells(probe_world_cells, "probe_world_cells")
+    grids = tuple(validate_target_cell(cell, "probe_grid_cell") for cell in probe_grid_cells)
+    frame = tuple(validate_target_cell(cell, "frame_world_cell") for cell in frame_world_cells)
+    interior = tuple(
+        validate_target_cell(cell, "interior_world_cell") for cell in interior_world_cells
+    )
+    controls = tuple(
+        validate_target_cell(cell, "control_world_cell") for cell in control_world_cells
+    )
+    expected_before_dimension = validate_dimension(
+        expected_before_dimension, "expected_before_dimension"
+    )
+    observed_frame = _obsidian_cells(before, frame)
+    before_portals = _portal_count(before, interior)
+    active_portal = before_portals == len(interior) and len(interior) > 0
+    evidence: dict[str, object] = {
+        "before_snapshot": before,
+        "before_dimension": before.dimension,
+        "after_dimension": None,
+        "frame_valid_before": observed_frame == frame,
+        "frame_block_count": len(observed_frame),
+        "expected_frame_cells": frame,
+        "observed_frame_cells": observed_frame,
+        "interior_cells": interior,
+        "before_portal_block_count": before_portals,
+        "active_portal_before": active_portal,
+        "dimension_transition_observed": False,
+        "truth_missing_count": before.truth_missing_count,
+        "observation_wait_count": 0,
+    }
+    if before.truth_missing_count != 0 or not before.block_truth:
+        return DimensionTransitionInspection(
+            TRUTH_BLOCK_MISSING,
+            "E12 success requires truth_missing_count=0 before entry",
+            **evidence,  # type: ignore[arg-type]
+        )
+    region_valid = (
+        tuple(item.world_cell for item in before.block_truth) == probes
+        and tuple(item.grid_cell for item in before.block_truth) == grids
+    )
+    if not region_valid:
+        return DimensionTransitionInspection(
+            TRUTH_IDENTITY_MISMATCH,
+            "E12 before truth region does not match the frozen probe set",
+            identity_valid=False,
+            **evidence,  # type: ignore[arg-type]
+        )
+    evidence["identity_valid"] = True
+    if before.dimension != expected_before_dimension:
+        return DimensionTransitionInspection(
+            TRUTH_WRONG_DIMENSION,
+            "E12 must start in minecraft:overworld",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if position_min is not None or position_max is not None:
+        for index, axis in enumerate(("x", "y", "z")):
+            value = before.position_world[index]
+            if position_min is not None and value < position_min[index]:
+                return DimensionTransitionInspection(
+                    TRUTH_POSITION_INVALID,
+                    f"before position {axis} is outside E12 calibration bounds",
+                    **evidence,  # type: ignore[arg-type]
+                )
+            if position_max is not None and value > position_max[index]:
+                return DimensionTransitionInspection(
+                    TRUTH_POSITION_INVALID,
+                    f"before position {axis} is outside E12 calibration bounds",
+                    **evidence,  # type: ignore[arg-type]
+                )
+    if observed_frame != frame:
+        return DimensionTransitionInspection(
+            INVALID_INITIAL_FRAME,
+            "E12 requires a complete obsidian frame before entry",
+            **evidence,  # type: ignore[arg-type]
+        )
+    for cell in interior:
+        block = before.block_at(cell)
+        if block is None:
+            return DimensionTransitionInspection(
+                TRUTH_BLOCK_MISSING,
+                "E12 interior truth is missing before entry",
+                **evidence,  # type: ignore[arg-type]
+            )
+        if not is_portal_block(block):
+            return DimensionTransitionInspection(
+                INVALID_INITIAL_STATE,
+                "E12 requires an already-active nether_portal interior",
+                **evidence,  # type: ignore[arg-type]
+            )
+    for cell in controls:
+        block = before.block_at(cell)
+        if block is None:
+            return DimensionTransitionInspection(
+                TRUTH_BLOCK_MISSING,
+                "E12 control truth is missing before entry",
+                **evidence,  # type: ignore[arg-type]
+            )
+        if block != "air":
+            return DimensionTransitionInspection(
+                INVALID_INITIAL_STATE,
+                "E12 control cells must be air before entry",
+                **evidence,  # type: ignore[arg-type]
+            )
+    return None
+
+
+def inspect_dimension_transition(
+    before: ServerTruthSnapshot,
+    after: DimensionTruthSnapshot,
+    execution: DimensionTransitionActionExecution,
+    *,
+    probe_world_cells: Sequence[tuple[int, int, int]],
+    probe_grid_cells: Sequence[tuple[int, int, int]],
+    frame_world_cells: Sequence[tuple[int, int, int]],
+    interior_world_cells: Sequence[tuple[int, int, int]],
+    control_world_cells: Sequence[tuple[int, int, int]],
+    expected_before_dimension: str = E12_REQUIRED_BEFORE_DIMENSION,
+    expected_after_dimension: str = E12_REQUIRED_AFTER_DIMENSION,
+    duration_ticks: int,
+    observation_window_ticks: int,
+    position_min: tuple[float, float, float] | None = None,
+    position_max: tuple[float, float, float] | None = None,
+) -> DimensionTransitionInspection:
+    """Fail closed unless evaluator-only dimension truth shows Overworld → Nether."""
+
+    precondition = inspect_dimension_transition_precondition(
+        before,
+        probe_world_cells=probe_world_cells,
+        probe_grid_cells=probe_grid_cells,
+        frame_world_cells=frame_world_cells,
+        interior_world_cells=interior_world_cells,
+        control_world_cells=control_world_cells,
+        expected_before_dimension=expected_before_dimension,
+        position_min=position_min,
+        position_max=position_max,
+    )
+    if precondition is not None:
+        return precondition
+
+    frame = tuple(validate_target_cell(cell, "frame_world_cell") for cell in frame_world_cells)
+    interior = tuple(
+        validate_target_cell(cell, "interior_world_cell") for cell in interior_world_cells
+    )
+    expected_before_dimension = validate_dimension(
+        expected_before_dimension, "expected_before_dimension"
+    )
+    expected_after_dimension = validate_dimension(
+        expected_after_dimension, "expected_after_dimension"
+    )
+    if type(duration_ticks) is not int or duration_ticks < 1:
+        raise ValueError("duration_ticks must be a positive int")
+    if type(observation_window_ticks) is not int or observation_window_ticks < 1:
+        raise ValueError("observation_window_ticks must be a positive int")
+
+    observed_at = execution.dimension_transition_observed_at_step
+    transition_observed = after.dimension == expected_after_dimension
+    if transition_observed and observed_at is None:
+        observed_at = after.step_id
+    identity_valid = (
+        before.episode_id == execution.episode_id
+        and after.episode_id == execution.episode_id
+        and before.agent_id == execution.agent_id
+        and after.agent_id == execution.agent_id
+        and before.step_id == 0
+        and execution.step_id >= 1
+        and after.step_id >= execution.step_id
+    )
+    evidence: dict[str, object] = {
+        "before_snapshot": before,
+        "after_dimension_snapshot": after,
+        "before_dimension": before.dimension,
+        "after_dimension": after.dimension,
+        "frame_valid_before": True,
+        "frame_block_count": len(frame),
+        "expected_frame_cells": frame,
+        "observed_frame_cells": frame,
+        "interior_cells": interior,
+        "before_portal_block_count": _portal_count(before, interior),
+        "active_portal_before": True,
+        "dimension_transition_observed": transition_observed,
+        "dimension_transition_observed_at_step": observed_at,
+        "observation_wait_count": execution.observation_wait_count,
+        "truth_missing_count": before.truth_missing_count,
+    }
+    if not identity_valid:
+        return DimensionTransitionInspection(
+            TRUTH_IDENTITY_MISMATCH,
+            "dimension-transition identity or step sequence is invalid",
+            identity_valid=False,
+            **evidence,  # type: ignore[arg-type]
+        )
+    evidence["identity_valid"] = True
+    if before.dimension != expected_before_dimension:
+        return DimensionTransitionInspection(
+            TRUTH_WRONG_DIMENSION,
+            "E12 must start in minecraft:overworld",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if after.dimension not in {expected_before_dimension, expected_after_dimension}:
+        return DimensionTransitionInspection(
+            TRUTH_WRONG_DIMENSION,
+            "E12 after dimension is neither overworld nor the nether",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.action_type != E12_STIMULUS_ACTION_TYPE:
+        return DimensionTransitionInspection(
+            TRUTH_WRONG_ACTION_TYPE,
+            "E12 stimulus must be move",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.duration_ticks != duration_ticks:
+        return DimensionTransitionInspection(
+            TRUTH_CALIBRATION_MISMATCH,
+            "E12 stimulus duration differs from frozen calibration",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.tested_action_count == 0:
+        return DimensionTransitionInspection(
+            TRUTH_TEST_ACTION_NOT_EXECUTED,
+            "E12 stimulus was not executed",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.tested_action_count != 1:
+        return DimensionTransitionInspection(
+            TRUTH_MULTIPLE_TEST_ACTIONS,
+            "exactly one E12 stimulus is required",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if not execution.translated_action_accepted:
+        return DimensionTransitionInspection(
+            TRUTH_STIMULUS_REJECTED,
+            "E12 stimulus translation was rejected",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if execution.observation_wait_count > observation_window_ticks:
+        return DimensionTransitionInspection(
+            TRUTH_CALIBRATION_MISMATCH,
+            "E12 observation wait exceeded the frozen window",
+            **evidence,  # type: ignore[arg-type]
+        )
+    if transition_observed:
+        if observed_at is None or observed_at < execution.step_id:
+            return DimensionTransitionInspection(
+                TRUTH_IDENTITY_MISMATCH,
+                "dimension transition is not bound to the E12 stimulus step",
+                **evidence,  # type: ignore[arg-type]
+            )
+        return DimensionTransitionInspection(
+            DIMENSION_TRANSITION_OK, None, **evidence  # type: ignore[arg-type]
+        )
+    return DimensionTransitionInspection(
+        DIMENSION_TRANSITION_NOT_OBSERVED,
+        "E12 did not observe minecraft:the_nether within the frozen window",
         **evidence,  # type: ignore[arg-type]
     )

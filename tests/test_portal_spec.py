@@ -220,6 +220,30 @@ class PortalA0EnvSpecTests(unittest.TestCase):
             PortalA0EnvSpec(initial_blocks=((0, 4, 2, "diamond_block"),))
         with self.assertRaisesRegex(ValueError, "coordinates must be ints"):
             PortalA0EnvSpec(initial_blocks=((0.0, 4, 2, "lava"),))  # type: ignore[arg-type]
+        xml = PortalA0EnvSpec(
+            initial_blocks=((-1, 3, 1, "obsidian"), (0, 4, 1, "portal")),
+            allow_active_portal_fixture=True,
+        ).to_xml()
+        self.assertEqual(
+            parse_mission_draw_blocks(xml),
+            ((-1, 3, 1, "obsidian"), (0, 4, 1, "portal")),
+        )
+        with self.assertRaisesRegex(ValueError, "must not pre-place nether_portal"):
+            PortalA0EnvSpec(
+                initial_blocks=((0, 4, 1, "nether_portal"),),
+                allow_active_portal_fixture=True,
+            )
+        with self.assertRaisesRegex(ValueError, "must not pre-place fire"):
+            PortalA0EnvSpec(
+                initial_blocks=((0, 4, 1, "fire"),),
+                allow_active_portal_fixture=True,
+            )
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            PortalA0EnvSpec(
+                initial_blocks=((-1, 3, 1, "obsidian"),),
+                allow_obsidian_frame_fixture=True,
+                allow_active_portal_fixture=True,
+            )
 
 
 if __name__ == "__main__":

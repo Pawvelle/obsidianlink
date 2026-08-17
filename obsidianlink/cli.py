@@ -78,9 +78,10 @@ def _offline_contract_check() -> dict[str, object]:
             "completion acknowledgement preceded evaluator after-truth, which "
             "observed 6/6 nether_portal with truth_missing_count=0 and outcome "
             "portal_activation_ok. E11 real reviewed success is YES and is not "
-            "integration_verified. "
-            "E12 and end-to-end portal "
-            "construction remain unverified in the real "
+            "integration_verified. E12 offline contract is unit_verified; E12 real "
+            "Overworld-to-Nether transition remains unverified. Canonical runtime "
+            "still excludes the E12 portal DrawBlock patch. End-to-end portal "
+            "construction remains unverified in the real "
             "environment."
         ),
     }

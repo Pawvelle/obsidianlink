@@ -1,0 +1,30 @@
+--- a/src/main/java/com/minerl/multiagent/env/EnvServer.java
++++ b/src/main/java/com/minerl/multiagent/env/EnvServer.java
+@@ -547,20 +547,23 @@
+-            if (type == BlockType.PORTAL
+-                    || type == BlockType.END_PORTAL
+-                    || type == BlockType.FIRE) {
++            if (type == BlockType.END_PORTAL
++                    || type == BlockType.FIRE) {
+                 throw new IllegalStateException(
+-                        "DrawBlock must not pre-place portal or fire at "
++                        "DrawBlock must not pre-place fire or end portal at "
+                                 + x + "," + y + "," + z);
+             }
+             BlockPos pos = new BlockPos(x, y, z);
+             if (type == BlockType.LAVA) {
+                 world.setBlockState(pos, Blocks.LAVA.getDefaultState(), 2);
+                 continue;
+             }
+             if (type == BlockType.OBSIDIAN) {
+                 world.setBlockState(pos, Blocks.OBSIDIAN.getDefaultState(), 2);
+                 continue;
+             }
++            if (type == BlockType.PORTAL) {
++                world.setBlockState(pos, Blocks.NETHER_PORTAL.getDefaultState(), 2);
++                continue;
++            }
+             throw new IllegalStateException(
+                     "DrawBlock type not allowed: " + type.value());
+         }
+     }

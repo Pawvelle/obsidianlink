@@ -15,6 +15,7 @@ from obsidianlink.env.validation.cases.truth import E8_SERVER_BLOCK_TRUTH_CASE
 from obsidianlink.env.validation.cases.fluid import E9_SERVER_FLUID_TRUTH_CASE
 from obsidianlink.env.validation.cases.obsidian import E10_OBSIDIAN_CONVERSION_CASE
 from obsidianlink.env.validation.cases.portal_activation import E11_PORTAL_ACTIVATION_CASE
+from obsidianlink.env.validation.cases.dimension_transition import E12_DIMENSION_TRANSITION_CASE
 from obsidianlink.env.validation.camera import (
     CameraActionExecution,
     CameraInspection,
@@ -66,6 +67,9 @@ from obsidianlink.env.validation.truth import (
     ObsidianConversionInspection,
     PortalActivationActionExecution,
     PortalActivationInspection,
+    DimensionTruthSnapshot,
+    DimensionTransitionActionExecution,
+    DimensionTransitionInspection,
     ServerBlockTruth,
     ServerFluidTruth,
     ServerTruthSnapshot,
@@ -74,6 +78,8 @@ from obsidianlink.env.validation.truth import (
     inspect_obsidian_conversion,
     inspect_portal_activation,
     inspect_portal_activation_precondition,
+    inspect_dimension_transition,
+    inspect_dimension_transition_precondition,
     canonicalize_portal_block,
     is_portal_block,
 )
@@ -106,6 +112,7 @@ __all__ = [
     "E9_SERVER_FLUID_TRUTH_CASE",
     "E10_OBSIDIAN_CONVERSION_CASE",
     "E11_PORTAL_ACTIVATION_CASE",
+    "E12_DIMENSION_TRANSITION_CASE",
     "EnvironmentValidationCase",
     "EnvironmentValidationId",
     "EnvironmentValidationRecorder",
@@ -135,6 +142,9 @@ __all__ = [
     "ObsidianConversionInspection",
     "PortalActivationActionExecution",
     "PortalActivationInspection",
+    "DimensionTruthSnapshot",
+    "DimensionTransitionActionExecution",
+    "DimensionTransitionInspection",
     "ServerBlockTruth",
     "ServerFluidTruth",
     "ServerTruthSnapshot",
@@ -160,6 +170,8 @@ __all__ = [
     "inspect_obsidian_conversion",
     "inspect_portal_activation",
     "inspect_portal_activation_precondition",
+    "inspect_dimension_transition",
+    "inspect_dimension_transition_precondition",
     "canonicalize_portal_block",
     "is_portal_block",
     "spawn_relative_grid_cell",

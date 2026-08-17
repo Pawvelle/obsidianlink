@@ -81,6 +81,10 @@ PORTAL_INVENTORY = (
 #: a reset cannot pre-place the E10 success block or a conversion stimulus.
 #: E11 may opt into ``allow_obsidian_frame_fixture`` for an obsidian-only
 #: calibration frame; lava, water, portal, and fire stay forbidden there.
+#: E12 may opt into ``allow_active_portal_fixture`` for that same obsidian
+#: frame plus Malmo ``portal`` interior blocks. Fire, lava, water, and
+#: ``nether_portal`` XML names stay forbidden; Java maps ``portal`` to
+#: ``Blocks.NETHER_PORTAL``.
 ALLOWED_INITIAL_DRAW_BLOCK_TYPES = frozenset(
     {
         "air",
@@ -137,30 +141,35 @@ def validate_initial_draw_blocks(
     *,
     field_name: str = "initial_blocks",
     allow_obsidian_fixture: bool = False,
+    allow_active_portal_fixture: bool = False,
 ) -> tuple[tuple[int, int, int, str], ...]:
     """Fail closed on duplicate cells, portal/fire, or unknown DrawBlock types.
 
     Default P1 specs still reject obsidian so E10 cannot pre-place its
     success block. E11 may opt into an obsidian-only calibration fixture;
-    portal, fire, lava, and water remain forbidden on that path.
+    portal, fire, lava, and water remain forbidden on that path. E12 may
+    opt into the obsidian frame plus Malmo ``portal`` interior blocks.
     """
 
     if type(allow_obsidian_fixture) is not bool:
         raise ValueError("allow_obsidian_fixture must be a boolean")
+    if type(allow_active_portal_fixture) is not bool:
+        raise ValueError("allow_active_portal_fixture must be a boolean")
+    if allow_obsidian_fixture and allow_active_portal_fixture:
+        raise ValueError("obsidian-frame and active-portal fixtures are mutually exclusive")
     if value is None:
         return ()
     if not isinstance(value, tuple):
         raise ValueError(f"{field_name} must be a tuple of (x, y, z, block) entries")
-    allowed = (
-        frozenset({"obsidian"})
-        if allow_obsidian_fixture
-        else ALLOWED_INITIAL_DRAW_BLOCK_TYPES
-    )
-    forbidden = (
-        FORBIDDEN_INITIAL_DRAW_BLOCK_TYPES - {"obsidian"}
-        if allow_obsidian_fixture
-        else FORBIDDEN_INITIAL_DRAW_BLOCK_TYPES
-    )
+    if allow_active_portal_fixture:
+        allowed = frozenset({"obsidian", "portal"})
+        forbidden = FORBIDDEN_INITIAL_DRAW_BLOCK_TYPES - {"obsidian", "portal"}
+    elif allow_obsidian_fixture:
+        allowed = frozenset({"obsidian"})
+        forbidden = FORBIDDEN_INITIAL_DRAW_BLOCK_TYPES - {"obsidian"}
+    else:
+        allowed = ALLOWED_INITIAL_DRAW_BLOCK_TYPES
+        forbidden = FORBIDDEN_INITIAL_DRAW_BLOCK_TYPES
     blocks: list[tuple[int, int, int, str]] = []
     seen: set[tuple[int, int, int]] = set()
     for index, item in enumerate(value):
@@ -459,6 +468,7 @@ class PortalA0EnvSpec(HumanSurvival):
         initial_pitch: float = 0.0,
         initial_blocks: tuple[tuple[int, int, int, str], ...] = (),
         allow_obsidian_frame_fixture: bool = False,
+        allow_active_portal_fixture: bool = False,
     ) -> None:
         if type(max_episode_steps) is not int or max_episode_steps < 1:
             raise ValueError("max_episode_steps must be a positive integer")
@@ -502,10 +512,14 @@ class PortalA0EnvSpec(HumanSurvival):
         self.initial_pitch = float(initial_pitch)
         if type(allow_obsidian_frame_fixture) is not bool:
             raise ValueError("allow_obsidian_frame_fixture must be a boolean")
+        if type(allow_active_portal_fixture) is not bool:
+            raise ValueError("allow_active_portal_fixture must be a boolean")
         self.allow_obsidian_frame_fixture = allow_obsidian_frame_fixture
+        self.allow_active_portal_fixture = allow_active_portal_fixture
         self.initial_blocks = validate_initial_draw_blocks(
             initial_blocks,
             allow_obsidian_fixture=allow_obsidian_frame_fixture,
+            allow_active_portal_fixture=allow_active_portal_fixture,
         )
         super().__init__(
             name=PORTAL_ENV_NAME,

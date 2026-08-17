@@ -1,7 +1,7 @@
 """Minimal P1 validation runner.
 
 Executes one validation case in a controlled lifecycle. This phase
-implements E0 lifecycle through E11 vanilla portal activation. E4--E11
+implements E0 lifecycle through E12 vanilla dimension transition. E4--E12
 consume only narrow evaluator truth from their integration adapters; the
 validation core remains MineRL-independent.
 The runner never uses benchmark evaluator success semantics.
@@ -92,6 +92,7 @@ from obsidianlink.env.validation.result import (
     E9_SUCCESS_OUTCOME,
     E10_SUCCESS_OUTCOME,
     E11_SUCCESS_OUTCOME,
+    E12_SUCCESS_OUTCOME,
     INVENTORY_MISMATCH,
     SELECTED_ITEM_MISMATCH,
     EnvironmentValidationResult,
@@ -120,6 +121,9 @@ from obsidianlink.env.validation.truth import (
     ObsidianConversionInspection,
     PortalActivationActionExecution,
     PortalActivationInspection,
+    DimensionTruthSnapshot,
+    DimensionTransitionActionExecution,
+    DimensionTransitionInspection,
     ServerTruthSnapshot,
     frozen_expected_flow_state,
     frozen_expected_fluid_type,
@@ -129,6 +133,8 @@ from obsidianlink.env.validation.truth import (
     inspect_obsidian_conversion,
     inspect_portal_activation,
     inspect_portal_activation_precondition,
+    inspect_dimension_transition,
+    inspect_dimension_transition_precondition,
     is_portal_block,
     truth_error_outcome,
     validate_fluid_variant,
@@ -137,7 +143,7 @@ from obsidianlink.env.validation.truth import (
 
 @runtime_checkable
 class LifecycleBackend(Protocol):
-    """Smallest common backend surface required by E0--E11.
+    """Smallest common backend surface required by E0--E12.
 
     ``reset`` must return an initial state mapping. ``close`` must be
     safe to call after both successful and failed execution. Later P1
@@ -257,6 +263,8 @@ def _result(
     obsidian_inspection: ObsidianConversionInspection | None = None,
     portal_execution: PortalActivationActionExecution | None = None,
     portal_inspection: PortalActivationInspection | None = None,
+    dimension_execution: DimensionTransitionActionExecution | None = None,
+    dimension_inspection: DimensionTransitionInspection | None = None,
     observation_window_ticks: int | None = None,
     failure_stage: str | None = None,
     original_exception_type: str | None = None,
@@ -300,7 +308,8 @@ def _result(
         expected_selected_item=expected_selected_item,
         selected_item_matches_expected=selected_item_matches_expected,
         agent_id=(
-            portal_execution.agent_id if portal_execution is not None
+            dimension_execution.agent_id if dimension_execution is not None
+            else portal_execution.agent_id if portal_execution is not None
             else obsidian_execution.agent_id if obsidian_execution is not None
             else fluid_execution.agent_id if fluid_execution is not None
             else truth_execution.agent_id if truth_execution is not None
@@ -315,7 +324,8 @@ def _result(
             else camera_agent_id
         ),
         tested_step_id=(
-            portal_execution.step_id if portal_execution is not None
+            dimension_execution.step_id if dimension_execution is not None
+            else portal_execution.step_id if portal_execution is not None
             else obsidian_execution.step_id if obsidian_execution is not None
             else fluid_execution.step_id if fluid_execution is not None
             else truth_execution.step_id if truth_execution is not None
@@ -325,7 +335,9 @@ def _result(
             else None if camera_execution is None else camera_execution.step_id
         ),
         action_type=(
-            portal_execution.action_type if portal_execution is not None
+            dimension_execution.action_type if dimension_execution is not None
+            else "move" if dimension_inspection is not None or case.check_id is EnvironmentValidationId.E12
+            else portal_execution.action_type if portal_execution is not None
             else obsidian_execution.action_type if obsidian_execution is not None
             else "use_item" if observation_window_ticks is not None
             else fluid_execution.action_type if fluid_execution is not None
@@ -344,7 +356,8 @@ def _result(
         requested_yaw=(camera_requested_yaw if camera_execution is None else camera_execution.requested_yaw),
         requested_pitch=(camera_requested_pitch if camera_execution is None else camera_execution.requested_pitch),
         translated_action_accepted=(
-            portal_execution.translated_action_accepted if portal_execution is not None
+            dimension_execution.translated_action_accepted if dimension_execution is not None
+            else portal_execution.translated_action_accepted if portal_execution is not None
             else obsidian_execution.translated_action_accepted if obsidian_execution is not None
             else fluid_execution.translated_action_accepted if fluid_execution is not None
             else truth_execution.translated_action_accepted if truth_execution is not None
@@ -354,7 +367,9 @@ def _result(
             else None if camera_execution is None else camera_execution.translated_action_accepted
         ),
         tested_action_count=(
-            portal_execution.tested_action_count if portal_execution is not None
+            dimension_execution.tested_action_count if dimension_execution is not None
+            else 0 if dimension_inspection is not None
+            else portal_execution.tested_action_count if portal_execution is not None
             else obsidian_execution.tested_action_count if obsidian_execution is not None
             else 0 if observation_window_ticks is not None
             else fluid_execution.tested_action_count if fluid_execution is not None
@@ -383,7 +398,8 @@ def _result(
         requested_sprint=(requested_sprint if movement_execution is None else movement_execution.sprint),
         requested_jump=(requested_jump if movement_execution is None else movement_execution.jump),
         requested_duration_ticks=(
-            portal_execution.duration_ticks if portal_execution is not None
+            dimension_execution.duration_ticks if dimension_execution is not None
+            else portal_execution.duration_ticks if portal_execution is not None
             else obsidian_execution.duration_ticks if obsidian_execution is not None
             else fluid_execution.duration_ticks if fluid_execution is not None
             else truth_execution.duration_ticks if truth_execution is not None
@@ -452,15 +468,41 @@ def _result(
         before_selected_item=before_selected_item,
         after_selected_item=after_selected_item,
         before_step_id=None if before_truth_snapshot is None else before_truth_snapshot.step_id,
-        after_step_id=None if after_truth_snapshot is None else after_truth_snapshot.step_id,
+        after_step_id=(
+            dimension_inspection.after_dimension_snapshot.step_id
+            if dimension_inspection is not None
+            and dimension_inspection.after_dimension_snapshot is not None
+            else None if after_truth_snapshot is None else after_truth_snapshot.step_id
+        ),
         before_position_x=None if before_truth_snapshot is None else before_truth_snapshot.position_world[0],
         before_position_y=None if before_truth_snapshot is None else before_truth_snapshot.position_world[1],
         before_position_z=None if before_truth_snapshot is None else before_truth_snapshot.position_world[2],
-        after_position_x=None if after_truth_snapshot is None else after_truth_snapshot.position_world[0],
-        after_position_y=None if after_truth_snapshot is None else after_truth_snapshot.position_world[1],
-        after_position_z=None if after_truth_snapshot is None else after_truth_snapshot.position_world[2],
-        before_dimension=None if before_truth_snapshot is None else before_truth_snapshot.dimension,
-        after_dimension=None if after_truth_snapshot is None else after_truth_snapshot.dimension,
+        after_position_x=(
+            dimension_inspection.after_dimension_snapshot.position_world[0]
+            if dimension_inspection is not None
+            and dimension_inspection.after_dimension_snapshot is not None
+            else None if after_truth_snapshot is None else after_truth_snapshot.position_world[0]
+        ),
+        after_position_y=(
+            dimension_inspection.after_dimension_snapshot.position_world[1]
+            if dimension_inspection is not None
+            and dimension_inspection.after_dimension_snapshot is not None
+            else None if after_truth_snapshot is None else after_truth_snapshot.position_world[1]
+        ),
+        after_position_z=(
+            dimension_inspection.after_dimension_snapshot.position_world[2]
+            if dimension_inspection is not None
+            and dimension_inspection.after_dimension_snapshot is not None
+            else None if after_truth_snapshot is None else after_truth_snapshot.position_world[2]
+        ),
+        before_dimension=(
+            dimension_inspection.before_dimension if dimension_inspection is not None
+            else None if before_truth_snapshot is None else before_truth_snapshot.dimension
+        ),
+        after_dimension=(
+            dimension_inspection.after_dimension if dimension_inspection is not None
+            else None if after_truth_snapshot is None else after_truth_snapshot.dimension
+        ),
         grid_anchor_x=(
             None if after_truth_snapshot is None and before_truth_snapshot is None
             else (after_truth_snapshot or before_truth_snapshot).grid_anchor_world[0]
@@ -487,6 +529,7 @@ def _result(
                 block_truth is None
                 and obsidian_inspection is None
                 and portal_inspection is None
+                and dimension_inspection is None
                 and observation_window_ticks is None
             )
             else tuple(item.as_dict() for item in before_truth_snapshot.block_truth)
@@ -499,12 +542,14 @@ def _result(
                 block_truth is None
                 and obsidian_inspection is None
                 and portal_inspection is None
+                and dimension_inspection is None
                 and observation_window_ticks is None
             )
             else tuple(item.as_dict() for item in after_truth_snapshot.block_truth)
         ),
         truth_missing_count=(
-            portal_inspection.truth_missing_count if portal_inspection is not None
+            dimension_inspection.truth_missing_count if dimension_inspection is not None
+            else portal_inspection.truth_missing_count if portal_inspection is not None
             else obsidian_inspection.truth_missing_count if obsidian_inspection is not None
             else fluid_inspection.truth_missing_count if fluid_inspection is not None
             else block_truth.truth_missing_count if block_truth is not None
@@ -605,29 +650,43 @@ def _result(
         conversion_observed_at_step=(
             None if obsidian_inspection is None else obsidian_inspection.conversion_observed_at_step
         ),
-        observation_window_ticks=observation_window_ticks if portal_inspection is not None or portal_execution is not None or obsidian_inspection is not None or obsidian_execution is not None or observation_window_ticks is not None else None,
+        observation_window_ticks=observation_window_ticks if portal_inspection is not None or portal_execution is not None or dimension_inspection is not None or dimension_execution is not None or obsidian_inspection is not None or obsidian_execution is not None or observation_window_ticks is not None else None,
         observation_wait_count=(
-            None if portal_execution is None and obsidian_execution is None
+            None if portal_execution is None and obsidian_execution is None and dimension_execution is None and dimension_inspection is None
+            else dimension_inspection.observation_wait_count if dimension_inspection is not None
+            else dimension_execution.observation_wait_count if dimension_execution is not None
             else portal_execution.observation_wait_count if portal_execution is not None
             else obsidian_execution.observation_wait_count
         ),
         frame_valid_before=(
-            None if portal_inspection is None else portal_inspection.frame_valid_before
+            None if dimension_inspection is None and portal_inspection is None
+            else dimension_inspection.frame_valid_before if dimension_inspection is not None
+            else portal_inspection.frame_valid_before
         ),
         frame_block_count=(
-            None if portal_inspection is None else portal_inspection.frame_block_count
+            None if dimension_inspection is None and portal_inspection is None
+            else dimension_inspection.frame_block_count if dimension_inspection is not None
+            else portal_inspection.frame_block_count
         ),
         expected_frame_cells=(
-            None if portal_inspection is None else portal_inspection.expected_frame_cells
+            None if dimension_inspection is None and portal_inspection is None
+            else dimension_inspection.expected_frame_cells if dimension_inspection is not None
+            else portal_inspection.expected_frame_cells
         ),
         observed_frame_cells=(
-            None if portal_inspection is None else portal_inspection.observed_frame_cells
+            None if dimension_inspection is None and portal_inspection is None
+            else dimension_inspection.observed_frame_cells if dimension_inspection is not None
+            else portal_inspection.observed_frame_cells
         ),
         interior_cells=(
-            None if portal_inspection is None else portal_inspection.interior_cells
+            None if dimension_inspection is None and portal_inspection is None
+            else dimension_inspection.interior_cells if dimension_inspection is not None
+            else portal_inspection.interior_cells
         ),
         before_portal_block_count=(
-            None if portal_inspection is None else portal_inspection.before_portal_block_count
+            None if dimension_inspection is None and portal_inspection is None
+            else dimension_inspection.before_portal_block_count if dimension_inspection is not None
+            else portal_inspection.before_portal_block_count
         ),
         after_portal_block_count=(
             None if portal_inspection is None else portal_inspection.after_portal_block_count
@@ -643,6 +702,15 @@ def _result(
         ),
         portal_activated=(
             None if portal_inspection is None else portal_inspection.portal_activated
+        ),
+        active_portal_before=(
+            None if dimension_inspection is None else dimension_inspection.active_portal_before
+        ),
+        dimension_transition_observed=(
+            None if dimension_inspection is None else dimension_inspection.dimension_transition_observed
+        ),
+        dimension_transition_observed_at_step=(
+            None if dimension_inspection is None else dimension_inspection.dimension_transition_observed_at_step
         ),
     )
 
@@ -683,6 +751,8 @@ def _success_outcome(case: EnvironmentValidationCase) -> str | None:
         return E10_SUCCESS_OUTCOME
     if case.check_id is EnvironmentValidationId.E11:
         return E11_SUCCESS_OUTCOME
+    if case.check_id is EnvironmentValidationId.E12:
+        return E12_SUCCESS_OUTCOME
     return None
 
 
@@ -1096,6 +1166,77 @@ class EnvironmentValidationRunner:
                     error="invalid E11 calibration: " + _format_error(exc),
                 )
 
+        e12_probe_world: tuple[tuple[int, int, int], ...] | None = None
+        e12_probe_grid: tuple[tuple[int, int, int], ...] | None = None
+        e12_frame_world: tuple[tuple[int, int, int], ...] | None = None
+        e12_interior_world: tuple[tuple[int, int, int], ...] | None = None
+        e12_controls: tuple[tuple[int, int, int], ...] | None = None
+        e12_position_min: tuple[float, float, float] | None = None
+        e12_position_max: tuple[float, float, float] | None = None
+        e12_observation_window: int | None = None
+        e12_duration_ticks: int | None = None
+        if case.check_id is EnvironmentValidationId.E12:
+            try:
+                e12_duration_ticks = 8
+                requested_duration_ticks = e12_duration_ticks
+                e12_frame_world = tuple(
+                    validate_target_cell(cell, "frame_world_cell")
+                    for cell in (
+                        (-1, 3, 1),
+                        (-1, 4, 1),
+                        (-1, 5, 1),
+                        (-1, 6, 1),
+                        (-1, 7, 1),
+                        (0, 3, 1),
+                        (0, 7, 1),
+                        (1, 3, 1),
+                        (1, 7, 1),
+                        (2, 3, 1),
+                        (2, 4, 1),
+                        (2, 5, 1),
+                        (2, 6, 1),
+                        (2, 7, 1),
+                    )
+                )
+                e12_interior_world = tuple(
+                    validate_target_cell(cell, "interior_world_cell")
+                    for cell in (
+                        (0, 4, 1),
+                        (1, 4, 1),
+                        (0, 5, 1),
+                        (1, 5, 1),
+                        (0, 6, 1),
+                        (1, 6, 1),
+                    )
+                )
+                e12_controls = (
+                    validate_target_cell((0, 8, 1), "control_above_frame"),
+                    validate_target_cell((0, 4, 3), "control_behind_frame"),
+                )
+                e12_probe_world = e12_frame_world + e12_interior_world + e12_controls
+                e12_probe_grid = tuple(
+                    spawn_relative_grid_cell(cell, (0, 4, 0)) for cell in e12_probe_world
+                )
+                e12_position_min = (-2.0, 2.0, -2.0)
+                e12_position_max = (3.0, 8.0, 4.0)
+                e12_observation_window = 100
+                if len(e12_frame_world) != 14 or len(e12_interior_world) != 6:
+                    raise ValueError("E12 frozen frame/interior sizes are invalid")
+                if e12_probe_world is None or len(e12_probe_world) != 22:
+                    raise ValueError("E12 probe set must be frame + interior + controls")
+            except (TypeError, ValueError) as exc:
+                return _result(
+                    case=case,
+                    episode_id=episode_id,
+                    success=False,
+                    outcome="runtime_error",
+                    created=False,
+                    reset_completed=False,
+                    initial_state_present=False,
+                    closed=False,
+                    error="invalid E12 calibration: " + _format_error(exc),
+                )
+
         created = False
         reset_completed = False
         initial_state_present = False
@@ -1145,6 +1286,8 @@ class EnvironmentValidationRunner:
         obsidian_inspection: ObsidianConversionInspection | None = None
         portal_execution: PortalActivationActionExecution | None = None
         portal_inspection: PortalActivationInspection | None = None
+        dimension_execution: DimensionTransitionActionExecution | None = None
+        dimension_inspection: DimensionTransitionInspection | None = None
         failure_stage: str | None = None
         original_exception_type: str | None = None
         reset_attempt_count: int | None = None
@@ -2117,6 +2260,176 @@ class EnvironmentValidationRunner:
                                                             )
                                                             outcome = portal_inspection.outcome
                                                             error = portal_inspection.error
+                        elif case.check_id is EnvironmentValidationId.E12:
+                            if isinstance(reset_result, Mapping) and reset_result:
+                                first_agent = next(iter(reset_result))
+                                if isinstance(first_agent, str) and first_agent.strip():
+                                    truth_agent_id = first_agent.strip()
+                            snapshot = getattr(backend, "server_truth_snapshot", None)
+                            dimension_truth = getattr(backend, "dimension_truth", None)
+                            execute = getattr(backend, "execute_transition_stimulus", None)
+                            if not callable(snapshot) or not callable(dimension_truth) or not callable(execute):
+                                outcome = "runtime_error"
+                                error = "E12 backend snapshot/dimension/stimulus surface is not callable"
+                            elif (
+                                e12_probe_world is None
+                                or e12_probe_grid is None
+                                or e12_frame_world is None
+                                or e12_interior_world is None
+                                or e12_controls is None
+                                or e12_position_min is None
+                                or e12_position_max is None
+                                or e12_observation_window is None
+                                or e12_duration_ticks is None
+                            ):
+                                outcome = "runtime_error"
+                                error = "E12 calibration cells were not initialized"
+                            else:
+                                try:
+                                    candidate_before = snapshot()
+                                except (TypeError, ValueError) as exc:
+                                    outcome = truth_error_outcome(exc)
+                                    error = _format_error(exc)
+                                else:
+                                    if candidate_before is None:
+                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                        error = "server truth snapshot is missing before stimulus"
+                                    elif not isinstance(candidate_before, ServerTruthSnapshot):
+                                        outcome = truth_error_outcome(
+                                            TypeError("before snapshot has the wrong type")
+                                        )
+                                        error = "before snapshot has the wrong type"
+                                    else:
+                                        before_truth_snapshot = candidate_before
+                                if before_truth_snapshot is not None:
+                                    dimension_inspection = inspect_dimension_transition_precondition(
+                                        before_truth_snapshot,
+                                        probe_world_cells=e12_probe_world,
+                                        probe_grid_cells=e12_probe_grid,
+                                        frame_world_cells=e12_frame_world,
+                                        interior_world_cells=e12_interior_world,
+                                        control_world_cells=e12_controls,
+                                        position_min=e12_position_min,
+                                        position_max=e12_position_max,
+                                    )
+                                    if dimension_inspection is not None:
+                                        outcome = dimension_inspection.outcome
+                                        error = dimension_inspection.error
+                                    else:
+                                        parsed = parse_macro_action(
+                                            json.dumps(
+                                                {
+                                                    "action_type": "move",
+                                                    "duration_ticks": e12_duration_ticks,
+                                                    "parameters": {
+                                                        "forward": 1.0,
+                                                        "strafe": 0.0,
+                                                        "sprint": False,
+                                                        "jump": False,
+                                                    },
+                                                },
+                                                allow_nan=False,
+                                                sort_keys=True,
+                                            )
+                                        )
+                                        if not parsed.accepted:
+                                            outcome = "truth_stimulus_rejected"
+                                            error = "E12 stimulus protocol rejected: " + (
+                                                parsed.error or "unknown error"
+                                            )
+                                        else:
+                                            try:
+                                                candidate_execution = execute(parsed.action)
+                                            except (TypeError, ValueError) as exc:
+                                                outcome = truth_error_outcome(exc)
+                                                error = _format_error(exc)
+                                            else:
+                                                if not isinstance(
+                                                    candidate_execution,
+                                                    DimensionTransitionActionExecution,
+                                                ):
+                                                    raise TypeError(
+                                                        "execute_transition_stimulus must return DimensionTransitionActionExecution"
+                                                    )
+                                                dimension_execution = candidate_execution
+                                                try:
+                                                    candidate_after = dimension_truth()
+                                                except (TypeError, ValueError) as exc:
+                                                    outcome = truth_error_outcome(exc)
+                                                    error = _format_error(exc)
+                                                else:
+                                                    if candidate_after is None:
+                                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                                        error = "dimension truth is missing after stimulus"
+                                                    elif not isinstance(
+                                                        candidate_after, DimensionTruthSnapshot
+                                                    ):
+                                                        outcome = truth_error_outcome(
+                                                            TypeError("after dimension truth has the wrong type")
+                                                        )
+                                                        error = "after dimension truth has the wrong type"
+                                                    else:
+                                                        after_dimension_snapshot = candidate_after
+                                                        wait_count = 0
+                                                        observed_at = None
+                                                        wait_failed = False
+                                                        if after_dimension_snapshot.dimension == "minecraft:the_nether":
+                                                            observed_at = after_dimension_snapshot.step_id
+                                                        else:
+                                                            observe_wait = getattr(backend, "observe_wait", None)
+                                                            if not callable(observe_wait):
+                                                                outcome = "runtime_error"
+                                                                error = "E12 backend observation wait surface is not callable"
+                                                                wait_failed = True
+                                                            else:
+                                                                for _ in range(e12_observation_window):
+                                                                    observe_wait()
+                                                                    wait_count += 1
+                                                                    try:
+                                                                        waited = dimension_truth()
+                                                                    except (TypeError, ValueError) as exc:
+                                                                        outcome = truth_error_outcome(exc)
+                                                                        error = _format_error(exc)
+                                                                        wait_failed = True
+                                                                        break
+                                                                    if waited is None:
+                                                                        outcome = TRUTH_SNAPSHOT_MISSING
+                                                                        error = "dimension truth is missing during E12 observation window"
+                                                                        wait_failed = True
+                                                                        break
+                                                                    if not isinstance(waited, DimensionTruthSnapshot):
+                                                                        outcome = truth_error_outcome(
+                                                                            TypeError("after dimension truth has the wrong type")
+                                                                        )
+                                                                        error = "after dimension truth has the wrong type"
+                                                                        wait_failed = True
+                                                                        break
+                                                                    after_dimension_snapshot = waited
+                                                                    if after_dimension_snapshot.dimension == "minecraft:the_nether":
+                                                                        observed_at = after_dimension_snapshot.step_id
+                                                                        break
+                                                        if not wait_failed and after_dimension_snapshot is not None:
+                                                            dimension_execution = replace(
+                                                                dimension_execution,
+                                                                observation_wait_count=wait_count,
+                                                                dimension_transition_observed_at_step=observed_at,
+                                                            )
+                                                            dimension_inspection = inspect_dimension_transition(
+                                                                before_truth_snapshot,
+                                                                after_dimension_snapshot,
+                                                                dimension_execution,
+                                                                probe_world_cells=e12_probe_world,
+                                                                probe_grid_cells=e12_probe_grid,
+                                                                frame_world_cells=e12_frame_world,
+                                                                interior_world_cells=e12_interior_world,
+                                                                control_world_cells=e12_controls,
+                                                                duration_ticks=e12_duration_ticks,
+                                                                observation_window_ticks=e12_observation_window,
+                                                                position_min=e12_position_min,
+                                                                position_max=e12_position_max,
+                                                            )
+                                                            outcome = dimension_inspection.outcome
+                                                            error = dimension_inspection.error
                         else:
                             outcome = E0_SUCCESS_OUTCOME
                     else:
@@ -2136,6 +2449,7 @@ class EnvironmentValidationRunner:
                     EnvironmentValidationId.E9,
                     EnvironmentValidationId.E10,
                     EnvironmentValidationId.E11,
+                    EnvironmentValidationId.E12,
                 ):
                     failure_stage = "reset"
                     original_exception_type = type(_root_exception(exc)).__name__
@@ -2214,6 +2528,13 @@ class EnvironmentValidationRunner:
                 exception_traceback = "".join(
                     traceback.format_exception(type(exc), exc, exc.__traceback__)
                 )
+            elif case.check_id is EnvironmentValidationId.E12 and before_truth_snapshot is not None:
+                outcome = "action_failed"
+                failure_stage = "action"
+                original_exception_type = type(_root_exception(exc)).__name__
+                exception_traceback = "".join(
+                    traceback.format_exception(type(exc), exc, exc.__traceback__)
+                )
             else:
                 outcome = "runtime_error"
         finally:
@@ -2234,6 +2555,7 @@ class EnvironmentValidationRunner:
                 E9_SUCCESS_OUTCOME,
                 E10_SUCCESS_OUTCOME,
                 E11_SUCCESS_OUTCOME,
+                E12_SUCCESS_OUTCOME,
             }:
                 outcome = "close_failed"
             error = error or close_error
@@ -2259,6 +2581,7 @@ class EnvironmentValidationRunner:
             E8_SUCCESS_OUTCOME,
             E9_SUCCESS_OUTCOME,
             E10_SUCCESS_OUTCOME,
+            E12_SUCCESS_OUTCOME,
         }:
             outcome = "close_failed" if close_error is not None else "runtime_error"
 
@@ -2317,7 +2640,7 @@ class EnvironmentValidationRunner:
             requested_strafe=requested_strafe if case.check_id is EnvironmentValidationId.E5 else None,
             requested_sprint=requested_sprint if case.check_id is EnvironmentValidationId.E5 else None,
             requested_jump=requested_jump if case.check_id is EnvironmentValidationId.E5 else None,
-            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            requested_duration_ticks=requested_duration_ticks if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
             minimum_horizontal_distance=minimum_horizontal_distance if case.check_id is EnvironmentValidationId.E5 else None,
             minimum_forward_projection=minimum_forward_projection if case.check_id is EnvironmentValidationId.E5 else None,
             maximum_lateral_drift=maximum_lateral_drift if case.check_id is EnvironmentValidationId.E5 else None,
@@ -2352,11 +2675,11 @@ class EnvironmentValidationRunner:
             expected_fluid=e7_expected_fluid if case.check_id is EnvironmentValidationId.E7 else None,
             before_selected_item=before_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
             after_selected_item=after_selected_item if case.check_id is EnvironmentValidationId.E7 else None,
-            before_truth_snapshot=before_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            before_truth_snapshot=before_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
             after_truth_snapshot=after_truth_snapshot if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
             truth_execution=truth_execution if case.check_id is EnvironmentValidationId.E8 else None,
             block_truth=block_truth if case.check_id is EnvironmentValidationId.E8 else None,
-            truth_agent_id=truth_agent_id if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            truth_agent_id=truth_agent_id if case.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
             stimulus_target=(
                 e11_stimulus_target if case.check_id is EnvironmentValidationId.E11
                 else e10_stimulus_target if case.check_id is EnvironmentValidationId.E10
@@ -2365,14 +2688,16 @@ class EnvironmentValidationRunner:
                 else None
             ),
             probe_world_cells=(
-                e11_probe_world if case.check_id is EnvironmentValidationId.E11
+                e12_probe_world if case.check_id is EnvironmentValidationId.E12
+                else e11_probe_world if case.check_id is EnvironmentValidationId.E11
                 else e10_probe_world if case.check_id is EnvironmentValidationId.E10
                 else e9_probe_world if case.check_id is EnvironmentValidationId.E9
                 else e8_probe_world if case.check_id is EnvironmentValidationId.E8
                 else None
             ),
             probe_grid_cells=(
-                e11_probe_grid if case.check_id is EnvironmentValidationId.E11
+                e12_probe_grid if case.check_id is EnvironmentValidationId.E12
+                else e11_probe_grid if case.check_id is EnvironmentValidationId.E11
                 else e10_probe_grid if case.check_id is EnvironmentValidationId.E10
                 else e9_probe_grid if case.check_id is EnvironmentValidationId.E9
                 else e8_probe_grid if case.check_id is EnvironmentValidationId.E8
@@ -2387,14 +2712,17 @@ class EnvironmentValidationRunner:
             obsidian_inspection=obsidian_inspection if case.check_id is EnvironmentValidationId.E10 else None,
             portal_execution=portal_execution if case.check_id is EnvironmentValidationId.E11 else None,
             portal_inspection=portal_inspection if case.check_id is EnvironmentValidationId.E11 else None,
+            dimension_execution=dimension_execution if case.check_id is EnvironmentValidationId.E12 else None,
+            dimension_inspection=dimension_inspection if case.check_id is EnvironmentValidationId.E12 else None,
             observation_window_ticks=(
-                e11_observation_window if case.check_id is EnvironmentValidationId.E11
+                e12_observation_window if case.check_id is EnvironmentValidationId.E12
+                else e11_observation_window if case.check_id is EnvironmentValidationId.E11
                 else e10_observation_window if case.check_id is EnvironmentValidationId.E10
                 else None
             ),
-            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
-            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
-            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
-            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
-            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11) else None,
+            failure_stage=failure_stage if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
+            original_exception_type=original_exception_type if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
+            reset_attempt_count=reset_attempt_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
+            environment_launch_count=environment_launch_count if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
+            exception_traceback=exception_traceback if case.check_id in (EnvironmentValidationId.E5, EnvironmentValidationId.E6, EnvironmentValidationId.E7, EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12) else None,
         )

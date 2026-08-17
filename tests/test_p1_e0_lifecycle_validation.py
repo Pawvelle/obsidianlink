@@ -321,15 +321,21 @@ class E0LifecycleValidationTests(unittest.TestCase):
             [f"E{index}" for index in range(13)],
         )
 
-    def test_unimplemented_case_fails_closed_without_lifecycle(self) -> None:
+    def test_all_checklist_cases_have_success_outcomes(self) -> None:
+        from obsidianlink.env.validation.runner import _success_outcome
+
+        for case in P1_VALIDATION_CASES:
+            self.assertIsNotNone(_success_outcome(case), case.check_id.value)
+
+    def test_e12_without_truth_surfaces_fails_closed(self) -> None:
         e12 = P1_VALIDATION_CASES[12]
         self.assertEqual(e12.check_id, EnvironmentValidationId.E12)
         result, stub = _run(case=e12)
-        self.assertIsNone(stub)
+        self.assertIsNotNone(stub)
         self.assertFalse(result.success)
         self.assertEqual(result.outcome, "runtime_error")
-        self.assertFalse(result.created)
-        self.assertIn("unimplemented", result.error or "")
+        self.assertTrue(result.created)
+        self.assertIn("E12 backend", result.error or "")
 
     def test_e0_case_matches_manifest_reset_close(self) -> None:
         self.assertIs(E0_LIFECYCLE_CASE.check_id, EnvironmentValidationId.E0)

@@ -2,7 +2,7 @@
 
 Date: 2026-08-17
 
-Status: deployed; E11 real reviewed success; E12 not started.
+Status: deployed; E11 real reviewed success; E12 portal DrawBlock not in canonical JAR.
 
 ## Reproducible source and build
 
@@ -25,6 +25,10 @@ Production source changes, in order:
    rejecting portal and fire;
 5. `p1-env-integrated-server-unpaused.patch`: an environment process
    (`envPort != 0`) does not pause its integrated server.
+
+`e12-drawing-decorator-portal.patch` exists for the authorized E12 fixture JAR
+and is excluded from this canonical allowlist. Canonical live JARs still reject
+portal DrawBlocks.
 
 The E11 completion-barrier runtime is staged from that canonical baseline and
 adds only `p1-e11-action-completion-barrier.patch`. It does not use

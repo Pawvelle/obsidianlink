@@ -85,6 +85,26 @@ One real E11 activation: `p1-e11-live-001`, outcome `portal_activation_not_obser
 
 Canonical live `p1-e11-canonical-runtime-20260817-002` rebuilt from frozen source and excluded `mcp_patch.diff`, all old E11 marshal/paused-executor/diagnostic patches, and E12. Production semantic diff is clean: only `IntegratedServer.class` plus `version.properties`; EnvServer, SoundEngine, PortalSize, FlintAndSteelItem, Entity, and ServerPlayerEntity are byte-identical. The environment-mode integrated server remained unpaused (`Saving and pausing game` absent). One fresh process, one reset, exactly one accepted `use_item(flint_and_steel)`, and zero retry produced client-visible fire but 0/6 `nether_portal`; `truth_missing_count=0`, outcome `portal_activation_not_observed`. Compact evidence: `runs/history/p1-e11-canonical-20260817-002/`.
 
+## E12 controlled calibration
+
+E12 只验证：已激活的 Nether portal fixture + 一次有界 `move(forward=1)` + vanilla portal wait → evaluator-only `portal_dimension` 从 `minecraft:overworld` 变为 `minecraft:the_nether` → `dimension_transition_ok`。
+
+它不是 portal construction、不是 E11 ignition、不是 Agent task、不是 end-to-end success。预置 active portal 是 **calibration fixture**。Nether 之后不再用 Overworld portal grid 作为 after-truth。
+
+冻结几何复用 E11 4×5 / interior 2×3 框，但 interior 在 reset 时已是 Malmo `portal` DrawBlock（Java `Blocks.NETHER_PORTAL`；ObservationFromGrid 仍报 `nether_portal`）：
+
+- spawn `(0, 4, 0)`，yaw `0.0`，pitch `0.0`（平视走进 portal 平面 z=1）
+- frame：14 obsidian；interior：6 portal；controls `(0, 8, 1)`、`(0, 4, 3)` 为 air
+- inventory：惰性 `dirt:1`（规范禁止空背包）
+- 恰好 1 次 stimulus：`move`，`duration_ticks=8`，`forward=1`，无 strafe/sprint/jump
+- bounded observation window：最多 100 个 wait tick（vanilla ~80 tick + MineRL 缓冲）
+- 成功必须：before dimension=`minecraft:overworld`，after dimension=`minecraft:the_nether`，before portal=6/6，frame=14/14，`truth_missing_count=0`
+- 成功 outcome：`dimension_transition_ok`
+
+Mission XML 使用 `allow_active_portal_fixture=True`。Canonical DrawingDecorator 仍拒绝 portal；`patches/minerl/e12-drawing-decorator-portal.patch` 不进入 `CANONICAL_PATCHES`。Live E12 在用户授权 Gradle 与真实 MineRL 运行之前保持 `NEEDS_E12_RUNTIME_PORTAL_FIXTURE_AUTHORIZATION=True`。
+
+FakeBackend / offline stub success 不能证明真实 Minecraft 维度切换。E12 `unit_verified` 不把 `integration_verified` 设为 true。
+
 ## Startup reliability hardening
 
 - P1 startup reliability hardening: **COMPLETE**.
@@ -98,8 +118,8 @@ The historical E5/E8/E9 `liblwjgl_stb` / Sound engine / `STBVorbis` SIGSEGV evid
 
 ## Authorization and hard gate
 
-E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 runtime geometry deployed / real verified = **YES**；real E11 reviewed success = **YES** (`p1-e11-completion-barrier-20260817-004`, `portal_activation_ok`, `tested_action_count=1`, retry=0, portal=6/6, `truth_missing_count=0`)；`integration_verified` = **NO**。E8/E9/E10/E11 evaluator-only truth 与 Agent-visible observation 保持隔离。E12 为 **NOT STARTED**，P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
+E0–E10 contract / adapter / offline runtime / live bridge 为 `unit_verified`，且各有 reviewed real success；均不是 `integration_verified`，`process_release_proven=false`，`p1_validation_manifest()` 仍将 E0–E12 标为 `not_run`。E11 contract / adapter / offline runtime / live gate 为 `unit_verified`；E11 runtime geometry deployed / real verified = **YES**；real E11 reviewed success = **YES** (`p1-e11-completion-barrier-20260817-004`, `portal_activation_ok`, `tested_action_count=1`, retry=0, portal=6/6, `truth_missing_count=0`)；`integration_verified` = **NO**。E12 contract / adapter / offline runtime / live gate 为 `unit_verified`；real E12 = **NOT RUN**；canonical JAR 不含 portal DrawBlock；`integration_verified` = **NO**。E8/E9/E10/E11/E12 evaluator-only truth 与 Agent-visible observation 保持隔离。P1 Hard Gate 为 **NOT PASSED**，P2 为 **NOT STARTED**。
 
-当前唯一最小 blocker：ReplaySender 的正常客户端右键路径已执行并产生 fire，integrated server 也未暂停，但现有证据尚未证明 use-item packet 到达并在 server side 执行 vanilla `FlintAndSteelItem`。不要自动重试，不要改 geometry/evaluator/window，不要开始 E12。每次真实运行仍需用户单独明确授权。
+当前最小未验证点：E12 真实 Overworld → Nether。每次真实运行与每次 Gradle 构建仍需用户单独明确授权。
 
 进入 P2 前要求完整 suite 稳定重复成功、`truth_missing=0`、无人工干预。P1 Hard Gate 尚未通过。建议至少 20 个 fresh episodes，最终次数、seed、timeout 与失败处理后续冻结。

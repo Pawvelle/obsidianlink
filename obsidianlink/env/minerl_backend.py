@@ -566,6 +566,29 @@ class MineRLEnvironmentBackend:
             cells, require_portal_grid=True, include_snapshot_context=True
         )
 
+    def get_dimension_truth(self) -> Mapping[str, Any] | None:
+        """Return evaluator-only dimension and position for P1 E12.
+
+        After Nether entry the Overworld portal grid is not a reliable
+        after-truth source. This getter reads only ``portal_dimension``
+        and FullStats position from the latest raw observation.
+        """
+
+        task = self._require_task()
+        raw = self._latest_raw
+        if raw is None:
+            return None
+        if "portal_dimension" not in raw:
+            return None
+        position = self._server_position_from_latest()
+        return {
+            "agent_id": "agent_1",
+            "dimension": self._dimension(raw),
+            "episode_id": task.task_id,
+            "position_world": None if position is None else list(position),
+            "step_id": self._step_id,
+        }
+
     def get_block_placement_truth(
         self, cell: tuple[int, int, int]
     ) -> Mapping[str, Any] | None:

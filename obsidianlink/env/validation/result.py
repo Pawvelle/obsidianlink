@@ -45,6 +45,9 @@ from obsidianlink.env.validation.truth import (
     OBSIDIAN_CONVERSION_OUTCOMES,
     PORTAL_ACTIVATION_OK,
     PORTAL_ACTIVATION_OUTCOMES,
+    DIMENSION_TRANSITION_OK,
+    DIMENSION_TRANSITION_OUTCOMES,
+    E12_STIMULUS_ACTION_TYPE,
     frozen_expected_flow_state,
     frozen_expected_fluid_type,
     frozen_fluid_bucket_item,
@@ -88,7 +91,7 @@ VALIDATION_OUTCOMES = frozenset(
     }
 ) | INVENTORY_OUTCOMES | SELECTED_ITEM_OUTCOMES | frozenset(
     {INVENTORY_MISMATCH, SELECTED_ITEM_MISMATCH}
-) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | PLACEMENT_OUTCOMES | BUCKET_OUTCOMES | BLOCK_TRUTH_OUTCOMES | FLUID_TRUTH_OUTCOMES | OBSIDIAN_CONVERSION_OUTCOMES | PORTAL_ACTIVATION_OUTCOMES | frozenset({"cleanup_failed", "action_failed"})
+) | CAMERA_OUTCOMES | MOVEMENT_OUTCOMES | PLACEMENT_OUTCOMES | BUCKET_OUTCOMES | BLOCK_TRUTH_OUTCOMES | FLUID_TRUTH_OUTCOMES | OBSIDIAN_CONVERSION_OUTCOMES | PORTAL_ACTIVATION_OUTCOMES | DIMENSION_TRANSITION_OUTCOMES | frozenset({"cleanup_failed", "action_failed"})
 E0_SUCCESS_OUTCOME = "lifecycle_ok"
 E1_SUCCESS_OUTCOME = "rgb_ok"
 E2_SUCCESS_OUTCOME = INVENTORY_OK
@@ -101,6 +104,7 @@ E8_SUCCESS_OUTCOME = BLOCK_TRUTH_OK
 E9_SUCCESS_OUTCOME = FLUID_TRUTH_OK
 E10_SUCCESS_OUTCOME = OBSIDIAN_CONVERSION_OK
 E11_SUCCESS_OUTCOME = PORTAL_ACTIVATION_OK
+E12_SUCCESS_OUTCOME = DIMENSION_TRANSITION_OK
 
 
 def _require_identifier(value: object, field_name: str) -> str:
@@ -408,6 +412,9 @@ class EnvironmentValidationResult:
     portal_activation_observed: bool | None = None
     portal_activation_observed_at_step: int | None = None
     portal_activated: bool | None = None
+    active_portal_before: bool | None = None
+    dimension_transition_observed: bool | None = None
+    dimension_transition_observed_at_step: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.check_id, EnvironmentValidationId):
@@ -507,6 +514,7 @@ class EnvironmentValidationResult:
             "water_placement_observed",
             "frame_valid_before", "ignition_effect_observed",
             "portal_activation_observed", "portal_activated",
+            "active_portal_before", "dimension_transition_observed",
         ):
             value = getattr(self, field_name)
             if value is not None:
@@ -604,10 +612,11 @@ class EnvironmentValidationResult:
             EnvironmentValidationId.E9,
             EnvironmentValidationId.E10,
             EnvironmentValidationId.E11,
+            EnvironmentValidationId.E12,
         ) and any(
             value is not None for value in action_fields
         ):
-            raise ValueError("action metadata is only valid for E4/E5/E6/E7/E8/E9/E10/E11 results")
+            raise ValueError("action metadata is only valid for E4/E5/E6/E7/E8/E9/E10/E11/E12 results")
         camera_fields = (
             self.requested_yaw, self.requested_pitch,
             self.before_yaw, self.before_pitch, self.after_yaw, self.after_pitch,
@@ -642,8 +651,9 @@ class EnvironmentValidationResult:
             EnvironmentValidationId.E9,
             EnvironmentValidationId.E10,
             EnvironmentValidationId.E11,
+            EnvironmentValidationId.E12,
         ):
-            raise ValueError("requested_duration_ticks is only valid for E5/E6/E7/E8/E9/E10/E11 results")
+            raise ValueError("requested_duration_ticks is only valid for E5/E6/E7/E8/E9/E10/E11/E12 results")
         if self.check_id not in (
             EnvironmentValidationId.E6,
             EnvironmentValidationId.E7,
@@ -719,12 +729,19 @@ class EnvironmentValidationResult:
             self.conversion_observed_at_step,
         )
         e11_only_fields = (
-            self.frame_valid_before, self.frame_block_count,
-            self.expected_frame_cells, self.observed_frame_cells,
-            self.interior_cells,
-            self.before_portal_block_count, self.after_portal_block_count,
+            self.after_portal_block_count,
             self.ignition_effect_observed, self.portal_activation_observed,
             self.portal_activation_observed_at_step, self.portal_activated,
+        )
+        e11_e12_frame_fields = (
+            self.frame_valid_before, self.frame_block_count,
+            self.expected_frame_cells, self.observed_frame_cells,
+            self.interior_cells, self.before_portal_block_count,
+        )
+        e12_only_fields = (
+            self.active_portal_before,
+            self.dimension_transition_observed,
+            self.dimension_transition_observed_at_step,
         )
         e10_e11_window_fields = (
             self.observation_window_ticks, self.observation_wait_count,
@@ -734,16 +751,18 @@ class EnvironmentValidationResult:
             EnvironmentValidationId.E9,
             EnvironmentValidationId.E10,
             EnvironmentValidationId.E11,
+            EnvironmentValidationId.E12,
         ) and any(value is not None for value in shared_truth_fields):
-            raise ValueError("server-truth metadata is only valid for E8/E9/E10/E11 results")
+            raise ValueError("server-truth metadata is only valid for E8/E9/E10/E11/E12 results")
         if self.check_id not in (
             EnvironmentValidationId.E8,
             EnvironmentValidationId.E10,
             EnvironmentValidationId.E11,
+            EnvironmentValidationId.E12,
         ) and any(
             value is not None for value in e8_only_fields
         ):
-            raise ValueError("block-truth metadata is only valid for E8/E10/E11 results")
+            raise ValueError("block-truth metadata is only valid for E8/E10/E11/E12 results")
         if self.check_id not in (
             EnvironmentValidationId.E9,
             EnvironmentValidationId.E10,
@@ -758,12 +777,22 @@ class EnvironmentValidationResult:
         if self.check_id not in (
             EnvironmentValidationId.E10,
             EnvironmentValidationId.E11,
+            EnvironmentValidationId.E12,
         ) and any(value is not None for value in e10_e11_window_fields):
-            raise ValueError("observation-window metadata is only valid for E10/E11 results")
+            raise ValueError("observation-window metadata is only valid for E10/E11/E12 results")
+        if self.check_id not in (
+            EnvironmentValidationId.E11,
+            EnvironmentValidationId.E12,
+        ) and any(value is not None for value in e11_e12_frame_fields):
+            raise ValueError("portal-frame metadata is only valid for E11/E12 results")
         if self.check_id is not EnvironmentValidationId.E11 and any(
             value is not None for value in e11_only_fields
         ):
             raise ValueError("portal-activation metadata is only valid for E11 results")
+        if self.check_id is not EnvironmentValidationId.E12 and any(
+            value is not None for value in e12_only_fields
+        ):
+            raise ValueError("dimension-transition metadata is only valid for E12 results")
         if self.bucket_variant is not None:
             object.__setattr__(
                 self,
@@ -800,7 +829,7 @@ class EnvironmentValidationResult:
                     field_name,
                     validate_selected_item(value, field_name),
                 )
-        if self.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11):
+        if self.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E9, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12):
             for field_name in ("before_step_id", "after_step_id"):
                 value = getattr(self, field_name)
                 if value is not None and (type(value) is not int or value < 0):
@@ -843,7 +872,7 @@ class EnvironmentValidationResult:
                     object.__setattr__(
                         self, "stimulus_target", _require_identifier(self.stimulus_target, "stimulus_target")
                     )
-        if self.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E10, EnvironmentValidationId.E11):
+        if self.check_id in (EnvironmentValidationId.E8, EnvironmentValidationId.E10, EnvironmentValidationId.E11, EnvironmentValidationId.E12):
             if self.before_block_truth is not None:
                 object.__setattr__(
                     self, "before_block_truth", _block_truth_records(self.before_block_truth, "before_block_truth")
@@ -939,6 +968,29 @@ class EnvironmentValidationResult:
                     raise ValueError(f"{field_name} must be a non-negative int or None")
             if self.observation_window_ticks is not None and self.observation_window_ticks < 1:
                 raise ValueError("observation_window_ticks must be a positive int or None")
+        if self.check_id is EnvironmentValidationId.E12:
+            for field_name in (
+                "expected_frame_cells",
+                "observed_frame_cells",
+                "interior_cells",
+            ):
+                value = getattr(self, field_name)
+                if value is not None:
+                    object.__setattr__(
+                        self, field_name, _probe_cell_region(value, field_name)
+                    )
+            for field_name in (
+                "frame_block_count",
+                "before_portal_block_count",
+                "dimension_transition_observed_at_step",
+                "observation_window_ticks",
+                "observation_wait_count",
+            ):
+                value = getattr(self, field_name)
+                if value is not None and (type(value) is not int or value < 0):
+                    raise ValueError(f"{field_name} must be a non-negative int or None")
+            if self.observation_window_ticks is not None and self.observation_window_ticks < 1:
+                raise ValueError("observation_window_ticks must be a positive int or None")
         reset_failure_fields = (
             self.failure_stage,
             self.original_exception_type,
@@ -954,10 +1006,11 @@ class EnvironmentValidationResult:
             EnvironmentValidationId.E9,
             EnvironmentValidationId.E10,
             EnvironmentValidationId.E11,
+            EnvironmentValidationId.E12,
         ) and any(
             value is not None for value in reset_failure_fields
         ):
-            raise ValueError("reset-failure audit metadata is only valid for E5/E6/E7/E8/E9/E10/E11 results")
+            raise ValueError("reset-failure audit metadata is only valid for E5/E6/E7/E8/E9/E10/E11/E12 results")
         if self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E5:
             if not (
                 self.failure_stage == "reset"
@@ -1172,9 +1225,36 @@ class EnvironmentValidationResult:
                 and self.exception_traceback is not None
             ):
                 raise ValueError("E11 action_failed requires complete action audit")
+        elif self.outcome == "reset_failed" and self.check_id is EnvironmentValidationId.E12:
+            if not (
+                self.failure_stage == "reset"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+                and self.tested_action_count == 0
+                and self.translated_action_accepted is None
+                and all(
+                    value is None
+                    for value in (
+                        self.before_block_truth,
+                        self.dimension_transition_observed,
+                        self.active_portal_before,
+                        self.control_cells_unchanged,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "E12 reset_failed requires complete reset audit and zero transition evidence"
+                )
+        elif self.outcome == "action_failed" and self.check_id is EnvironmentValidationId.E12:
+            if not (
+                self.failure_stage == "action"
+                and self.original_exception_type is not None
+                and self.exception_traceback is not None
+            ):
+                raise ValueError("E12 action_failed requires complete action audit")
         elif any(value is not None for value in reset_failure_fields):
             raise ValueError(
-                "reset-failure audit metadata requires E5/E6/E7/E8/E9/E10/E11 reset_failed or E6/E7/E8/E9/E10/E11 action_failed"
+                "reset-failure audit metadata requires E5/E6/E7/E8/E9/E10/E11/E12 reset_failed or E6/E7/E8/E9/E10/E11/E12 action_failed"
             )
         movement_thresholds = (
             self.minimum_horizontal_distance,
@@ -1255,6 +1335,9 @@ class EnvironmentValidationResult:
         elif self.check_id is EnvironmentValidationId.E11:
             success_outcome = E11_SUCCESS_OUTCOME
             success_error = "success requires a clean independently observed E11 portal activation"
+        elif self.check_id is EnvironmentValidationId.E12:
+            success_outcome = E12_SUCCESS_OUTCOME
+            success_error = "success requires a clean independently observed E12 dimension transition"
         else:
             success_outcome = None
             success_error = "success is not defined for this validation case"
@@ -1607,6 +1690,40 @@ class EnvironmentValidationResult:
                     raise ValueError(
                         "E11 success requires one accepted flint_and_steel plus complete portal interior"
                     )
+            elif self.check_id is EnvironmentValidationId.E12:
+                if not (
+                    self.agent_id is not None
+                    and self.tested_step_id is not None
+                    and self.tested_step_id >= 1
+                    and self.action_type == E12_STIMULUS_ACTION_TYPE
+                    and self.translated_action_accepted is True
+                    and self.tested_action_count == 1
+                    and self.requested_duration_ticks == 8
+                    and self.observation_window_ticks == 100
+                    and self.observation_wait_count is not None
+                    and self.observation_wait_count <= 100
+                    and self.before_step_id == 0
+                    and self.after_step_id is not None
+                    and self.after_step_id >= 1
+                    and self.before_dimension == "minecraft:overworld"
+                    and self.after_dimension == "minecraft:the_nether"
+                    and self.frame_valid_before is True
+                    and self.frame_block_count == 14
+                    and self.before_portal_block_count == 6
+                    and self.active_portal_before is True
+                    and self.dimension_transition_observed is True
+                    and self.dimension_transition_observed_at_step is not None
+                    and self.dimension_transition_observed_at_step >= 1
+                    and self.truth_missing_count == 0
+                    and self.expected_frame_cells is not None
+                    and self.observed_frame_cells is not None
+                    and self.interior_cells is not None
+                    and len(self.interior_cells) == 6
+                    and self.before_block_truth is not None
+                ):
+                    raise ValueError(
+                        "E12 success requires one accepted move plus Overworld to Nether server truth"
+                    )
         elif self.outcome in {
             E0_SUCCESS_OUTCOME,
             E1_SUCCESS_OUTCOME,
@@ -1620,6 +1737,7 @@ class EnvironmentValidationResult:
             E9_SUCCESS_OUTCOME,
             E10_SUCCESS_OUTCOME,
             E11_SUCCESS_OUTCOME,
+            E12_SUCCESS_OUTCOME,
         }:
             raise ValueError(f"{self.outcome} requires success=True")
         if self.outcome == INVENTORY_MISMATCH:
@@ -2240,6 +2358,105 @@ class EnvironmentValidationResult:
                         }
                     ),
                     "target_changed": self.target_changed,
+                    "tested_action_count": self.tested_action_count,
+                    "tested_step_id": self.tested_step_id,
+                    "translated_action_accepted": self.translated_action_accepted,
+                    "truth_missing_count": self.truth_missing_count,
+                }
+            )
+        elif self.check_id is EnvironmentValidationId.E12:
+            payload.update(
+                {
+                    "action_type": self.action_type,
+                    "active_portal_before": self.active_portal_before,
+                    "after_dimension": self.after_dimension,
+                    "after_position": (
+                        None
+                        if self.after_position_x is None
+                        or self.after_position_y is None
+                        or self.after_position_z is None
+                        else [
+                            self.after_position_x,
+                            self.after_position_y,
+                            self.after_position_z,
+                        ]
+                    ),
+                    "after_step_id": self.after_step_id,
+                    "agent_id": self.agent_id,
+                    "anchor_source": self.anchor_source,
+                    "before_block_truth": (
+                        None
+                        if self.before_block_truth is None
+                        else [dict(item) for item in self.before_block_truth]
+                    ),
+                    "before_dimension": self.before_dimension,
+                    "before_portal_block_count": self.before_portal_block_count,
+                    "before_position": (
+                        None
+                        if self.before_position_x is None
+                        or self.before_position_y is None
+                        or self.before_position_z is None
+                        else [
+                            self.before_position_x,
+                            self.before_position_y,
+                            self.before_position_z,
+                        ]
+                    ),
+                    "before_step_id": self.before_step_id,
+                    "dimension_transition_observed": self.dimension_transition_observed,
+                    "dimension_transition_observed_at_step": (
+                        self.dimension_transition_observed_at_step
+                    ),
+                    "environment_launch_count": self.environment_launch_count,
+                    "exception_traceback": self.exception_traceback,
+                    "expected_frame_cells": (
+                        None
+                        if self.expected_frame_cells is None
+                        else [list(cell) for cell in self.expected_frame_cells]
+                    ),
+                    "failure_stage": self.failure_stage,
+                    "frame_block_count": self.frame_block_count,
+                    "frame_valid_before": self.frame_valid_before,
+                    "grid_anchor_world": (
+                        None
+                        if self.grid_anchor_x is None
+                        or self.grid_anchor_y is None
+                        or self.grid_anchor_z is None
+                        else [self.grid_anchor_x, self.grid_anchor_y, self.grid_anchor_z]
+                    ),
+                    "interior_cells": (
+                        None
+                        if self.interior_cells is None
+                        else [list(cell) for cell in self.interior_cells]
+                    ),
+                    "observation_wait_count": self.observation_wait_count,
+                    "observation_window_ticks": self.observation_window_ticks,
+                    "observed_frame_cells": (
+                        None
+                        if self.observed_frame_cells is None
+                        else [list(cell) for cell in self.observed_frame_cells]
+                    ),
+                    "original_exception_type": self.original_exception_type,
+                    "probe_grid_cells": (
+                        None
+                        if self.probe_grid_cells is None
+                        else [list(cell) for cell in self.probe_grid_cells]
+                    ),
+                    "probe_world_cells": (
+                        None
+                        if self.probe_world_cells is None
+                        else [list(cell) for cell in self.probe_world_cells]
+                    ),
+                    "requested_duration_ticks": self.requested_duration_ticks,
+                    "reset_attempt_count": self.reset_attempt_count,
+                    "stimulus_action": (
+                        None
+                        if self.action_type is None
+                        else {
+                            "action_type": self.action_type,
+                            "duration_ticks": self.requested_duration_ticks,
+                        }
+                    ),
                     "tested_action_count": self.tested_action_count,
                     "tested_step_id": self.tested_step_id,
                     "translated_action_accepted": self.translated_action_accepted,

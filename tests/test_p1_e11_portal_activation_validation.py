@@ -268,13 +268,13 @@ class PortalActivationRunnerTests(unittest.TestCase):
         self.assertTrue(forbidden.isdisjoint(payload))
         self.assertFalse(payload["integration_verified"])
 
-    def test_e12_and_hard_gate_remain_unstarted(self):
+    def test_e12_manifest_remains_not_run_and_hard_gate_unpassed(self):
         manifest = p1_validation_manifest()
         self.assertEqual(manifest[11]["status"], "not_run")
         self.assertEqual(manifest[12]["name"], "dimension_transition")
         self.assertEqual(manifest[12]["status"], "not_run")
         root = Path(__file__).resolve().parents[1]
-        self.assertFalse((root / "obsidianlink/env/integration/e12_run.py").exists())
+        self.assertTrue((root / "obsidianlink/env/integration/e12_run.py").exists())
         self.assertEqual(E11_PORTAL_ACTIVATION_CASE.check_id, EnvironmentValidationId.E11)
 
 
