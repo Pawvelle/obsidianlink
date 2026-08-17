@@ -1,0 +1,26 @@
+--- a/src/main/java/net/minecraft/server/integrated/IntegratedServer.java
++++ b/src/main/java/net/minecraft/server/integrated/IntegratedServer.java
+@@ -25,5 +25,6 @@
+ import net.minecraft.server.management.PlayerProfileCache;
+ import net.minecraft.util.SharedConstants;
++import net.minecraft.util.concurrent.TickDelayedTask;
+ import net.minecraft.util.registry.DynamicRegistries;
+ import net.minecraft.world.GameType;
+ import net.minecraft.world.chunk.listener.IChunkStatusListenerFactory;
+@@ -93,7 +94,17 @@
+       }
+    }
+ 
++   protected boolean canRun(TickDelayedTask runnable) {
++      // In MineRL's syncIntegratedServer mode the Render thread calls
++      // runSyncTick. While the client is paused, tick() intentionally skips
++      // super.tick(), so tickCounter cannot advance to release execute()
++      // tasks under MinecraftServer's normal three-tick delay. The sync tick
++      // still drains this executor; permit that drain without advancing world
++      // simulation.
++      return this.isGamePaused || super.canRun(runnable);
++   }
++
+    public boolean allowLoggingRcon() {
+       return true;
+    }

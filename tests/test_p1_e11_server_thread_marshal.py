@@ -17,6 +17,7 @@ E11_PATCH = PATCHES / "e11-drawing-decorator-obsidian.patch"
 MARSHAL_PATCH = PATCHES / "e11-server-thread-marshal.patch"
 NONBLOCKING_PATCH = PATCHES / "e11-server-thread-marshal-nonblocking.patch"
 AWAIT_AFTER_TICK_PATCH = PATCHES / "e11-server-thread-marshal-await-after-tick.patch"
+PAUSED_SERVER_EXECUTOR_PATCH = PATCHES / "e11-paused-server-executor.patch"
 DIAG_PATCH = PATCHES / "e11-portal-activation-diagnostic.patch"
 SITE_MCP = Path(
     "/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/MCP-Reborn"
@@ -285,6 +286,61 @@ class E11AwaitAfterTickMarshalPatchTests(unittest.TestCase):
             self.assertNotIn("Blocks.NETHER_PORTAL", env_text)
             for marker in FORBIDDEN_RUNTIME:
                 self.assertNotIn(marker, env_text, marker)
+
+
+class E11PausedServerExecutorPatchTests(unittest.TestCase):
+    def test_patch_releases_only_integrated_server_executor_tasks_while_paused(self) -> None:
+        text = PAUSED_SERVER_EXECUTOR_PATCH.read_text(encoding="utf-8")
+        self.assertIn("IntegratedServer.java", text)
+        self.assertIn("protected boolean canRun(TickDelayedTask runnable)", text)
+        self.assertIn("return this.isGamePaused || super.canRun(runnable);", text)
+        self.assertNotIn("setBlockState", text)
+        self.assertNotIn("Blocks.NETHER_PORTAL", text)
+        self.assertNotIn("placePortalBlocks", text)
+
+    def test_reconstructed_runtime_uses_paused_executor_drain(self) -> None:
+        source_root = SITE_MCP / "src/main/java"
+        self.assertTrue(source_root.is_dir(), "P1 MCP-Reborn source is missing")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env_dir = root / "src/main/java/com/minerl/multiagent/env"
+            server_dir = root / "src/main/java/net/minecraft/server/integrated"
+            env_dir.mkdir(parents=True)
+            server_dir.mkdir(parents=True)
+            shutil.copy(
+                source_root / "com/minerl/multiagent/env/EnvServer.java",
+                env_dir / "EnvServer.java",
+            )
+            shutil.copy(
+                source_root / "net/minecraft/server/integrated/IntegratedServer.java",
+                server_dir / "IntegratedServer.java",
+            )
+            _apply(ENVSERVER_PATCH, root)
+            _apply(DRAW_PATCH, root)
+            _apply(E11_PATCH, root)
+            _apply(NONBLOCKING_PATCH, root)
+            _apply(AWAIT_AFTER_TICK_PATCH, root)
+            _apply(PAUSED_SERVER_EXECUTOR_PATCH, root)
+            env_text = (env_dir / "EnvServer.java").read_text(encoding="utf-8")
+            server_text = (server_dir / "IntegratedServer.java").read_text(
+                encoding="utf-8"
+            )
+            step = env_text[
+                env_text.index("private void stepClient") : env_text.index(
+                    "private Stream<Object> getAgentHandlers"
+                )
+            ]
+            self.assertLess(
+                step.index("waitForNextObservation();"),
+                step.index("awaitPendingFlintAndSteelMarshal();"),
+            )
+            self.assertIn("queueFlintAndSteelUseToServerThread", env_text)
+            self.assertIn("server.execute(() -> {", env_text)
+            self.assertNotIn("Blocks.NETHER_PORTAL", env_text)
+            self.assertIn("import net.minecraft.util.concurrent.TickDelayedTask;", server_text)
+            self.assertIn(
+                "return this.isGamePaused || super.canRun(runnable);", server_text
+            )
 
 
 class RecordedE11ServerThreadMarshalLiveTests(unittest.TestCase):
