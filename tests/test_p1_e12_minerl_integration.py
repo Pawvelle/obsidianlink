@@ -17,15 +17,14 @@ from obsidianlink.env.integration.e12_adapter import (
 )
 from obsidianlink.env.integration.e12_config import (
     E12_AGENT_ID,
-    E12_CALIBRATION,
     E12_CONTROL_WORLD_CELLS,
     E12_FRAME_BLOCKS,
+    E12_INITIAL_DRAW_BLOCKS,
     E12_INTERIOR_CELLS,
     E12_PROBE_GRID_CELLS,
     E12_PROBE_WORLD_CELLS,
     E12_SPAWN_WORLD,
     build_e12_compatibility_task,
-    e12_initial_blocks,
 )
 from obsidianlink.env.minerl_backend import MineRLEnvironmentBackend
 from obsidianlink.env.portal_spec import (
@@ -199,9 +198,9 @@ class E12MineRLIntegrationTests(unittest.TestCase):
         self.assertIs(task.scenario_parameters["portal_preplaced"], True)
         self.assertIs(task.scenario_parameters["fire_preplaced"], False)
         self.assertIs(task.scenario_parameters["needs_e12_runtime_portal_fixture_authorization"], True)
-        self.assertEqual(len(E12_CALIBRATION.frame_blocks), 14)
-        self.assertEqual(len(E12_CALIBRATION.interior_cells), 6)
-        self.assertEqual(E12_CALIBRATION.probe_world_cells, E12_PROBE_WORLD_CELLS)
+        self.assertEqual(len(E12_FRAME_BLOCKS), 14)
+        self.assertEqual(len(E12_INTERIOR_CELLS), 6)
+        self.assertEqual(len(E12_PROBE_WORLD_CELLS), 22)
 
     def test_e12_envspec_xml_places_active_portal_without_fire(self):
         xml = PortalA0EnvSpec(
@@ -211,7 +210,7 @@ class E12MineRLIntegrationTests(unittest.TestCase):
             initial_position=(0, 4, 0),
             initial_yaw=0.0,
             initial_pitch=0.0,
-            initial_blocks=e12_initial_blocks(),
+            initial_blocks=E12_INITIAL_DRAW_BLOCKS,
             allow_active_portal_fixture=True,
         ).to_xml()
         draw = parse_mission_draw_blocks(xml)
@@ -223,7 +222,7 @@ class E12MineRLIntegrationTests(unittest.TestCase):
         self.assertEqual(parse_mission_draw_blocks(default_xml), ())
         with self.assertRaisesRegex(ValueError, "mutually exclusive"):
             PortalA0EnvSpec(
-                initial_blocks=e12_initial_blocks(),
+                initial_blocks=E12_INITIAL_DRAW_BLOCKS,
                 allow_obsidian_frame_fixture=True,
                 allow_active_portal_fixture=True,
             )

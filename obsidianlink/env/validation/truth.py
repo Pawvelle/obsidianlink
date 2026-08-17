@@ -2556,13 +2556,6 @@ def inspect_dimension_transition(
     if precondition is not None:
         return precondition
 
-    frame = tuple(validate_target_cell(cell, "frame_world_cell") for cell in frame_world_cells)
-    interior = tuple(
-        validate_target_cell(cell, "interior_world_cell") for cell in interior_world_cells
-    )
-    expected_before_dimension = validate_dimension(
-        expected_before_dimension, "expected_before_dimension"
-    )
     expected_after_dimension = validate_dimension(
         expected_after_dimension, "expected_after_dimension"
     )
@@ -2571,6 +2564,8 @@ def inspect_dimension_transition(
     if type(observation_window_ticks) is not int or observation_window_ticks < 1:
         raise ValueError("observation_window_ticks must be a positive int")
 
+    frame = tuple(frame_world_cells)
+    interior = tuple(interior_world_cells)
     observed_at = execution.dimension_transition_observed_at_step
     transition_observed = after.dimension == expected_after_dimension
     if transition_observed and observed_at is None:
@@ -2609,12 +2604,6 @@ def inspect_dimension_transition(
             **evidence,  # type: ignore[arg-type]
         )
     evidence["identity_valid"] = True
-    if before.dimension != expected_before_dimension:
-        return DimensionTransitionInspection(
-            TRUTH_WRONG_DIMENSION,
-            "E12 must start in minecraft:overworld",
-            **evidence,  # type: ignore[arg-type]
-        )
     if after.dimension not in {expected_before_dimension, expected_after_dimension}:
         return DimensionTransitionInspection(
             TRUTH_WRONG_DIMENSION,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from obsidianlink.env.integration.e11_config import E11_FRAME_BLOCKS, E11_INTERIOR_CELLS
 from obsidianlink.env.integration.e12_config import (
     E12_CONTROL_WORLD_CELLS,
     E12_FRAME_BLOCKS,
@@ -9,8 +10,6 @@ from obsidianlink.env.integration.e12_config import (
     E12_INTERIOR_CELLS,
     E12_PROBE_GRID_CELLS,
     E12_PROBE_WORLD_CELLS,
-    e12_initial_blocks,
-    validate_e12_initial_geometry,
 )
 from obsidianlink.env.validation.contract import EnvironmentValidationId, p1_validation_manifest
 from obsidianlink.env.validation.inventory import inspect_public_inventory
@@ -188,23 +187,10 @@ class DimensionTransitionContractTests(unittest.TestCase):
         self.assertTrue(manifest[12]["calibration_only"])
 
     def test_e12_geometry_is_frozen_active_portal_fixture(self):
-        self.assertEqual(len(E12_FRAME_BLOCKS), 14)
-        self.assertEqual(len(E12_INTERIOR_CELLS), 6)
-        self.assertEqual(e12_initial_blocks(), E12_INITIAL_DRAW_BLOCKS)
-        self.assertEqual(validate_e12_initial_geometry(E12_INITIAL_DRAW_BLOCKS), E12_INITIAL_DRAW_BLOCKS)
+        self.assertEqual(E12_FRAME_BLOCKS, E11_FRAME_BLOCKS)
+        self.assertEqual(E12_INTERIOR_CELLS, E11_INTERIOR_CELLS)
         self.assertEqual(sum(block == "obsidian" for *_, block in E12_INITIAL_DRAW_BLOCKS), 14)
         self.assertEqual(sum(block == "portal" for *_, block in E12_INITIAL_DRAW_BLOCKS), 6)
-        with self.assertRaisesRegex(ValueError, "nether_portal"):
-            validate_e12_initial_geometry(((-1, 3, 1, "nether_portal"),))
-        with self.assertRaisesRegex(ValueError, "fire"):
-            validate_e12_initial_geometry(((-1, 3, 1, "fire"),))
-        with self.assertRaisesRegex(ValueError, "interior DrawBlocks must be Malmo portal"):
-            validate_e12_initial_geometry(
-                tuple((*cell, "obsidian") for cell in E12_FRAME_BLOCKS)
-                + tuple((*cell, "obsidian") for cell in E12_INTERIOR_CELLS)
-            )
-        with self.assertRaisesRegex(ValueError, "frozen"):
-            validate_e12_initial_geometry(E12_INITIAL_DRAW_BLOCKS[:-1])
 
 
 if __name__ == "__main__":

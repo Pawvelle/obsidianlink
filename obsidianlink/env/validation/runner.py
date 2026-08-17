@@ -25,6 +25,18 @@ from obsidianlink.env.validation.camera import (
     inspect_camera_change,
 )
 
+from obsidianlink.env.validation.cases.dimension_transition import (
+    E12_CONTROL_WORLD_CELLS,
+    E12_DURATION_TICKS,
+    E12_FRAME_BLOCKS,
+    E12_INTERIOR_CELLS,
+    E12_MOVE_PARAMETERS,
+    E12_OBSERVATION_WINDOW_TICKS,
+    E12_POSITION_MAX,
+    E12_POSITION_MIN,
+    E12_PROBE_GRID_CELLS,
+    E12_PROBE_WORLD_CELLS,
+)
 from obsidianlink.env.validation.cases.lifecycle import initial_state_exists
 from obsidianlink.env.validation.contract import (
     EnvironmentValidationCase,
@@ -1166,76 +1178,19 @@ class EnvironmentValidationRunner:
                     error="invalid E11 calibration: " + _format_error(exc),
                 )
 
-        e12_probe_world: tuple[tuple[int, int, int], ...] | None = None
-        e12_probe_grid: tuple[tuple[int, int, int], ...] | None = None
-        e12_frame_world: tuple[tuple[int, int, int], ...] | None = None
-        e12_interior_world: tuple[tuple[int, int, int], ...] | None = None
-        e12_controls: tuple[tuple[int, int, int], ...] | None = None
-        e12_position_min: tuple[float, float, float] | None = None
-        e12_position_max: tuple[float, float, float] | None = None
-        e12_observation_window: int | None = None
-        e12_duration_ticks: int | None = None
+        e12_probe_world = E12_PROBE_WORLD_CELLS if case.check_id is EnvironmentValidationId.E12 else None
+        e12_probe_grid = E12_PROBE_GRID_CELLS if case.check_id is EnvironmentValidationId.E12 else None
+        e12_frame_world = E12_FRAME_BLOCKS if case.check_id is EnvironmentValidationId.E12 else None
+        e12_interior_world = E12_INTERIOR_CELLS if case.check_id is EnvironmentValidationId.E12 else None
+        e12_controls = E12_CONTROL_WORLD_CELLS if case.check_id is EnvironmentValidationId.E12 else None
+        e12_position_min = E12_POSITION_MIN if case.check_id is EnvironmentValidationId.E12 else None
+        e12_position_max = E12_POSITION_MAX if case.check_id is EnvironmentValidationId.E12 else None
+        e12_observation_window = (
+            E12_OBSERVATION_WINDOW_TICKS if case.check_id is EnvironmentValidationId.E12 else None
+        )
+        e12_duration_ticks = E12_DURATION_TICKS if case.check_id is EnvironmentValidationId.E12 else None
         if case.check_id is EnvironmentValidationId.E12:
-            try:
-                e12_duration_ticks = 8
-                requested_duration_ticks = e12_duration_ticks
-                e12_frame_world = tuple(
-                    validate_target_cell(cell, "frame_world_cell")
-                    for cell in (
-                        (-1, 3, 1),
-                        (-1, 4, 1),
-                        (-1, 5, 1),
-                        (-1, 6, 1),
-                        (-1, 7, 1),
-                        (0, 3, 1),
-                        (0, 7, 1),
-                        (1, 3, 1),
-                        (1, 7, 1),
-                        (2, 3, 1),
-                        (2, 4, 1),
-                        (2, 5, 1),
-                        (2, 6, 1),
-                        (2, 7, 1),
-                    )
-                )
-                e12_interior_world = tuple(
-                    validate_target_cell(cell, "interior_world_cell")
-                    for cell in (
-                        (0, 4, 1),
-                        (1, 4, 1),
-                        (0, 5, 1),
-                        (1, 5, 1),
-                        (0, 6, 1),
-                        (1, 6, 1),
-                    )
-                )
-                e12_controls = (
-                    validate_target_cell((0, 8, 1), "control_above_frame"),
-                    validate_target_cell((0, 4, 3), "control_behind_frame"),
-                )
-                e12_probe_world = e12_frame_world + e12_interior_world + e12_controls
-                e12_probe_grid = tuple(
-                    spawn_relative_grid_cell(cell, (0, 4, 0)) for cell in e12_probe_world
-                )
-                e12_position_min = (-2.0, 2.0, -2.0)
-                e12_position_max = (3.0, 8.0, 4.0)
-                e12_observation_window = 100
-                if len(e12_frame_world) != 14 or len(e12_interior_world) != 6:
-                    raise ValueError("E12 frozen frame/interior sizes are invalid")
-                if e12_probe_world is None or len(e12_probe_world) != 22:
-                    raise ValueError("E12 probe set must be frame + interior + controls")
-            except (TypeError, ValueError) as exc:
-                return _result(
-                    case=case,
-                    episode_id=episode_id,
-                    success=False,
-                    outcome="runtime_error",
-                    created=False,
-                    reset_completed=False,
-                    initial_state_present=False,
-                    closed=False,
-                    error="invalid E12 calibration: " + _format_error(exc),
-                )
+            requested_duration_ticks = E12_DURATION_TICKS
 
         created = False
         reset_completed = False
@@ -2321,12 +2276,7 @@ class EnvironmentValidationRunner:
                                                 {
                                                     "action_type": "move",
                                                     "duration_ticks": e12_duration_ticks,
-                                                    "parameters": {
-                                                        "forward": 1.0,
-                                                        "strafe": 0.0,
-                                                        "sprint": False,
-                                                        "jump": False,
-                                                    },
+                                                    "parameters": dict(E12_MOVE_PARAMETERS),
                                                 },
                                                 allow_nan=False,
                                                 sort_keys=True,

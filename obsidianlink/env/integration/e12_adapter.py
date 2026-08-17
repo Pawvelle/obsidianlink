@@ -9,20 +9,21 @@ prompt, memory, or shared agent state.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping
 
 from obsidianlink.core.types import BackendStep, MacroAction
 from obsidianlink.env.integration.e0_adapter import MineRLE0LifecycleAdapter, public_initial_state
-from obsidianlink.env.integration.e8_adapter import server_truth_snapshot
+from obsidianlink.env.integration.e8_adapter import (
+    _cell_component,
+    _scalar,
+    server_truth_snapshot,
+)
 from obsidianlink.env.integration.e12_config import (
     E12_AGENT_ID,
     E12_DURATION_TICKS,
-    E12_FORWARD,
-    E12_JUMP,
+    E12_MOVE_PARAMETERS,
     E12_PROBE_WORLD_CELLS,
-    E12_SPRINT,
     E12_STIMULUS_ACTION_TYPE,
-    E12_STRAFE,
     build_e12_compatibility_task,
 )
 from obsidianlink.env.validation.movement import finite_number
@@ -33,20 +34,6 @@ from obsidianlink.env.validation.truth import (
     ServerTruthSnapshot,
     validate_dimension,
 )
-
-
-def _scalar(value: object) -> object:
-    shape = getattr(value, "shape", None)
-    item = getattr(value, "item", None)
-    if shape == () and callable(item):
-        return item()
-    return value
-
-
-def _cell_component(value: object, index: int) -> object:
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) and len(value) == 3:
-        return value[index]
-    raise ValueError("coordinate sequence is invalid")
 
 
 def dimension_truth_snapshot(value: object) -> DimensionTruthSnapshot:
@@ -146,15 +133,10 @@ class MineRLE12DimensionTransitionAdapter(MineRLE0LifecycleAdapter):
     def execute_transition_stimulus(self, action: MacroAction) -> DimensionTransitionActionExecution:
         if not isinstance(action, MacroAction) or action.action_type != E12_STIMULUS_ACTION_TYPE:
             raise ValueError("E12 stimulus must be MacroAction('move')")
-        parameters = dict(action.parameters)
         if (
             action.target is not None
             or action.duration_ticks != E12_DURATION_TICKS
-            or parameters.get("forward") != E12_FORWARD
-            or parameters.get("strafe") != E12_STRAFE
-            or parameters.get("sprint") is not E12_SPRINT
-            or parameters.get("jump") is not E12_JUMP
-            or set(parameters) != {"forward", "strafe", "sprint", "jump"}
+            or dict(action.parameters) != dict(E12_MOVE_PARAMETERS)
         ):
             raise ValueError("E12 stimulus differs from frozen calibration")
         self._tested_action_count += 1

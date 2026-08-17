@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from pathlib import Path
 import unittest
 
 from obsidianlink.env.validation import (
     E12_DIMENSION_TRANSITION_CASE,
     EnvironmentValidationRunner,
     p1_validation_manifest,
+)
+from obsidianlink.env.validation.cases.dimension_transition import (
+    E12_CONTROL_WORLD_CELLS,
+    E12_FRAME_BLOCKS,
+    E12_INTERIOR_CELLS,
+    E12_PROBE_GRID_CELLS,
+    E12_PROBE_WORLD_CELLS,
 )
 from obsidianlink.env.validation.contract import EnvironmentValidationId
 from obsidianlink.env.validation.truth import (
@@ -17,26 +23,11 @@ from obsidianlink.env.validation.truth import (
 )
 
 
-FRAME = (
-    (-1, 3, 1),
-    (-1, 4, 1),
-    (-1, 5, 1),
-    (-1, 6, 1),
-    (-1, 7, 1),
-    (0, 3, 1),
-    (0, 7, 1),
-    (1, 3, 1),
-    (1, 7, 1),
-    (2, 3, 1),
-    (2, 4, 1),
-    (2, 5, 1),
-    (2, 6, 1),
-    (2, 7, 1),
-)
-INTERIOR = ((0, 4, 1), (1, 4, 1), (0, 5, 1), (1, 5, 1), (0, 6, 1), (1, 6, 1))
-CONTROLS = ((0, 8, 1), (0, 4, 3))
-PROBES = FRAME + INTERIOR + CONTROLS
-GRIDS = tuple((cell[0], cell[1] - 4, cell[2]) for cell in PROBES)
+FRAME = E12_FRAME_BLOCKS
+INTERIOR = E12_INTERIOR_CELLS
+CONTROLS = E12_CONTROL_WORLD_CELLS
+PROBES = E12_PROBE_WORLD_CELLS
+GRIDS = E12_PROBE_GRID_CELLS
 
 
 def _before_map():
@@ -251,8 +242,6 @@ class DimensionTransitionRunnerTests(unittest.TestCase):
         manifest = p1_validation_manifest()
         self.assertEqual(manifest[12]["status"], "not_run")
         self.assertEqual(E12_DIMENSION_TRANSITION_CASE.check_id, EnvironmentValidationId.E12)
-        root = Path(__file__).resolve().parents[1]
-        self.assertTrue((root / "obsidianlink/env/integration/e12_run.py").exists())
 
 
 if __name__ == "__main__":

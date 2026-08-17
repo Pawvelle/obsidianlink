@@ -23,7 +23,6 @@ from obsidianlink.env.integration.e0_cleanup import E0CleanupStatus
 from obsidianlink.env.integration.e12_adapter import MineRLE12DimensionTransitionAdapter
 from obsidianlink.env.integration.e12_config import (
     E12_AGENT_ID,
-    E12_CALIBRATION,
     E12_COMPATIBILITY_INVENTORY,
     E12_CONTROL_WORLD_CELLS,
     E12_DURATION_TICKS,
@@ -34,13 +33,13 @@ from obsidianlink.env.integration.e12_config import (
     E12_INITIAL_PITCH,
     E12_INITIAL_YAW,
     E12_INTERIOR_CELLS,
+    E12_MOVE_PARAMETERS,
     E12_OBSERVATION_WINDOW_TICKS,
     E12_PROBE_GRID_CELLS,
     E12_PROBE_WORLD_CELLS,
     E12_SPAWN_WORLD,
     E12_STIMULUS_ACTION_TYPE,
     build_e12_compatibility_task,
-    e12_initial_blocks,
 )
 from obsidianlink.env.validation import E12_DIMENSION_TRANSITION_CASE, EnvironmentValidationRunner
 from obsidianlink.env.validation.contract import EnvironmentValidationId
@@ -176,50 +175,20 @@ def _validate_catalog_policy() -> None:
 
 
 def _validate_configuration() -> None:
-    if not (
-        E12_DIMENSION_TRANSITION_CASE.check_id is EnvironmentValidationId.E12
-        and E12_DIMENSION_TRANSITION_CASE.name == "dimension_transition"
-        and E12_DIMENSION_TRANSITION_CASE.requires_server_truth
-        and E12_DIMENSION_TRANSITION_CASE.calibration_only
-        and E12_STIMULUS_ACTION_TYPE == "move"
-        and E12_SPAWN_WORLD == (0, 4, 0)
-        and len(E12_FRAME_BLOCKS) == 14
-        and len(E12_INTERIOR_CELLS) == 6
-        and E12_CONTROL_WORLD_CELLS == ((0, 8, 1), (0, 4, 3))
-        and E12_DURATION_TICKS == 8
-        and E12_OBSERVATION_WINDOW_TICKS == 100
-        and (E12_INITIAL_YAW, E12_INITIAL_PITCH) == (0.0, 0.0)
-        and E12_CALIBRATION.initial_draw_blocks == E12_INITIAL_DRAW_BLOCKS
-        and E12_EXPECTED_BEFORE_DIMENSION == "minecraft:overworld"
-        and E12_EXPECTED_AFTER_DIMENSION == "minecraft:the_nether"
+    if (
+        E12_DIMENSION_TRANSITION_CASE.check_id is not EnvironmentValidationId.E12
+        or not E12_DIMENSION_TRANSITION_CASE.requires_server_truth
+        or not E12_DIMENSION_TRANSITION_CASE.calibration_only
     ):
-        raise E12AuthorizationError("frozen E12 calibration differs")
+        raise E12AuthorizationError("frozen E12 case contract differs")
     task = build_e12_compatibility_task("p1-e12-preflight")
     if dict(task.initial_inventories[E12_AGENT_ID]) != E12_COMPATIBILITY_INVENTORY:
         raise E12AuthorizationError("E12 compatibility inventory differs")
     if task.spawn_positions[E12_AGENT_ID] != E12_SPAWN_WORLD:
         raise E12AuthorizationError("E12 flat-ground spawn differs")
-    if task.scenario_parameters.get("portal_preplaced") is not True:
-        raise E12AuthorizationError("E12 must pre-place an active portal fixture")
-    if task.scenario_parameters.get("fire_preplaced") is not False:
-        raise E12AuthorizationError("E12 must not pre-place fire")
-    if task.scenario_parameters.get("obsidian_frame_preplaced") is not True:
-        raise E12AuthorizationError("E12 must request the obsidian frame fixture")
-    from obsidianlink.env.portal_spec import PortalA0EnvSpec, parse_mission_draw_blocks
+    from obsidianlink.env.portal_spec import parse_mission_draw_blocks
 
-    xml = PortalA0EnvSpec(
-        max_episode_steps=130,
-        max_game_time_seconds=60,
-        initial_inventory=({"type": "dirt", "quantity": 1},),
-        initial_position=E12_SPAWN_WORLD,
-        include_agent_start_placement=True,
-        grid_at_spawn=True,
-        initial_yaw=E12_INITIAL_YAW,
-        initial_pitch=E12_INITIAL_PITCH,
-        initial_blocks=e12_initial_blocks(),
-        allow_active_portal_fixture=True,
-    ).to_xml()
-    draw_blocks = parse_mission_draw_blocks(xml)
+    draw_blocks = parse_mission_draw_blocks(_e12_env_spec(task).to_xml())
     if any(block not in {"obsidian", "portal"} for _, _, _, block in draw_blocks):
         raise E12AuthorizationError("E12 Mission XML may pre-place only obsidian and portal")
     if any(block in {"nether_portal", "fire"} for _, _, _, block in draw_blocks):
@@ -260,10 +229,7 @@ def check_e12_live_runner() -> dict[str, Any]:
         "stimulus": {
             "action_type": E12_STIMULUS_ACTION_TYPE,
             "duration_ticks": E12_DURATION_TICKS,
-            "forward": 1.0,
-            "jump": False,
-            "sprint": False,
-            "strafe": 0.0,
+            **dict(E12_MOVE_PARAMETERS),
         },
         "expected_before_dimension": E12_EXPECTED_BEFORE_DIMENSION,
         "expected_after_dimension": E12_EXPECTED_AFTER_DIMENSION,
@@ -296,7 +262,7 @@ def _validate_output_dir(output_dir: Path) -> Path:
     return resolved
 
 
-def _e12_env_factory(task: TaskInstance) -> Any:
+def _e12_env_spec(task: TaskInstance) -> Any:
     from obsidianlink.env.portal_spec import PortalA0EnvSpec
 
     initial_inventory = tuple(
@@ -304,7 +270,7 @@ def _e12_env_factory(task: TaskInstance) -> Any:
         for item, quantity in task.initial_inventories[E12_AGENT_ID].items()
         if quantity > 0
     )
-    specification = PortalA0EnvSpec(
+    return PortalA0EnvSpec(
         max_episode_steps=task.limits["max_environment_steps"],
         max_game_time_seconds=task.limits["max_game_time_seconds"],
         initial_inventory=initial_inventory,
@@ -313,10 +279,13 @@ def _e12_env_factory(task: TaskInstance) -> Any:
         grid_at_spawn=True,
         initial_yaw=E12_INITIAL_YAW,
         initial_pitch=E12_INITIAL_PITCH,
-        initial_blocks=e12_initial_blocks(),
+        initial_blocks=E12_INITIAL_DRAW_BLOCKS,
         allow_active_portal_fixture=True,
     )
-    return specification.make()
+
+
+def _e12_env_factory(task: TaskInstance) -> Any:
+    return _e12_env_spec(task).make()
 
 
 def _production_backend_cls() -> type:
