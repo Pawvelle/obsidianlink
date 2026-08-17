@@ -21,6 +21,7 @@ from obsidianlink.core.task_catalog import load_task_catalog
 from obsidianlink.env.integration.e0_cleanup import (
     ProcessReleaseStatus,
     inspect_os_process_release,
+    merge_tracked_descendants,
     residual_descendants,
     tracked_descendants,
 )
@@ -637,7 +638,7 @@ def execute_case_subprocess(
         )
         deadline = time.monotonic() + timeout_seconds
         while process.poll() is None and time.monotonic() < deadline:
-            tracked.update(tracked_descendants(process.pid))
+            merge_tracked_descendants(tracked, tracked_descendants(process.pid))
             time.sleep(0.25)
         if process.poll() is None:
             timed_out = True

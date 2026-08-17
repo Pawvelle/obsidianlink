@@ -163,16 +163,32 @@ def tracked_descendants(root_pid: int, table: Mapping[int, tuple[int, str]] | No
     return {pid: snapshot[pid][1] for pid in descendant_pids(root_pid, snapshot) if pid in snapshot}
 
 
+def merge_tracked_descendants(
+    tracked: dict[int, str],
+    observed: Mapping[int, str],
+) -> None:
+    """Keep the strongest JVM identity seen for each PID.
+
+    A later degraded command such as ``(java)`` must not replace a
+    previously observed ``java ...`` command line. A later complete
+    command may replace a weaker placeholder.
+    """
+
+    for pid, command in observed.items():
+        previous = tracked.get(pid)
+        if previous is not None and is_minerl_runtime_command(previous):
+            continue
+        tracked[pid] = command
+
+
 def residual_descendants(
     tracked: Mapping[int, str],
     table: Mapping[int, tuple[int, str]] | None = None,
 ) -> dict[int, str]:
+    """Return tracked PIDs that still exist. Identity text is not required."""
+
     snapshot = snapshot_process_table() if table is None else table
-    return {
-        pid: command
-        for pid, command in tracked.items()
-        if pid in snapshot and snapshot[pid][1] == command
-    }
+    return {pid: snapshot[pid][1] for pid in tracked if pid in snapshot}
 
 
 @dataclass(frozen=True)
@@ -228,7 +244,7 @@ def inspect_os_process_release(
 
     ``env.close()`` is ignored here. Proven only when a Java/Minecraft
     child was seen, the case subprocess exited, and no tracked PID
-    remains with the same command.
+    remains in the process table.
     """
 
     _require_bool(subprocess_exited, "subprocess_exited")

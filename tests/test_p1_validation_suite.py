@@ -12,8 +12,13 @@ from unittest.mock import patch
 
 from obsidianlink.env.integration.e0_cleanup import (
     PROCESS_RELEASE_NOT_OBSERVED,
+    PROCESS_RELEASE_RESIDUAL,
+    PROCESS_RELEASE_SUBPROCESS_ALIVE,
     descendant_pids,
     inspect_os_process_release,
+    is_minerl_runtime_command,
+    merge_tracked_descendants,
+    residual_descendants,
     snapshot_process_table,
 )
 from obsidianlink.env.integration.e0_run import (
@@ -157,6 +162,77 @@ class ProcessReleaseInspectionTests(unittest.TestCase):
             99: (1, "unrelated"),
         }
         self.assertEqual(descendant_pids(10, table), {11, 12})
+
+    def test_retained_java_identity_survives_degraded_command(self) -> None:
+        tracked: dict[int, str] = {}
+        merge_tracked_descendants(
+            tracked,
+            {2785: "java -Xmx4G -XstartOnFirstThread -jar mcprec-6.13.jar --envPort=9594"},
+        )
+        merge_tracked_descendants(tracked, {2785: "(java)"})
+        self.assertTrue(is_minerl_runtime_command(tracked[2785]))
+        self.assertNotEqual(tracked[2785], "(java)")
+        status = inspect_os_process_release(
+            tracked_children=[{"pid": 2785, "command": tracked[2785]}],
+            residual_children=(),
+            subprocess_exited=True,
+        )
+        self.assertTrue(status.minerl_runtime_observed)
+        self.assertTrue(status.process_release_proven)
+
+    def test_parenthesized_java_alone_is_not_runtime_identity(self) -> None:
+        self.assertFalse(is_minerl_runtime_command("(java)"))
+        tracked: dict[int, str] = {}
+        merge_tracked_descendants(tracked, {2785: "(java)"})
+        status = inspect_os_process_release(
+            tracked_children=[{"pid": 2785, "command": tracked[2785]}],
+            residual_children=(),
+            subprocess_exited=True,
+        )
+        self.assertFalse(status.minerl_runtime_observed)
+        self.assertFalse(status.process_release_proven)
+        self.assertEqual(status.limitation, PROCESS_RELEASE_NOT_OBSERVED)
+
+    def test_observed_java_with_residual_pid_is_not_proven(self) -> None:
+        child = {"pid": 9, "command": "java -Xmx4G -jar mcprec-6.13.jar"}
+        residual = residual_descendants(
+            {9: child["command"]},
+            table={9: (1, "(java)")},
+        )
+        self.assertEqual(residual, {9: "(java)"})
+        status = inspect_os_process_release(
+            tracked_children=[child],
+            residual_children=[{"pid": 9, "command": residual[9]}],
+            subprocess_exited=True,
+        )
+        self.assertTrue(status.minerl_runtime_observed)
+        self.assertFalse(status.process_release_proven)
+        self.assertEqual(status.limitation, PROCESS_RELEASE_RESIDUAL)
+
+    def test_live_subprocess_is_not_proven(self) -> None:
+        status = inspect_os_process_release(
+            tracked_children=[
+                {"pid": 9, "command": "java -Xmx4G -jar mcprec-6.13.jar"}
+            ],
+            residual_children=(),
+            subprocess_exited=False,
+        )
+        self.assertFalse(status.process_release_proven)
+        self.assertEqual(status.limitation, PROCESS_RELEASE_SUBPROCESS_ALIVE)
+
+    def test_weaker_command_can_upgrade_to_java_identity(self) -> None:
+        tracked: dict[int, str] = {}
+        merge_tracked_descendants(tracked, {7: "(java)"})
+        merge_tracked_descendants(tracked, {7: "/usr/bin/java -jar mcprec.jar"})
+        self.assertEqual(tracked[7], "/usr/bin/java -jar mcprec.jar")
+
+    def test_residual_uses_pid_presence_not_command_text(self) -> None:
+        tracked = {9: "java -Xmx4G -jar mcprec-6.13.jar"}
+        self.assertEqual(residual_descendants(tracked, table={}), {})
+        self.assertEqual(
+            residual_descendants(tracked, table={9: (1, "(java)")}),
+            {9: "(java)"},
+        )
 
 
 class SuiteOrderingTests(unittest.TestCase):
