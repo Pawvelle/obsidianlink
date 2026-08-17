@@ -8,6 +8,15 @@ This is not E12 and not `integration_verified`.
 
 Status: **FAILED** / live #3 queued-then-timeout; live #4 await-after-tick still timeout / no further patch round
 
+## Paused-executor validation (`8b2258e`)
+
+The patch does not call `super.tick()` or change PortalSize, geometry,
+the evaluator, the observation window, E12, or audio code. But its
+`isGamePaused || super.canRun(...)` condition admits every queued
+`TickDelayedTask` while paused, not just E11. It therefore broadens
+generic paused-executor semantics and is not approved for deployment or
+a fresh E11 run. Historical live #1--#4 evidence is unchanged.
+
 ## How scheduling avoided the live #2 deadlock (and what remained)
 
 `patches/minerl/e11-server-thread-marshal-nonblocking.patch` still
