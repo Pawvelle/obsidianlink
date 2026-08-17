@@ -360,6 +360,11 @@ def run_benchmark(
             if not isinstance(next_observations, Mapping) or not next_observations:
                 raise RuntimeError("backend.step result must expose observations mapping")
             observations = next_observations
+            if getattr(step_result, "terminated", False) or getattr(
+                step_result, "truncated", False
+            ):
+                # Episode ended naturally; do not call backend.step() again.
+                break
         runner_status = "completed"
     except Exception as error:
         evidence.append(
@@ -386,6 +391,11 @@ def run_benchmark(
                     payload={"error_type": type(error).__name__, "error": str(error)},
                 )
             )
+            if runner_status == "completed":
+                # close failure must not let the kernel claim success; the
+                # evaluator is forced to reflect the failed close via
+                # runner_status='failed' and the recorded close_error evidence.
+                runner_status = "failed"
 
     state = dict(initial_evaluator_state or {})
     state["evidence"] = tuple(evidence)

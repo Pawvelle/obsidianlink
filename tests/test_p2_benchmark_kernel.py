@@ -357,6 +357,106 @@ class BenchmarkKernelSmokeTest(TestCase):
         self.assertEqual(len(error_records), 1)
         self.assertEqual(error_records[0].channel, EvidenceChannel.EVALUATOR_ONLY)
 
+    def test_terminated_observation_stops_step_loop(self) -> None:
+        # Backend terminates after the first step; the driver must not call
+        # backend.step() again even though max_steps would allow more.
+        terminating_backend = type("TerminatingBackend", (StubBackend,), {})()
+        step_calls = {"n": 0}
+
+        def _terminating_step(self, actions):  # type: ignore[no-redef]
+            step_calls["n"] += 1
+            return BackendStep(
+                episode_id=EPISODE_ID,
+                step_id=step_calls["n"],
+                observations={
+                    "agent_1": Observation(
+                        episode_id=EPISODE_ID,
+                        agent_id="agent_1",
+                        step_id=step_calls["n"],
+                        timestamp=float(step_calls["n"]),
+                        frame=None,
+                        visible_inventory={"dirt": 1},
+                        selected_item="dirt",
+                        messages=(),
+                        workflow_stage="step",
+                    )
+                },
+                rewards={"agent_1": 0.0},
+                terminated=True,
+                truncated=False,
+                info={},
+            )
+
+        type(terminating_backend).step = _terminating_step  # type: ignore[method-assign]
+
+        record = run_benchmark(
+            episode_id=EPISODE_ID,
+            task=self.task,
+            backend=terminating_backend,
+            agent=self.agent,
+            evaluator=self.evaluator,
+            max_steps=10,
+        )
+        self.assertEqual(record.runner_status, "completed")
+        observation_events = [
+            ev for ev in record.evidence if ev.event_type == "observation"
+        ]
+        action_events = [ev for ev in record.evidence if ev.event_type == "action"]
+        self.assertEqual(len(observation_events), 1)
+        self.assertEqual(len(action_events), 1)
+        self.assertEqual(step_calls["n"], 1)
+
+    def test_close_failure_downgrades_runner_status(self) -> None:
+        # Backend whose close() raises. The driver must record the close
+        # error on the evaluator-only channel AND downgrade runner_status
+        # from "completed" to "failed", so the post-init guard can
+        # fail-closed a wrong success verdict.
+        class CloseFailingBackend(StubBackend):
+            def close(self) -> None:  # type: ignore[override]
+                self.closed = True
+                raise RuntimeError("close blew up")
+
+        with self.assertRaises(ValueError):
+            # An evaluator that ignores the close failure and claims
+            # success must be rejected by BenchmarkRunRecord.__post_init__.
+            run_benchmark(
+                episode_id=EPISODE_ID,
+                task=self.task,
+                backend=CloseFailingBackend(),
+                agent=self.agent,
+                evaluator=self.evaluator,  # returns success=True
+                max_steps=1,
+            )
+
+        class HonestEvaluator(StubEvaluator):
+            def evaluate(self, state: Mapping[str, Any]) -> EvaluatorVerdict:
+                return EvaluatorVerdict(
+                    identity=EvidenceIdentity(
+                        episode_id=EPISODE_ID, step_id=0, agent_id=None
+                    ),
+                    success=state.get("runner_status") == "completed",
+                    outcome="close_failed"
+                    if state.get("runner_status") != "completed"
+                    else "ok",
+                    evidence_complete=True,
+                )
+
+        record = run_benchmark(
+            episode_id=EPISODE_ID,
+            task=self.task,
+            backend=CloseFailingBackend(),
+            agent=self.agent,
+            evaluator=HonestEvaluator(),
+            max_steps=1,
+        )
+        self.assertEqual(record.runner_status, "failed")
+        self.assertFalse(record.verdict.success)
+        close_error_records = [
+            ev for ev in record.evidence if ev.event_type == "close_error"
+        ]
+        self.assertEqual(len(close_error_records), 1)
+        self.assertEqual(close_error_records[0].channel, EvidenceChannel.EVALUATOR_ONLY)
+
 
 if __name__ == "__main__":
     unittest.main()
