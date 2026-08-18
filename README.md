@@ -1,12 +1,12 @@
 # ObsidianLink
 
-A Minecraft benchmark for studying long-horizon AI agents through Nether Portal construction.
+一个通过 Nether Portal construction 研究 long-horizon AI Agent 的 Minecraft Benchmark。
 
-## Research
+## 研究
 
-ObsidianLink evaluates agents on a single core task: construct, activate, and enter a Nether Portal using vanilla Minecraft mechanics (default: bucket casting / water-lava).
+ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版机制构造、激活并进入 Nether Portal（默认：bucket casting / water-lava）。
 
-Study dimensions:
+研究方向：
 
 - Diagnostic
 - End-to-End Portal Construction
@@ -14,8 +14,8 @@ Study dimensions:
 - Multi-Agent
 - Generalization & Recovery
 
-The benchmark is solver-independent. It is not a Minecraft automation script, and it is not bound to a specific model vendor.
+该 Benchmark 与具体 solver 无关。它不是 Minecraft 自动化脚本，也不绑定任何特定模型厂商。
 
-## Current status
+## 当前状态
 
-Current status: clean restart / minimal research infrastructure.
+当前状态：clean restart / 最小 research infrastructure。
