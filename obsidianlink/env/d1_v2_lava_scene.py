@@ -1,4 +1,4 @@
-"""D1 v2 / D1-01 Lava Presence scene geometry.
+"""D1 v2 scene geometry (D1-01 Lava Presence; D1-02 reuses the courtyard).
 
 Pure XML / constants. Importing this module does not load MineRL.
 
@@ -9,14 +9,14 @@ discovered from live ``EnvServer`` errors (do not patch the jar):
 * only block types ``lava`` / ``obsidian`` (``dirt`` and ``water``
   raise ``DrawBlock type not allowed``)
 
-The scene is therefore an **obsidian sky-platform** at y=100
-(above default overworld terrain) with a 3×3 floor patch that is
-lava (positive) or obsidian (negative). No ceiling: noon sunlight
-lights both scenes equally. The Agent is teleported onto the
-platform after world gen.
+D1-01 is an **obsidian sky-platform** at y=100 with a 3×3 floor
+patch that is lava (positive) or obsidian (negative), POV
+**640×360**. D1-02 uses the lava-negative courtyard and places
+water env-side (bucket dump), because water cannot be drawn.
+Both are live-verified. Old 64×64 captures are historical only.
 
 The herobraine spec in :mod:`obsidianlink.env.controlled_specs`
-draws this XML via ``DrawingDecorator``.
+draws lava/obsidian XML via ``DrawingDecorator``.
 """
 
 from __future__ import annotations

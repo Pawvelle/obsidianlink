@@ -25,7 +25,7 @@ for every step into that directory as ``step_<N>_frame.png`` (the
 exact bytes that were forwarded to the model). This is purely
 additive: when ``debug_save_dir`` is ``None`` (default), the runner
 behaves identically to the non-debug path. The flag is intended for
-human sanity-checks of the observation pipeline (Phase 2C D1
+human sanity-checks of the observation pipeline (D1 v2 debug)
 debug) and does NOT change model input, prompt, evaluator, or
 ground truth in any way.
 """

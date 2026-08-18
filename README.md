@@ -18,4 +18,9 @@ ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版�
 
 ## 当前状态
 
-当前状态：clean restart / 最小 research infrastructure。
+**D1 Perception Pilot 已完成。下一步：D2 Grounding。**
+
+正式 D1 v2：640×360 受控场景、hidden ground truth、positive/negative。
+D1-01 Lava Presence 与 D1-02 Water Presence 均已 live 验证。
+旧 inventory D1 与旧 64×64 lava 抓帧仅作 historical pilot，不作为 capability 结论。
+不再增加 Obsidian / Iron / Log 等 D1 task。

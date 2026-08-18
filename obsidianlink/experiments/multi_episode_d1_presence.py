@@ -1,11 +1,15 @@
-"""Phase 2C — multi-episode D1 Presence evaluation on live MineRL.
+"""Historical Phase 2C — multi-episode D1 Presence on live MineRL.
 
-Runs the **same** D1 Presence task (Lava / Water / Obsidian) for
-``--num-episodes`` consecutive live episodes against a
-:class:`obsidianlink.env.controlled_scene_env.ControlledSceneEnv`.
-The only intentional variable is the model path
-(``--model-path``) — this is the model-scale control experiment
-the user asked for.
+Reproduces the **original** single-block lava presence runs
+(``MineRLControlledLava-v0``). That scene is **not** D1 v2 and is
+**not** a capability conclusion. Formal D1 v2 live eval is
+:mod:`obsidianlink.experiments.run_d1_01` (lava) and
+:mod:`obsidianlink.experiments.run_d1_02` (water).
+
+The CLI still accepts ``water`` / ``obsidian`` target names for
+the old DrawBlock env ids; those envs were never live-verified
+and cannot DrawBlock water.
+"""
 
 Failure-mode contract
 ---------------------
@@ -156,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         "--target",
         required=True,
         choices=("lava", "water", "obsidian"),
-        help="D1 presence target. Phase 2C ships only the lava env live.",
+        help="Historical Phase 2C target. Only lava was live-run; D1 v2 water is run_d1_02.py.",
     )
     parser.add_argument("--model-path", required=True)
     parser.add_argument("--num-episodes", type=int, default=3)

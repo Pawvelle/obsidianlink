@@ -1,16 +1,18 @@
 """Task families and concrete Diagnostic / L-level task definitions.
 
-Phase 2A / 2B ships the **D1 inventory pilot**: the
-:class:`D1_INVENTORY_PERCEPTION` Task plus its evaluator,
-heuristic model, and agent. The pilot uses the agent-visible
-observation as ground truth.
+**D1 Perception Pilot is complete.** Formal D1 v2 tasks:
 
-Phase 2C ships the **D1 presence family**: Lava / Water /
-Obsidian. The presence tasks use a controlled scene + a hidden
-``Task.ground_truth`` channel; the Evaluator splits failures into
-``perception_error`` vs ``output_protocol_error``. The Lava
-vertical slice is exercised on live MineRL in Phase 2C; Water
-and Obsidian presence specs are defined but not yet run.
+* D1-01 Lava Presence and D1-02 Water Presence — 640×360
+  controlled scenes, hidden ``Task.ground_truth``,
+  positive/negative, live-verified.
+
+Historical, **not** capability conclusions:
+
+* Phase 2A / 2B inventory D1 (agent-visible observation as GT).
+* Phase 2C single-block lava presence (64×64 / poorly framed).
+  ``D1_WATER_PRESENCE`` / ``D1_OBSIDIAN_PRESENCE`` in that family
+  were never live-run; D1-02 is the live water task. No further
+  D1 object classes.
 
 See :mod:`obsidianlink.tasks.diagnostic`.
 """
@@ -45,14 +47,14 @@ __all__ = [
     "D1InventoryPerceptionAgent",
     "D1InventoryPerceptionEvaluator",
     "D1InventoryPerceptionModel",
-    # Phase 2C presence family (pilot)
+    # Historical Phase 2C presence family (not D1 v2)
     "D1_LAVA_PRESENCE",
     "D1_WATER_PRESENCE",
     "D1_OBSIDIAN_PRESENCE",
     "D1_PRESENCE_TASKS",
     "D1PresenceAgent",
     "D1PresenceEvaluator",
-    # D1 v2 / D1-01 Lava Presence
+    # D1 v2 — Lava (D1-01) and Water (D1-02)
     "D1_01_LAVA_PRESENCE_POSITIVE",
     "D1_01_LAVA_PRESENCE_NEGATIVE",
     "D1_01_LAVA_ENV_IDS",

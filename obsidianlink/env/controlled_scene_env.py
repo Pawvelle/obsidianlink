@@ -1,4 +1,4 @@
-"""Controlled-scene env for Phase 2C D1 perception vertical slice.
+"""Controlled-scene env for D1 v2 perception (and the Phase 2C lava pilot).
 
 This is a thin wrapper around :class:`obsidianlink.env.minerl.MineRLEnvironment`
 that points at one of the custom herobraine env specs defined in
@@ -11,7 +11,7 @@ that points at one of the custom herobraine env specs defined in
 
 The ground-truth channel is the class attribute
 :attr:`ControlledSceneEnv.target_truths`: a mapping from
-target name (``"lava"`` / ``"water"`` / ``"obsidian"``) to a
+target name (``"lava"`` / ``"water"``) to a
 bool meaning "is this target present in the current world?".
 
 **Crucially**, ``target_truths`` is NOT part of the agent-visible
@@ -38,8 +38,8 @@ def _ensure_specs_registered() -> None:
 
 
 # Map of env_id -> hidden ground truth for the targets the env
-# supports. Pilot ids stay so the original lava-presence script
-# still resolves; D1 v2 ids are the capability scenes.
+# supports. Historical Phase 2C ids stay so the original
+# lava-presence script still resolves; D1 v2 ids are lava + water.
 _ENV_TARGET_TRUTHS: dict[str, dict[str, bool]] = {
     "MineRLControlledLava-v0": {"lava": True},  # Phase 2C pilot
     "MineRLD1LavaPositive-v0": {"lava": True},

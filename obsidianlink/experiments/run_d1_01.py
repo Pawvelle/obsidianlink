@@ -3,7 +3,8 @@
 Runs the redesigned D1-01 task (640×360 obsidian sky-platform,
 binary lava presence, ``max_steps=1``) against a local Qwen3-VL
 checkpoint. Prompt, evaluator, and model weights are not tuned
-here: this is one real capability pass after the scene redesign.
+here: live one-shot after the 640×360 redesign, not a
+statistical capability claim.
 
 Each episode launches a fresh MineRL env. Positive and negative
 conditions share the Agent prompt; only the hidden

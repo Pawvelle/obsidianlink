@@ -1,22 +1,20 @@
 """Diagnostic suite (D1–D6).
 
-Phase 2A / Phase 2B shipped **D1 — Inventory & Selected-Item
-Perception** as a pilot that exercises the full Benchmark plumbing
-(Task -> Runner -> Agent -> Evaluator -> Result) with the
-agent-visible observation as the ground truth. The pilot stays
-in the codebase — it is a useful D1 control condition that does
-not need a controlled scene.
+**D1 Perception Pilot is complete.** Live-verified D1 v2 tasks are
+D1-01 Lava Presence and D1-02 Water Presence (640×360 controlled
+scenes, hidden ground truth, positive/negative, ``max_steps=1``).
+Obsidian / Iron / Log D1 tasks are **not** in this pilot.
 
-Phase 2C introduces the **D1 Presence** family — Lava / Water /
-Obsidian — which is the first D1 main task family. The Presence
-tasks test a **narrower** perception capability ("is the target
-visible in the frame?") and use a **controlled scene** so the
-ground truth is hidden from the Agent. Phase 2C ships the
-Lava Presence vertical slice; Water and Obsidian presence specs
-are defined but not yet exercised on live MineRL.
+Historical pilots kept for reproducibility, **not** capability
+conclusions:
 
-Failure-mode contract (Phase 2C)
---------------------------------
+* Phase 2A / 2B **inventory** D1 — plumbing with agent-visible
+  observation as ground truth.
+* Phase 2C **single-block lava** (and unused water/obsidian
+  DrawBlock stubs) — frames were too small / poorly placed.
+
+Failure-mode contract (presence Evaluator)
+------------------------------------------
 
 The D1 Presence Evaluator distinguishes two failure modes that
 the inventory pilot collapsed into one:
@@ -125,13 +123,12 @@ D1_PRESENCE_TASKS: dict[str, Task] = {
 
 
 # ---------------------------------------------------------------------------
-# D1 v2 — D1-01 Lava Presence (capability scene)
+# D1 v2 — D1-01 Lava Presence (live-verified)
 # ---------------------------------------------------------------------------
 #
-# Single frame, single target, binary classification, max_steps=1.
-# Positive and negative are the same question; only hidden
-# ``ground_truth`` and the env scene differ. The Agent prompt is
-# identical and does not contain the truth.
+# 640×360, single frame, binary presence, max_steps=1, hidden GT.
+# Positive and negative share the prompt; only ground_truth and
+# the env scene differ. Not a statistical capability claim (n=1).
 
 _D1_01_LAVA_GOAL = (
     "Look at the Minecraft frame and report whether LAVA is "
@@ -169,10 +166,10 @@ D1_01_WARMUP_STEPS = 20
 
 
 # ---------------------------------------------------------------------------
-# D1 v2 — D1-02 Water Presence
+# D1 v2 — D1-02 Water Presence (live-verified)
 # ---------------------------------------------------------------------------
 #
-# Same contract as D1-01: single frame, binary presence, max_steps=1.
+# Same 640×360 / max_steps=1 / hidden-GT protocol as D1-01.
 # Prompt is built by D1PresenceAgent(target_name="water") and is not
 # tuned. Hidden ground_truth is not in the prompt.
 
@@ -514,17 +511,15 @@ class D1InventoryPerceptionAgent:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2C — D1 Presence Agent (Lava / Water / Obsidian)
+# D1 Presence Agent (D1-01 lava, D1-02 water)
 # ---------------------------------------------------------------------------
 
 
 def _build_presence_prompt(target_name: str) -> str:
     """Build the D1 presence prompt for a given target.
 
-    The target name is the **only** thing that varies between
-    Lava / Water / Obsidian; everything else is shared so the
-    model's behaviour across the three targets is directly
-    comparable. Keep this prompt minimal: the user asked for
+    The target name is the **only** thing that varies (live D1 v2:
+    lava and water). Keep this prompt minimal: the user asked for
     ``{"visible": true|false}`` and explicitly forbade
     optimisation, so we do not add visual hints about the
     target's appearance.
@@ -553,10 +548,10 @@ def _build_presence_prompt(target_name: str) -> str:
 
 
 class D1PresenceAgent:
-    """Diagnostic agent for the D1 Presence task family (Lava / Water / Obsidian).
+    """Diagnostic agent for D1 presence (D1-01 lava, D1-02 water).
 
-    The agent's prompt is constructed once at construction time
-    from the target name. The Agent goes through
+    Also used by the historical Phase 2C presence tasks. The prompt
+    is built once from the target name. The Agent goes through
     :func:`obsidianlink.agents.model_client.call_model`, so a
     vision-capable model receives the frame alongside the prompt.
 
@@ -589,7 +584,7 @@ class D1PresenceAgent:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2C — D1 Presence Evaluator
+# D1 Presence Evaluator (D1 v2 + historical Phase 2C)
 # ---------------------------------------------------------------------------
 
 
@@ -711,14 +706,14 @@ __all__ = [
     "D1InventoryPerceptionEvaluator",
     "D1InventoryPerceptionModel",
     "D1InventoryPerceptionAgent",
-    # Phase 2C presence family (pilot)
+    # Historical Phase 2C presence family (not D1 v2)
     "D1_LAVA_PRESENCE",
     "D1_WATER_PRESENCE",
     "D1_OBSIDIAN_PRESENCE",
     "D1_PRESENCE_TASKS",
     "D1PresenceAgent",
     "D1PresenceEvaluator",
-    # D1 v2 / D1-01 Lava Presence
+    # D1 v2 — Lava (D1-01) and Water (D1-02), live-verified
     "D1_01_LAVA_PRESENCE_POSITIVE",
     "D1_01_LAVA_PRESENCE_NEGATIVE",
     "D1_01_LAVA_ENV_IDS",

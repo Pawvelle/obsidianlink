@@ -2,16 +2,17 @@
 
 Two generations live here:
 
-* **Pilot (Phase 2C).** A single lava *block* five tiles ahead of
-  the player. Kept so the original lava-presence runs stay
-  reproducible. Those frames were too small / poorly placed for a
-  capability claim; they are **not** D1 v2.
-* **D1 v2 (D1-01 Lava Presence).** An obsidian sky-platform with a
-  3×3 lava pool (or an obsidian patch of the same size) in the
-  downward view, rendered at 640×360 so the HUD is a thin strip
-  rather than a lava-coloured blob. Positive and negative scenes
-  share geometry, spawn, pitch, lighting, and background; only
-  the floor patch differs.
+* **Historical pilot (Phase 2C).** A single lava *block* five
+  tiles ahead of the player. Kept so the original lava-presence
+  runs stay reproducible. Those frames were too small / poorly
+  placed; they are **not** D1 v2 and are **not** a capability
+  conclusion.
+* **D1 v2 (live-verified).** 640×360 controlled scenes with
+  hidden ground truth and a positive/negative protocol:
+  D1-01 Lava Presence (obsidian sky-platform, 3×3 lava vs
+  obsidian patch) and D1-02 Water Presence (same courtyard;
+  water cannot be DrawBlock'd, so the positive env dumps a
+  bucket onto the floor before the Agent's first frame).
 
 Ground truth is a class attribute on the spec. It is read by the
 evaluator through ``Task.ground_truth`` and must never enter the
@@ -188,12 +189,15 @@ class ControlledLavaSpec(_ControlledPresenceSpec):
     target_name = "lava"
 
 
-# Water and Obsidian specs are stubbed for Phase 2C. They share the
-# same structural pattern as :class:`ControlledLavaSpec`; live
-# verification of these is a follow-up (Phase 2C+).
+# Historical Phase 2C DrawBlock stubs. They are **not** D1 v2.
+# EnvServer only allows DrawBlock types lava / obsidian, so these
+# water specs cannot place water. Live water is D1-02
+# (:class:`D1WaterPositiveSpec` / :class:`D1WaterNegativeSpec`).
+# Obsidian presence was not added as a D1 v2 task.
+
 
 class ControlledWaterSpec(_ControlledPresenceSpec):
-    """Water-positive spec (NOT yet exercised on live MineRL)."""
+    """Historical DrawBlock water stub. Not used by D1-02."""
 
     block_type = "water"
     target_present = True
@@ -201,15 +205,14 @@ class ControlledWaterSpec(_ControlledPresenceSpec):
 
 
 class ControlledObsidianSpec(_ControlledPresenceSpec):
-    """Obsidian-positive spec (NOT yet exercised on live MineRL)."""
+    """Historical DrawBlock obsidian stub. No D1 v2 obsidian task."""
 
     block_type = "obsidian"
     target_present = True
     target_name = "obsidian"
 
 
-# Negative variants for water / obsidian (lava / water / obsidian
-# *not* drawn). Stubbed; not exercised yet.
+# Historical negative DrawBlock variants. Unused by D1 v2.
 
 class ControlledLavaNegativeSpec(_ControlledPresenceSpec):
     """Lava-negative: no drawn block; the world has no lava."""
@@ -235,8 +238,7 @@ class ControlledObsidianNegativeSpec(_ControlledPresenceSpec):
 # D1 v2 — Lava Presence (D1-01)
 # ---------------------------------------------------------------------------
 #
-# Scene contract (must stay true for the task to be a capability
-# claim, not a framing artefact):
+# Scene contract (must stay true for D1 v2, not a framing artefact):
 #
 # * single target, binary presence, one frozen viewpoint
 # * lava (when present) near the centre of the frame
@@ -414,8 +416,9 @@ class D1WaterNegativeSpec(_D1V2WaterSpec):
 # Registration with MineRL / gym
 # ---------------------------------------------------------------------------
 
-# Pilot spec stays registered so the original lava-presence script
-# still runs. D1 v2 registers both positive and negative.
+# Historical Phase 2C spec stays registered so the original
+# lava-presence script still runs. D1 v2 registers lava + water
+# positive/negative.
 _REGISTERED_SPECS: List[_ControlledPresenceSpec] = [
     ControlledLavaSpec(),  # Phase 2C pilot — do not use for D1 v2
     D1LavaPositiveSpec(),

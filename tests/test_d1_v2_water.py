@@ -1,4 +1,4 @@
-"""Offline tests for D1-02 Water Presence.
+"""Offline tests for D1-02 Water Presence (640×360, live-verified).
 
 No Minecraft, no VLM. Mirrors the D1-01 lava checks: single-step
 binary tasks, water XML contract, prompt does not leak truth.

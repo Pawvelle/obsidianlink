@@ -1,8 +1,10 @@
-"""Phase 2C — single-episode D1 Lava debug view.
+"""Historical Phase 2C — single-episode D1 Lava debug view.
 
-NOT a benchmark. NOT a batch experiment. This script runs **one**
-Lava Presence positive episode and writes the per-step debug
-artifacts to disk:
+NOT D1 v2. Reproduces the original single-block lava scene
+(``MineRLControlledLava-v0``). Formal D1 v2 capture is
+:mod:`obsidianlink.experiments.debug_d1_v2_lava_scenes`.
+
+Writes per-step debug artifacts:
 
 * ``step_<N>_frame.png`` — the *exact* bytes of the
   ``Observation.frame`` that were forwarded to the model that

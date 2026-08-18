@@ -1,9 +1,9 @@
-"""Offline tests for D1 v2 / D1-01 Lava Presence.
+"""Offline tests for D1 v2 / D1-01 Lava Presence (640×360, live-verified).
 
 No Minecraft, no VLM. Covers:
 
 * D1-01 tasks are single-step with hidden bool ground truth
-* the Phase 2C lava task is unchanged (pilot)
+* the Phase 2C lava task is unchanged (historical pilot)
 * scene XML: positive draws lava, negative does not
 * hidden truth is not in the Agent prompt
 * Runner takes exactly one step

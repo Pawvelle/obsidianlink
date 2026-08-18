@@ -5,11 +5,10 @@ Two report flavours are defined here:
 * :class:`PerceptionReport` — the Phase 2A *inventory* report
   (``inventory`` + ``selected_item``). The D1 inventory pilot uses
   this.
-* :class:`PresenceReport` — the Phase 2C *presence* report
-  (``visible`` boolean). The D1 Lava / Water / Obsidian
-  presence tasks use this. The report only asks "is the
-  target visible in the frame", which is a much narrower
-  perception question than "what is in the inventory".
+* :class:`PresenceReport` — the *presence* report (``visible``
+  boolean). D1-01 Lava and D1-02 Water (and the historical
+  Phase 2C presence family) use this. The report only asks
+  "is the target visible in the frame".
 
 The report is what the :class:`Evaluator` compares against the
 ground truth. For Phase 2A the ground truth is the agent-visible
@@ -106,7 +105,7 @@ def parse_perception_report(response: str) -> PerceptionReport | None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2C — Presence report (Lava / Water / Obsidian)
+# Presence report (D1-01 lava, D1-02 water; historical Phase 2C family)
 # ---------------------------------------------------------------------------
 
 

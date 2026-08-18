@@ -1,4 +1,7 @@
-"""Tests for Phase 2C — D1 Presence vertical slice.
+"""Tests for the historical Phase 2C D1 Presence lava pilot.
+
+That scene is **not** D1 v2. Formal D1 v2 tests are
+``test_d1_v2_lava.py`` / ``test_d1_v2_water.py``.
 
 These tests cover the offline components of the D1 Presence
 pipeline:
@@ -16,9 +19,6 @@ pipeline:
   Evaluator (so the controlled-scene env can carry the hidden
   truth on the ``Task`` and the Agent never sees it);
 * the existing inventory pilot is unchanged by Phase 2C.
-
-The live ``OBSIDIANLINK_PHASE=2c`` smoke is the live analogue of
-the runner-vertical-slice test below.
 """
 
 from __future__ import annotations

@@ -1,15 +1,11 @@
 """Environment adapters.
 
-Phase 1 / Step 1 introduces :class:`MineRLEnvironment` as the first real
-adapter; the in-process simulated adapter will be added in a later
-sub-step. New adapters must implement the :class:`Environment` protocol
-from :mod:`obsidianlink.env.environment`.
-
-Phase 2C adds :class:`ControlledSceneEnv`, which wraps a custom
-herobraine env spec that places a known block (lava, water, or
-obsidian) in front of the player. The env exposes a hidden
-ground-truth channel (``target_truths``) that the agent never
-sees; the evaluator reads it via ``Task.ground_truth``.
+Phase 1 introduces :class:`MineRLEnvironment`. D1 v2 uses
+:class:`ControlledSceneEnv`, which wraps a custom herobraine spec
+(640×360 lava or water presence) and a hidden ground-truth channel
+(``target_truths``) that the agent never sees; the evaluator reads
+it via ``Task.ground_truth``. The Phase 2C single-block lava env
+remains available for reproducibility.
 """
 
 from obsidianlink.env.controlled_scene_env import ControlledSceneEnv
