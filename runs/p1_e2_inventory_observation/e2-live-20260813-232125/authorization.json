@@ -1,9 +1,0 @@
-{
-  "authorized_live_run": "e2_inventory_observation",
-  "catalog_live_run_allowed_remains_false": true,
-  "execution_mode": "authorized_live_e2",
-  "gradle_authorized": false,
-  "integration_verified": false,
-  "model_api_authorized": false,
-  "note": "Per-run authorization only. Does not mark E2 integration_verified. Evidence contains inventory and lifecycle metadata only."
-}

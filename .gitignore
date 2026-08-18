@@ -10,35 +10,9 @@ build/
 dist/
 *.egg-info/
 
-# Local model weights, generated runs, and Minecraft logs.
+# Local caches that are not part of the research skeleton.
 /models/
-/runs/*
-!/runs/history/
-/runs/history/*
-!/runs/history/phase1-scripted-a0/
-!/runs/history/phase1-scripted-a0/**
-!/runs/history/phase1-portal-env-smoke/
-!/runs/history/phase1-portal-env-smoke/**
-!/runs/history/p1-startup-reliability-post-audio-20260816/
-!/runs/history/p1-startup-reliability-post-audio-20260816/**
-!/runs/history/p1-e10-live-20260816-001/
-!/runs/history/p1-e10-live-20260816-001/**
-!/runs/history/p1-e11-geometry-20260816-001/
-!/runs/history/p1-e11-geometry-20260816-001/**
-!/runs/history/p1-e11-live-20260816-001/
-!/runs/history/p1-e11-live-20260816-001/**
-!/runs/history/p1-e11-diagnostic-20260817-001/
-!/runs/history/p1-e11-diagnostic-20260817-001/**
-!/runs/history/p1-e11-diagnostic-20260817-002/
-!/runs/history/p1-e11-diagnostic-20260817-002/**
-!/runs/history/p1-e11-live-20260817-001/
-!/runs/history/p1-e11-live-20260817-001/**
-!/runs/history/p1-e11-live-20260817-002/
-!/runs/history/p1-e11-live-20260817-002/**
-!/runs/history/p1-e11-live-20260817-003/
-!/runs/history/p1-e11-live-20260817-003/**
-/results/
+/runs/
 /logs/
-
-# MineRL is an independent upstream checkout with its own history.
-/vendor/minerl/
+/results/
+/vendor/

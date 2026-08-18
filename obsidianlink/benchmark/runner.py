@@ -1,33 +1,38 @@
-"""Runner contracts. No solver or deterministic plan is imported here."""
+"""Minimal benchmark loop. Does not start Minecraft."""
 
-from __future__ import annotations
+import time
 
-from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
-
-from obsidianlink.benchmark.evaluator import EvaluatorVerdict
-from obsidianlink.benchmark.task import TaskIdentity
-
-
-RUNNER_STATUSES = frozenset({"completed", "blocked", "failed"})
+from obsidianlink.agents.base import Agent
+from obsidianlink.benchmark.evaluator import Evaluator
+from obsidianlink.benchmark.result import Result
+from obsidianlink.benchmark.task import Task
+from obsidianlink.env.environment import Environment
 
 
-@dataclass(frozen=True)
-class RunnerResult:
-    task: TaskIdentity
-    status: str
-    evaluator_verdict: EvaluatorVerdict | None
+class BenchmarkRunner:
+    def run(
+        self,
+        task: Task,
+        env: Environment,
+        agent: Agent,
+        evaluator: Evaluator,
+    ) -> Result:
+        started = time.perf_counter()
+        observation = env.reset()
+        steps = 0
+        try:
+            for _ in range(task.max_steps):
+                action = agent.act(observation)
+                observation = env.step(action)
+                steps += 1
+        finally:
+            env.close()
 
-    def __post_init__(self) -> None:
-        if self.status not in RUNNER_STATUSES:
-            raise ValueError(f"unknown runner status: {self.status!r}")
-        if self.evaluator_verdict is not None and not isinstance(
-            self.evaluator_verdict, EvaluatorVerdict
-        ):
-            raise ValueError("evaluator_verdict must be EvaluatorVerdict or None")
-
-
-@runtime_checkable
-class BenchmarkRunner(Protocol):
-    def run(self, task: TaskIdentity) -> RunnerResult:
-        ...
+        model_calls = getattr(agent, "model_calls", 0)
+        return evaluator.evaluate(
+            task,
+            steps=steps,
+            model_calls=model_calls,
+            invalid_actions=0,
+            elapsed_time=time.perf_counter() - started,
+        )

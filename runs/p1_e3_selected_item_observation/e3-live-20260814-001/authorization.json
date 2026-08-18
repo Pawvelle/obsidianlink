@@ -1,9 +1,0 @@
-{
-  "authorized_live_run": "e3_selected_item",
-  "catalog_live_run_allowed_remains_false": true,
-  "execution_mode": "authorized_live_e3",
-  "gradle_authorized": false,
-  "integration_verified": false,
-  "model_api_authorized": false,
-  "note": "Per-run authorization only; no capability promotion."
-}

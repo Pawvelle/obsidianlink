@@ -1,39 +1,24 @@
-"""Evaluator boundary for v2.
+"""Evaluator interface.
 
-Concrete evaluators consume evaluator-only state. They must not consume an
-Agent response, policy object, or scripted-driver completion flag.
+Evaluator-only information must never enter agent observations, prompts, or memory.
+This module does not implement a truth framework.
 """
 
-from __future__ import annotations
+from abc import ABC, abstractmethod
 
-from dataclasses import dataclass
-from typing import Generic, Protocol, TypeVar, runtime_checkable
-
-from obsidianlink.benchmark.evidence import EvidenceIdentity
+from obsidianlink.benchmark.result import Result
+from obsidianlink.benchmark.task import Task
 
 
-StateT = TypeVar("StateT")
-
-
-@dataclass(frozen=True)
-class EvaluatorVerdict:
-    identity: EvidenceIdentity
-    success: bool
-    outcome: str
-    evidence_complete: bool
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.success, bool):
-            raise ValueError("success must be bool")
-        if not isinstance(self.evidence_complete, bool):
-            raise ValueError("evidence_complete must be bool")
-        if not isinstance(self.outcome, str) or not self.outcome.strip():
-            raise ValueError("outcome must be a non-empty string")
-        if self.success and not self.evidence_complete:
-            raise ValueError("success requires complete evidence")
-
-
-@runtime_checkable
-class Evaluator(Protocol, Generic[StateT]):
-    def evaluate(self, state: StateT) -> EvaluatorVerdict:
-        ...
+class Evaluator(ABC):
+    @abstractmethod
+    def evaluate(
+        self,
+        task: Task,
+        *,
+        steps: int,
+        model_calls: int,
+        invalid_actions: int,
+        elapsed_time: float,
+    ) -> Result:
+        raise NotImplementedError

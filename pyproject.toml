@@ -4,24 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "obsidianlink"
-version = "2.0.0.dev0"
-description = "A reproducible Minecraft benchmark for Nether portal construction"
+version = "0.1.0"
+description = "A Minecraft benchmark for studying long-horizon AI agents through Nether Portal construction."
 readme = "README.md"
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.10"
 license = {text = "Private research project"}
 authors = [{name = "ObsidianLink contributors"}]
 dependencies = []
 
-[project.scripts]
-obsidianlink = "obsidianlink.cli:main"
+[project.optional-dependencies]
+dev = ["pytest"]
 
 [tool.setuptools.packages.find]
 include = ["obsidianlink*"]
 
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-
-[tool.mypy]
-python_version = "3.10"
-strict = true
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

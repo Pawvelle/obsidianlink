@@ -1,1 +1,1 @@
-"""v2 task taxonomy extension points; no concrete task instances yet."""
+"""Task families. Concrete D-levels and L-levels are not implemented yet."""

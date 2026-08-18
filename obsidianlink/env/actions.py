@@ -1,6 +1,18 @@
-"""Strict action facade for the v2 environment boundary."""
+"""Structured actions. No Minecraft execution lives here."""
 
-from obsidianlink.actions.protocol import ParsedAction, parse_macro_action
-from obsidianlink.core.types import MacroAction
+from dataclasses import dataclass
+from enum import Enum
 
-__all__ = ["MacroAction", "ParsedAction", "parse_macro_action"]
+
+class ActionType(Enum):
+    MOVE = "move"
+    CAMERA = "camera"
+    ATTACK = "attack"
+    USE = "use"
+    PLACE = "place"
+    WAIT = "wait"
+
+
+@dataclass(frozen=True)
+class Action:
+    type: ActionType

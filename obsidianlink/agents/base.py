@@ -1,17 +1,12 @@
-"""Agent interface separated from benchmark evaluation."""
+"""Agent protocol: observation in, action out."""
 
-from __future__ import annotations
+from typing import Protocol
 
-from typing import Protocol, runtime_checkable
+from obsidianlink.env.actions import Action
+from obsidianlink.env.environment import Observation
 
-from obsidianlink.core.types import MacroAction, Observation
 
-
-@runtime_checkable
 class Agent(Protocol):
-    @property
-    def agent_id(self) -> str:
-        ...
-
-    def act(self, observation: Observation) -> MacroAction:
+    def act(self, observation: Observation) -> Action:
+        """Return the next action. Must not receive evaluator-only truth."""
         ...

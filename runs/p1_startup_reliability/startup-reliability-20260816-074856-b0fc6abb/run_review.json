@@ -1,7 +1,0 @@
-{
-  "excluded_from_startup_reliability_result": true,
-  "reason": "OS sandbox denied MineRL launch with Errno 1 Operation not permitted before any Java/Minecraft process started",
-  "reviewed_at": "2026-08-16T08:05:00Z",
-  "tracked_java_or_minecraft_descendants": 0,
-  "valid_real_startup_attempts": 0
-}
