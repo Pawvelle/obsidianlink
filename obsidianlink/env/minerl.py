@@ -1,20 +1,23 @@
-"""MineRL environment adapter (Phase 1 / Step 1).
+"""MineRL environment adapter (Phase 1).
 
-Scope of this module (intentionally small):
+Scope:
 
 * ``reset()`` launches the configured MineRL environment and returns the
   first agent-visible ``Observation`` (RGB frame + inventory snapshot).
-* ``step(action)`` forwards one bounded action and returns the next
-  ``Observation``.
+* ``step(action)`` translates an :class:`Action` into the MineRL
+  Dict action space and forwards it.
 * ``close()`` shuts the underlying MineRL / Malmo instance down cleanly.
 
-Out of scope (deferred to later Phase 1 sub-steps):
+The adapter introspects the MineRL ``action_space.spaces`` on the first
+``step()`` call so it only emits keys the live env actually understands
+(``MineRLTreechop-v0`` has no ``place``; ``MineRLNavigate-v0`` does).
+This keeps the same code path correct across the two missions without
+branching on env id.
 
-* The full bounded action set mapping (MOVE / CAMERA / ATTACK / USE / PLACE).
-  For now every non-WAIT action is forwarded as a MineRL no-op so the
-  env-observation loop can be exercised end-to-end without lying about
-  MineRL. ``ActionType.WAIT`` is the only fully-specified type here.
-* Benchmark tasks, agents, evaluators, planners, multi-agent.
+Out of scope (deferred):
+
+* Vision / inventory wiring beyond what MineRL hands us.
+* Benchmark tasks, evaluators, planners, multi-agent.
 
 Importing this module must NOT start MineRL. The actual ``gym.make`` call
 happens inside ``reset()`` so the rest of the package stays cheap to
@@ -32,24 +35,12 @@ _DEFAULT_ENV_ID = "MineRLTreechop-v0"
 
 
 class MineRLEnvironment(Environment):
-    """Adapter around a single MineRL ``gym`` environment.
-
-    Parameters
-    ----------
-    env_id:
-        The MineRL environment id. Defaults to ``MineRLTreechop-v0``,
-        which exposes a minimal ``pov`` observation and is the lightest
-        mission spec in MineRL 1.0.2 — chosen to avoid the
-        ``NavigationDecorator`` / ``RewardForTouchingBlockType``
-        NPE that ``MineRLNavigate-v0`` currently triggers in the
-        bundled Malmo 0.37.0 server. Once that server-side bug is
-        resolved, ``MineRLNavigate-v0`` should become the default
-        again because it exposes the richest agent-visible state.
-    """
+    """Adapter around a single MineRL ``gym`` environment."""
 
     def __init__(self, env_id: str = _DEFAULT_ENV_ID) -> None:
         self._env_id = env_id
         self._env: Any = None
+        self._action_keys: tuple[str, ...] | None = None
         self._last_pov: Any = None
         self._last_inventory: dict[str, int] = {}
         self._last_compass: Any = None
@@ -57,6 +48,14 @@ class MineRLEnvironment(Environment):
     @property
     def env_id(self) -> str:
         return self._env_id
+
+    @property
+    def action_space_keys(self) -> tuple[str, ...] | None:
+        """Action space keys cached after the first ``step()`` call.
+
+        ``None`` until the env has been reset at least once.
+        """
+        return self._action_keys
 
     def reset(self) -> Observation:
         # Local imports: keep MineRL / Java / gym out of the module-level
@@ -68,9 +67,11 @@ class MineRLEnvironment(Environment):
         import minerl  # type: ignore[import-untyped]  # noqa: F401
 
         if self._env is not None:
-            # Idempotent reset semantics: close any previous instance first
-            # so we never leak a JVM.
+            # Idempotent reset semantics: close any previous instance
+            # first so we never leak a JVM.
             self.close()
+        # Invalidate the action-space cache; the new env may differ.
+        self._action_keys = None
         self._env = gym.make(self._env_id)
         raw = self._env.reset()
         return self._convert(raw)
@@ -81,7 +82,9 @@ class MineRLEnvironment(Environment):
                 "MineRLEnvironment.step called before reset(); "
                 "call reset() first."
             )
-        minerl_action = self._to_minerl_action(action)
+        if self._action_keys is None:
+            self._action_keys = tuple(self._env.action_space.spaces.keys())
+        minerl_action = self._to_minerl_action(action, self._action_keys)
         raw, _reward, _done, _info = self._env.step(minerl_action)
         return self._convert(raw)
 
@@ -108,39 +111,48 @@ class MineRLEnvironment(Environment):
             selected_item=_selected_hotbar_item(self._last_inventory),
         )
 
-    def _to_minerl_action(self, action: Action) -> dict[str, Any]:
-        # MineRL's Dict action space: see MineRLNavigate-v0 spec.
-        # Step 1 keeps the mapping deliberately minimal: WAIT is the
-        # only fully-specified type. Other types become no-ops, not
-        # because their semantics are decided, but because the bounded
-        # action set is deferred to a later Phase 1 sub-step.
-        noop: dict[str, Any] = {
-            "attack": 0,
-            "back": 0,
-            "camera": [0.0, 0.0],
-            "forward": 0,
-            "jump": 0,
-            "left": 0,
-            "place": "none",
-            "right": 0,
-            "sneak": 0,
-            "sprint": 0,
-        }
-        if action.type is not ActionType.WAIT:
-            # Defer the bounded action set to Phase 1 / Step 3.
-            # We do not raise here so the env loop is still exercisable.
-            return noop
-        return noop
+    @staticmethod
+    def _to_minerl_action(
+        action: Action, keys: tuple[str, ...]
+    ) -> dict[str, Any]:
+        """Translate an :class:`Action` into a MineRL Dict action.
+
+        Only keys present in the env's ``action_space`` are emitted, so
+        the same code path works for ``MineRLTreechop-v0`` (no
+        ``place``) and ``MineRLNavigate-v0`` (with ``place``).
+        """
+        keyset = set(keys)
+        out: dict[str, Any] = {}
+
+        if "forward" in keyset:
+            out["forward"] = 1 if action.dx > 0 else 0
+        if "back" in keyset:
+            out["back"] = 1 if action.dx < 0 else 0
+        if "left" in keyset:
+            out["left"] = 1 if action.dz < 0 else 0
+        if "right" in keyset:
+            out["right"] = 1 if action.dz > 0 else 0
+        if "camera" in keyset:
+            out["camera"] = [float(action.yaw), float(action.pitch)]
+        if "jump" in keyset:
+            out["jump"] = 1 if action.type is ActionType.USE else 0
+        if "sneak" in keyset:
+            out["sneak"] = 0
+        if "sprint" in keyset:
+            out["sprint"] = 0
+        if "attack" in keyset:
+            out["attack"] = 1 if action.type is ActionType.ATTACK else 0
+        if "place" in keyset:
+            # PLACE / USE: place the named block if given, else "none".
+            if action.type in (ActionType.PLACE, ActionType.USE):
+                out["place"] = action.target or "dirt"
+            else:
+                out["place"] = "none"
+        return out
 
 
 def _summarize_inventory(inventory: Any) -> dict[str, int]:
-    """Reduce a MineRL inventory mapping to ``{item_name: count}``.
-
-    MineRL inventories are ``{name: {'type': ..., 'quantity': N}}`` after
-    the 1.0.2 refactor, but earlier shapes appear in some missions. We
-    accept both ``{name: count}`` and ``{name: {'quantity': N}}`` forms
-    and return a flat ``{name: int}`` view.
-    """
+    """Reduce a MineRL inventory mapping to ``{item_name: count}``."""
     if not inventory:
         return {}
     out: dict[str, int] = {}
@@ -166,9 +178,8 @@ def _selected_hotbar_item(inventory: Mapping[str, int]) -> str | None:
     """Pick a single ``selected_item`` for the observation.
 
     MineRL does not expose a hotbar cursor in a portable way across all
-    missions. For Phase 1 we surface the first non-empty inventory entry
-    as a stable, agent-visible hint and let the real hotbar wiring land
-    with the bounded action set.
+    missions. For Phase 1 we surface the first non-empty inventory
+    entry as a stable, agent-visible hint.
     """
     if not inventory:
         return None

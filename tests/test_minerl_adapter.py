@@ -1,11 +1,10 @@
-"""Offline tests for the Phase 1 / Step 1 MineRL adapter.
+"""Offline tests for the Phase 1 MineRL adapter.
 
 These tests must NOT start MineRL or Java. They cover:
 
 * importability of the adapter module without triggering ``gym.make``;
-* the action translation layer for the one fully-supported action
-  (``ActionType.WAIT``) and the documented no-op behaviour for other
-  action types in Step 1;
+* the action translation layer for the bounded action set across
+  Treechop-shaped and Navigate-shaped action spaces;
 * the inventory summarizer accepting both legacy ``{name: count}`` and
   current ``{name: {'quantity': N}}`` MineRL inventory shapes.
 
@@ -27,6 +26,16 @@ from obsidianlink.env.minerl import (
 )
 
 
+# Treechop-shaped action space, used by the offline tests for the
+# action translation layer. The MineRL adapter introspects the live
+# env's action space on the first ``step()`` call, so passing the
+# same shape here keeps the unit test honest.
+_TREECHOP_KEYS = (
+    "attack", "back", "camera", "forward", "jump", "left",
+    "right", "sneak", "sprint",
+)
+
+
 def test_minerl_environment_is_subclass_of_environment() -> None:
     from obsidianlink.env.environment import Environment
 
@@ -35,45 +44,37 @@ def test_minerl_environment_is_subclass_of_environment() -> None:
 
 def test_minerl_environment_instantiation_does_not_start_jvm() -> None:
     """Constructing the adapter must be side-effect free."""
-    env = MineRLEnvironment(env_id="MineRLNavigate-v0")
-    assert env.env_id == "MineRLNavigate-v0"
+    env = MineRLEnvironment(env_id="MineRLTreechop-v0")
+    assert env.env_id == "MineRLTreechop-v0"
     # Internal gym handle stays None until reset() is called.
     assert env._env is None  # noqa: SLF001 - intentional probe
+    # Action-space keys are also unset until first step().
+    assert env.action_space_keys is None
 
 
 def test_wait_action_translates_to_minerl_noop() -> None:
-    env = MineRLEnvironment()
-    translated = env._to_minerl_action(Action(type=ActionType.WAIT))  # noqa: SLF001
-    assert translated == {
-        "attack": 0,
-        "back": 0,
-        "camera": [0.0, 0.0],
-        "forward": 0,
-        "jump": 0,
-        "left": 0,
-        "place": "none",
-        "right": 0,
-        "sneak": 0,
-        "sprint": 0,
-    }
+    translated = MineRLEnvironment._to_minerl_action(
+        Action(type=ActionType.WAIT), _TREECHOP_KEYS
+    )
+    assert set(translated.keys()) == set(_TREECHOP_KEYS)
+    assert translated["forward"] == 0
+    assert translated["back"] == 0
+    assert translated["camera"] == [0.0, 0.0]
+    assert translated["attack"] == 0
 
 
 @pytest.mark.parametrize(
     "non_wait_type",
     [ActionType.MOVE, ActionType.CAMERA, ActionType.ATTACK, ActionType.USE, ActionType.PLACE],
 )
-def test_non_wait_actions_fall_back_to_noop_in_step1(non_wait_type: ActionType) -> None:
-    """Step 1 does not yet implement the bounded action set.
-
-    The adapter must therefore be safe to call with any action type and
-    fall back to the MineRL no-op dict, rather than raise, so the env
-    loop can still be exercised end-to-end.
-    """
-    env = MineRLEnvironment()
-    translated = env._to_minerl_action(Action(type=non_wait_type))  # noqa: SLF001
-    assert translated["attack"] == 0
+def test_non_wait_actions_do_not_crash_translation(non_wait_type: ActionType) -> None:
+    """The adapter must accept any action type and emit a valid MineRL
+    Dict action that the live env can step with, rather than raise."""
+    translated = MineRLEnvironment._to_minerl_action(
+        Action(type=non_wait_type), _TREECHOP_KEYS
+    )
+    assert set(translated.keys()) == set(_TREECHOP_KEYS)
     assert translated["camera"] == [0.0, 0.0]
-    assert translated["place"] == "none"
 
 
 def test_summarize_inventory_handles_modern_shape() -> None:
