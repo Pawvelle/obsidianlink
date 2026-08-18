@@ -1,0 +1,87 @@
+{
+  "task_id": "d1_01_lava_presence",
+  "resolution": [
+    640,
+    360
+  ],
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "conditions": [
+    "positive",
+    "negative"
+  ],
+  "env_ids": {
+    "positive": "MineRLD1LavaPositive-v0",
+    "negative": "MineRLD1LavaNegative-v0"
+  },
+  "warmup_steps": 20,
+  "num_episodes_per_condition": 1,
+  "num_episodes": 2,
+  "total_wall_time": 71.57466558300075,
+  "frames_dir": "obsidianlink/experiments/runs/d1_01_lava_Qwen3-VL-2B-Instruct_1ep_20260818_162502Z_frames",
+  "aggregate": {
+    "n_episodes": 2,
+    "success_rate": 1.0,
+    "perception_error_rate": 0.0,
+    "output_protocol_error_rate": 0.0,
+    "reasons": {
+      "ok": 2
+    },
+    "by_condition": {
+      "positive": {
+        "n": 1,
+        "n_success": 1,
+        "n_perception_error": 0,
+        "n_protocol_error": 0
+      },
+      "negative": {
+        "n": 1,
+        "n_success": 1,
+        "n_perception_error": 0,
+        "n_protocol_error": 0
+      }
+    }
+  },
+  "episodes": [
+    {
+      "condition": "positive",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_visible": true,
+      "ground_truth_visible": true,
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 41.54389912499755,
+      "wall_time": 41.54392604200984,
+      "evidence": {
+        "report_visible": true,
+        "ground_truth_visible": true,
+        "raw_response": "{\n  \"visible\": true\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "negative",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_visible": false,
+      "ground_truth_visible": false,
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 29.584378707993892,
+      "wall_time": 29.58470758399926,
+      "evidence": {
+        "report_visible": false,
+        "ground_truth_visible": false,
+        "raw_response": "{\n  \"visible\": false\n}",
+        "reason": "ok"
+      }
+    }
+  ],
+  "pilot": false
+}

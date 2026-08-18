@@ -134,8 +134,15 @@ class MineRLEnvironment(Environment):
             out["right"] = 1 if action.dz > 0 else 0
         if "camera" in keyset:
             out["camera"] = [float(action.yaw), float(action.pitch)]
+        if "use" in keyset:
+            out["use"] = 1 if action.type is ActionType.USE else 0
         if "jump" in keyset:
-            out["jump"] = 1 if action.type is ActionType.USE else 0
+            # Legacy Treechop has no ``use`` key; USE was wired to jump.
+            # When the env exposes ``use`` (D1-02), do not also jump.
+            if "use" in keyset:
+                out["jump"] = 0
+            else:
+                out["jump"] = 1 if action.type is ActionType.USE else 0
         if "sneak" in keyset:
             out["sneak"] = 0
         if "sprint" in keyset:

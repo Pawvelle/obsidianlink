@@ -123,6 +123,15 @@ def test_use_action_also_drives_place_in_navigate() -> None:
     assert translated["place"] == "dirt"
 
 
+def test_use_key_drives_use_not_jump() -> None:
+    keys = _TREECHOP_KEYS + ("use",)
+    translated = MineRLEnvironment._to_minerl_action(
+        Action(type=ActionType.USE), keys
+    )
+    assert translated["use"] == 1
+    assert translated["jump"] == 0
+
+
 def test_translation_ignores_keys_not_in_env_action_space() -> None:
     # A Navigate-only key like ``place`` must NOT appear when the env
     # is Treechop (which has no ``place`` slot).

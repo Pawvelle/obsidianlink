@@ -1,0 +1,148 @@
+{
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-4B-Instruct",
+  "model_name": "Qwen3-VL-4B-Instruct",
+  "device": "auto",
+  "task_id": "d1_inventory_perception",
+  "env_id": "MineRLTreechop-v0",
+  "num_episodes": 5,
+  "total_wall_time": 415.1078326669958,
+  "aggregate": {
+    "n_episodes": 5,
+    "success_rate": 0.8,
+    "inventory_match_rate": 0.8,
+    "selected_match_rate": 0.8,
+    "reasons": {
+      "ok": 4,
+      "inventory_mismatch": 1
+    }
+  },
+  "episodes": [
+    {
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "inventory_match": true,
+      "selected_match": true,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 60.71481754100387,
+      "wall_time": 60.71560083300574,
+      "evidence": {
+        "report": {
+          "inventory": {},
+          "selected_item": null
+        },
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {},\n    \"selected_item\": null\n  }\n}",
+        "inventory_match": true,
+        "selected_match": true,
+        "success": true,
+        "reason": "ok"
+      }
+    },
+    {
+      "episode": 2,
+      "success": false,
+      "reason": "inventory_mismatch",
+      "inventory_match": false,
+      "selected_match": false,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 77.60719524999877,
+      "wall_time": 77.6089039169965,
+      "evidence": {
+        "report": {
+          "inventory": {
+            "dirt": 3
+          },
+          "selected_item": "dirt"
+        },
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {\n      \"dirt\": 3\n    },\n    \"selected_item\": \"dirt\"\n  }\n}",
+        "inventory_match": false,
+        "selected_match": false,
+        "success": false,
+        "reason": "inventory_mismatch"
+      }
+    },
+    {
+      "episode": 3,
+      "success": true,
+      "reason": "ok",
+      "inventory_match": true,
+      "selected_match": true,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 92.81778400000621,
+      "wall_time": 92.81881958400481,
+      "evidence": {
+        "report": {
+          "inventory": {},
+          "selected_item": null
+        },
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {},\n    \"selected_item\": null\n  }\n}",
+        "inventory_match": true,
+        "selected_match": true,
+        "success": true,
+        "reason": "ok"
+      }
+    },
+    {
+      "episode": 4,
+      "success": true,
+      "reason": "ok",
+      "inventory_match": true,
+      "selected_match": true,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 86.36203650000243,
+      "wall_time": 86.36226079200424,
+      "evidence": {
+        "report": {
+          "inventory": {},
+          "selected_item": null
+        },
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {},\n    \"selected_item\": null\n  }\n}",
+        "inventory_match": true,
+        "selected_match": true,
+        "success": true,
+        "reason": "ok"
+      }
+    },
+    {
+      "episode": 5,
+      "success": true,
+      "reason": "ok",
+      "inventory_match": true,
+      "selected_match": true,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 97.59562758300308,
+      "wall_time": 97.5963830000037,
+      "evidence": {
+        "report": {
+          "inventory": {},
+          "selected_item": null
+        },
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {},\n    \"selected_item\": null\n  }\n}",
+        "inventory_match": true,
+        "selected_match": true,
+        "success": true,
+        "reason": "ok"
+      }
+    }
+  ]
+}

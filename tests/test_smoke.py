@@ -43,6 +43,10 @@ class _StubEvaluator(Evaluator):
         model_calls: int,
         invalid_actions: int,
         elapsed_time: float,
+        report=None,
+        observation=None,
+        raw_response=None,
+        ground_truth=None,
     ) -> Result:
         return Result(
             task_id=task.task_id,

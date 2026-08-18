@@ -19,6 +19,19 @@ in size.
 
 The agent is reactive on purpose: it has no memory of past
 observations, no planner, no reflection. Those land in Phase 3.
+
+Phase 2A — Diagnostic Suite extension
+-------------------------------------
+
+The Agent may also emit a structured side-channel payload on a given
+step. Today the only side-channel type is a :class:`PerceptionReport`
+(see ``obsidianlink.benchmark.perception``), used by the D1 task to ask
+the Agent "what do you see right now?". The model returns a JSON
+response of the form ``{"action": "...", "report": {...}}``; the
+agent stores the parsed report in :attr:`last_report` so the
+BenchmarkRunner can forward it to the Evaluator. The action parsing
+path is unchanged: missing or malformed ``report`` does not affect
+the returned :class:`Action`.
 """
 
 from __future__ import annotations
@@ -26,7 +39,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from obsidianlink.agents.model_client import ModelClient
+from obsidianlink.agents.model_client import ModelClient, call_model
+from obsidianlink.benchmark.perception import (
+    PerceptionReport,
+    parse_perception_report,
+)
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Observation
 
@@ -35,11 +52,24 @@ class ReactiveAgent:
     def __init__(self, model: ModelClient) -> None:
         self._model = model
         self.model_calls = 0
+        # Latest structured side-channel payload the Agent emitted
+        # (e.g. a PerceptionReport from a Diagnostic task). ``None``
+        # when the last model response had no side-channel payload
+        # or was unparseable. The BenchmarkRunner reads this after the
+        # loop to forward to the Evaluator.
+        self.last_report: PerceptionReport | None = None
+        # Raw model response string from the most recent act() call.
+        # Exposed for diagnostic Evaluators (D1, D2, ...) that need
+        # to inspect *why* parsing failed. The runner forwards this
+        # to the Evaluator as ``raw_response=``.
+        self.last_raw_response: str | None = None
 
     def act(self, observation: Observation) -> Action:
         self.model_calls += 1
         prompt = self._build_prompt(observation)
-        response = self._model.complete(prompt)
+        response = call_model(self._model, prompt, observation=observation)
+        self.last_raw_response = response
+        self.last_report = parse_perception_report(response)
         return parse_model_response(response)
 
     @staticmethod

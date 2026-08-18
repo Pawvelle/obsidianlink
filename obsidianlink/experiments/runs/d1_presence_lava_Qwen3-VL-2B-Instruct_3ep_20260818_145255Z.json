@@ -1,0 +1,75 @@
+{
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "target": "lava",
+  "task_id": "d1_lava_presence",
+  "env_id": "MineRLControlledLava-v0",
+  "num_episodes": 3,
+  "total_wall_time": 101.03342104100011,
+  "aggregate": {
+    "n_episodes": 3,
+    "success_rate": 0.0,
+    "perception_error_rate": 1.0,
+    "output_protocol_error_rate": 0.0,
+    "reasons": {
+      "perception_error": 3
+    }
+  },
+  "episodes": [
+    {
+      "episode": 1,
+      "success": false,
+      "reason": "perception_error",
+      "report_visible": false,
+      "ground_truth_visible": true,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 37.072649500005355,
+      "wall_time": 37.07268695799576,
+      "evidence": {
+        "report_visible": false,
+        "ground_truth_visible": true,
+        "raw_response": "{\n  \"visible\": false\n}",
+        "reason": "perception_error"
+      }
+    },
+    {
+      "episode": 2,
+      "success": false,
+      "reason": "perception_error",
+      "report_visible": false,
+      "ground_truth_visible": true,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 30.923622624999552,
+      "wall_time": 30.923670457996195,
+      "evidence": {
+        "report_visible": false,
+        "ground_truth_visible": true,
+        "raw_response": "{\n  \"visible\": false\n}",
+        "reason": "perception_error"
+      }
+    },
+    {
+      "episode": 3,
+      "success": false,
+      "reason": "perception_error",
+      "report_visible": false,
+      "ground_truth_visible": true,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 32.63384779199987,
+      "wall_time": 32.63388712499727,
+      "evidence": {
+        "report_visible": false,
+        "ground_truth_visible": true,
+        "raw_response": "{\n  \"visible\": false\n}",
+        "reason": "perception_error"
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "label": "negative",
+  "shape": [
+    64,
+    64,
+    3
+  ],
+  "dtype": "uint8",
+  "mean_rgb": [
+    37.40478515625,
+    29.542724609375,
+    31.32421875
+  ],
+  "min_rgb": [
+    0,
+    0,
+    0
+  ],
+  "max_rgb": [
+    255,
+    248,
+    239
+  ],
+  "orange_fraction": 0.029052734375,
+  "native_png": "obsidianlink/experiments/runs/d1_v2_scene_validity/negative_64x64.png",
+  "upscaled_png": "obsidianlink/experiments/runs/d1_v2_scene_validity/negative_upscaled_512.png",
+  "note": "native_png is the exact VLM input. upscaled_png is human-only (nearest-neighbour x8).",
+  "env_id": "MineRLD1LavaNegative-v0",
+  "warmup_steps": 20,
+  "reset_seconds": 23.185767709001084,
+  "inventory": {},
+  "selected_item": null
+}

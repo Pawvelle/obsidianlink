@@ -1,0 +1,164 @@
+{
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "task_id": "d1_inventory_perception",
+  "env_id": "MineRLTreechop-v0",
+  "num_episodes": 5,
+  "total_wall_time": 297.68142262499896,
+  "aggregate": {
+    "n_episodes": 5,
+    "success_rate": 0.0,
+    "inventory_match_rate": 0.0,
+    "selected_match_rate": 0.0,
+    "reasons": {
+      "inventory_mismatch": 3,
+      "no_report_emitted": 2
+    }
+  },
+  "episodes": [
+    {
+      "episode": 1,
+      "success": false,
+      "reason": "inventory_mismatch",
+      "inventory_match": false,
+      "selected_match": false,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 47.71363791600015,
+      "wall_time": 47.713910999998916,
+      "evidence": {
+        "report": {
+          "inventory": {
+            "dirt": 3,
+            "oak_log": 1,
+            "cobblestone": 1,
+            "iron_ingot": 1,
+            "diamond": 1,
+            "apple": 1,
+            "wood": 1,
+            "coal": 1,
+            "gravel": 1
+          },
+          "selected_item": "oak_log"
+        },
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {\n      \"dirt\": 3,\n      \"oak_log\": 1,\n      \"cobblestone\": 1,\n      \"iron_ingot\": 1,\n      \"diamond\": 1,\n      \"apple\": 1,\n      \"wood\": 1,\n      \"coal\": 1,\n      \"gravel\": 1\n    },\n    \"selected_item\": \"oak_log\"\n  }\n}",
+        "inventory_match": false,
+        "selected_match": false,
+        "success": false,
+        "reason": "inventory_mismatch"
+      }
+    },
+    {
+      "episode": 2,
+      "success": false,
+      "reason": "no_report_emitted",
+      "inventory_match": null,
+      "selected_match": null,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 63.08408720800071,
+      "wall_time": 63.085074750000786,
+      "evidence": {
+        "report": null,
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {\n      \"dirt\": 3,\n      \"oak_log\": 1,\n      \"cobblestone\": 1,\n      \"nether_wart\": 1,\n      \"end_crystal\": 1,\n      \"iron_ingot\": 1,\n      \"diamond\": 1,\n      \"emerald\": 1,\n      \"experience_bottle\": 1,\n      \"lapis_lazuli\": 1,\n      \"gold_ingot\": 1,\n      \"redstone\": 1,\n      \"glow",
+        "reason": "no_report_emitted"
+      }
+    },
+    {
+      "episode": 3,
+      "success": false,
+      "reason": "no_report_emitted",
+      "inventory_match": null,
+      "selected_match": null,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 67.61194099999557,
+      "wall_time": 67.61230237500422,
+      "evidence": {
+        "report": null,
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {\n      \"dirt\": 0,\n      \"oak_log\": 0,\n      \"cobblestone\": 0,\n      \"stone\": 0,\n      \"wood\": 0,\n      \"iron_ingot\": 0,\n      \"gold_ingot\": 0,\n      \"diamond\": 0,\n      \"emerald\": 0\n    },\n    \"selected_item\": Finch\n  }\n}",
+        "reason": "no_report_emitted"
+      }
+    },
+    {
+      "episode": 4,
+      "success": false,
+      "reason": "inventory_mismatch",
+      "inventory_match": false,
+      "selected_match": false,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 64.70763116600574,
+      "wall_time": 64.70786650000082,
+      "evidence": {
+        "report": {
+          "inventory": {
+            "dirt": 3,
+            "oak_log": 1,
+            "cobblestone": 1,
+            "minecraft:stick": 1,
+            "minecraft:wood": 1,
+            "diamond": 1,
+            "iron_ingot": 1,
+            "gold_ingot": 1,
+            "emerald": 1
+          },
+          "selected_item": "diamond"
+        },
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {\n      \"dirt\": 3,\n      \"oak_log\": 1,\n      \"cobblestone\": 1,\n      \"minecraft:stick\": 1,\n      \"minecraft:wood\": 1,\n      \"diamond\": 1,\n      \"iron_ingot\": 1,\n      \"gold_ingot\": 1,\n      \"emerald\": 1\n    },\n    \"selected_item\": \"diamond\"\n  }\n}",
+        "inventory_match": false,
+        "selected_match": false,
+        "success": false,
+        "reason": "inventory_mismatch"
+      }
+    },
+    {
+      "episode": 5,
+      "success": false,
+      "reason": "inventory_mismatch",
+      "inventory_match": false,
+      "selected_match": false,
+      "steps": 2,
+      "model_calls": 2,
+      "invalid_actions": 0,
+      "elapsed_time": 54.55983874999947,
+      "wall_time": 54.55996433299879,
+      "evidence": {
+        "report": {
+          "inventory": {
+            "\u5361\u8f66": 0,
+            "\u7ea2\u77f3": 0,
+            "\u6728\u677f": 0,
+            "\u94c1\u952d": 0,
+            "\u6c99\u5b50": 0,
+            "\u6ce5\u571f": 0,
+            "\u7164\u70ad": 0,
+            "\u7f8a\u6bdb": 0,
+            "\u77f3\u5934": 0
+          },
+          "selected_item": "\u6ce5\u571f"
+        },
+        "ground_truth_inv": {},
+        "ground_truth_sel": null,
+        "raw_response": "{\n  \"action\": \"WAIT\",\n  \"report\": {\n    \"inventory\": {\n      \"\u5361\u8f66\": 0,\n      \"\u7ea2\u77f3\": 0,\n      \"\u6728\u677f\": 0,\n      \"\u94c1\u952d\": 0,\n      \"\u6c99\u5b50\": 0,\n      \"\u6ce5\u571f\": 0,\n      \"\u7164\u70ad\": 0,\n      \"\u7f8a\u6bdb\": 0,\n      \"\u77f3\u5934\": 0\n    },\n    \"selected_item\": \"\u6ce5\u571f\"\n  }\n}",
+        "inventory_match": false,
+        "selected_match": false,
+        "success": false,
+        "reason": "inventory_mismatch"
+      }
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "task_id": "d1_02_water_presence",
+  "resolution": [
+    640,
+    360
+  ],
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "conditions": [
+    "positive",
+    "negative"
+  ],
+  "env_ids": {
+    "positive": "MineRLD1WaterPositive-v0",
+    "negative": "MineRLD1WaterNegative-v0"
+  },
+  "warmup_steps": 20,
+  "num_episodes_per_condition": 1,
+  "num_episodes": 2,
+  "total_wall_time": 70.44475650000095,
+  "frames_dir": "obsidianlink/experiments/runs/d1_02_water_Qwen3-VL-2B-Instruct_1ep_20260818_165011Z_frames",
+  "aggregate": {
+    "n_episodes": 2,
+    "success_rate": 0.5,
+    "perception_error_rate": 0.5,
+    "output_protocol_error_rate": 0.0,
+    "reasons": {
+      "perception_error": 1,
+      "ok": 1
+    },
+    "by_condition": {
+      "positive": {
+        "n": 1,
+        "n_success": 0,
+        "n_perception_error": 1,
+        "n_protocol_error": 0
+      },
+      "negative": {
+        "n": 1,
+        "n_success": 1,
+        "n_perception_error": 0,
+        "n_protocol_error": 0
+      }
+    }
+  },
+  "episodes": [
+    {
+      "condition": "positive",
+      "episode": 1,
+      "success": false,
+      "reason": "perception_error",
+      "report_visible": false,
+      "ground_truth_visible": true,
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 38.062523917004,
+      "wall_time": 38.06260483400547,
+      "evidence": {
+        "report_visible": false,
+        "ground_truth_visible": true,
+        "raw_response": "{\n  \"visible\": false\n}",
+        "reason": "perception_error"
+      }
+    },
+    {
+      "condition": "negative",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_visible": false,
+      "ground_truth_visible": false,
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 31.943713540997123,
+      "wall_time": 31.943973457993707,
+      "evidence": {
+        "report_visible": false,
+        "ground_truth_visible": false,
+        "raw_response": "{\n  \"visible\": false\n}",
+        "reason": "ok"
+      }
+    }
+  ],
+  "pilot": true
+}

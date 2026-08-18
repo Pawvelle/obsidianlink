@@ -1,23 +1,27 @@
-"""Phase 1 full smoke entry point.
+"""Phase 1 / Phase 2A / Phase 2B entry points.
 
-Default behavior (Phase 1 — Minimal Minecraft Agent Loop):
+Modes are dispatched via environment variables:
 
-* Launches a real MineRL environment.
-* Wires a :class:`ReactiveAgent` to a :class:`HeuristicModelClient`.
-* Runs ``reset -> N agent.step -> close`` against the live Minecraft
-  instance, then reports:
+* ``OBSIDIANLINK_OFFLINE=1``     — Phase 0 in-process stub smoke,
+  useful for syntactic / wiring checks when Java 8 + MineRL are
+  unavailable.
+* ``OBSIDIANLINK_PHASE=1`` (default) — Phase 1 live smoke: 16-step
+  ReactiveAgent loop on real MineRL, proves the bounded action set
+  reaches Minecraft.
+* ``OBSIDIANLINK_PHASE=2a``       — Phase 2A live smoke: run the
+  Benchmark vertical slice (Task -> Runner -> Agent -> Evaluator ->
+  Result) for the D1 task on real MineRL with the Phase 2A
+  heuristic D1 agent.
+* ``OBSIDIANLINK_PHASE=2b``       — Phase 2B live smoke: same
+  vertical slice, but the D1 agent is wired to a real local MLLM
+  (:class:`QwenVLModelClient`). ``OBSIDIANLINK_MODEL_PATH`` selects
+  the checkpoint; default is
+  ``<project_root>/models/Qwen3-VL-2B-Instruct``. This is the
+  first end-to-end D1 run where the Agent is actually doing
+  *perception* rather than transcribing a pre-built report.
 
-  - the per-step action emitted by the model,
-  - whether the RGB frame changed across the loop (proves the action
-    reached Minecraft and produced an observable result),
-  - the total loop time and model call count.
-
-``OBSIDIANLINK_OFFLINE=1`` runs the legacy Phase 0 in-process stub
-smoke, useful for syntactic / wiring checks when Java 8 + MineRL are
-unavailable.
-
-This module owns no benchmark / evaluator / planner / multi-agent
-logic; those land in later phases.
+This module owns no planner / multi-agent / recovery logic; those
+land in later phases.
 """
 
 from __future__ import annotations
@@ -30,10 +34,10 @@ from typing import Any
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
 
-# Loop length for the live smoke. Short on purpose: a 16-step episode
-# is enough to exercise every ActionType in the heuristic cycle at
-# least once while keeping total wall time well under a minute after
-# the cold start.
+# Loop length for the Phase 1 live smoke. Short on purpose: a 16-step
+# episode is enough to exercise every ActionType in the heuristic
+# cycle at least once while keeping total wall time well under a
+# minute after the cold start.
 NUM_LIVE_STEPS = 16
 
 
@@ -145,6 +149,181 @@ def _run_phase1_full_smoke() -> int:
     return 0
 
 
+def _run_phase2a_d1_smoke() -> int:
+    """Phase 2A — D1 Inventory Perception vertical slice on live MineRL.
+
+    Wires the full Benchmark chain end-to-end on the live env:
+
+    * Task: D1_INVENTORY_PERCEPTION (max_steps=2).
+    * Env:  MineRLTreechop-v0 (Phase 1 default).
+    * Agent: D1InventoryPerceptionAgent wrapping a
+      :class:`D1InventoryPerceptionModel` (Phase 2A heuristic; the
+      real MLLM client lands in a later sub-step).
+    * Evaluator: D1InventoryPerceptionEvaluator.
+    * Runner: BenchmarkRunner.
+
+    Prints the structured :class:`Result` so the human can see
+    success / failure and the evidence bag.
+    """
+    # Local imports: keep MineRL / Java out of the module-level import
+    # graph so ``import obsidianlink.main`` itself never starts a JVM.
+    from obsidianlink.benchmark.runner import BenchmarkRunner
+    from obsidianlink.env.minerl import MineRLEnvironment
+    from obsidianlink.tasks.diagnostic import (
+        D1_INVENTORY_PERCEPTION,
+        D1InventoryPerceptionAgent,
+        D1InventoryPerceptionEvaluator,
+        D1InventoryPerceptionModel,
+    )
+
+    print("ObsidianLink")
+    print(
+        "Mode: LIVE Phase 2A D1 vertical slice "
+        "(Task -> Runner -> Agent -> Evaluator -> Result)"
+    )
+    print("Phase 0 / Clean Restart: COMPLETE")
+    print("Phase 1 / Minimal Minecraft Agent Loop: COMPLETE")
+    print("Phase 2A / D1 Inventory Perception: RUNNING")
+    sys.stdout.flush()
+
+    env = MineRLEnvironment()
+    model = D1InventoryPerceptionModel()
+    agent = D1InventoryPerceptionAgent(model=model)
+    evaluator = D1InventoryPerceptionEvaluator()
+
+    print(f"target env_id: {env.env_id}")
+    print(f"task_id: {D1_INVENTORY_PERCEPTION.task_id}")
+    print(f"task goal: {D1_INVENTORY_PERCEPTION.goal}")
+    print(
+        f"calling env.reset() ... (cold start ~30-60s, "
+        f"max_steps={D1_INVENTORY_PERCEPTION.max_steps})"
+    )
+    sys.stdout.flush()
+
+    result = BenchmarkRunner().run(
+        task=D1_INVENTORY_PERCEPTION,
+        env=env,
+        agent=agent,
+        evaluator=evaluator,
+    )
+
+    print("\n--- Phase 2A / D1 Result ---")
+    print(f"task_id:        {result.task_id}")
+    print(f"success:        {result.success}")
+    print(f"steps:          {result.steps}")
+    print(f"model_calls:    {result.model_calls}")
+    print(f"invalid_actions:{result.invalid_actions}")
+    print(f"elapsed_time:   {result.elapsed_time:.2f}s")
+    print(f"evidence:")
+    for key, value in result.evidence.items():
+        print(f"  {key}: {value!r}")
+    print("Phase 2A / D1 Inventory Perception: COMPLETE")
+    return 0 if result.success else 1
+
+
+def _resolve_model_path() -> str:
+    """Resolve the local MLLM checkpoint path for Phase 2B.
+
+    ``OBSIDIANLINK_MODEL_PATH`` wins; otherwise we look for a
+    sibling ``models/`` directory of the project root. We
+    intentionally do NOT search ``$HOME`` or the conda env: a
+    benchmark run must be reproducible, so the checkpoint path has
+    to be explicit.
+    """
+    import os
+
+    explicit = os.environ.get("OBSIDIANLINK_MODEL_PATH", "").strip()
+    if explicit:
+        return explicit
+    # Project root is the parent of the package directory.
+    package_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(package_dir)
+    default = os.path.join(project_root, "models", "Qwen3-VL-2B-Instruct")
+    return default
+
+
+def _run_phase2b_d1_qwen_smoke() -> int:
+    """Phase 2B — D1 vertical slice on live MineRL with Qwen3-VL.
+
+    Same wire-up as :func:`_run_phase2a_d1_smoke` but the D1 agent
+    is backed by a real local vision-capable MLLM
+    (:class:`QwenVLModelClient`). This is the first end-to-end D1
+    run where the Agent must *perceive* the live Minecraft frame
+    rather than transcribe a pre-built report.
+
+    Expected wall time on an M-series Mac with the 2B model on MPS:
+
+    * env.reset() cold start : ~25-30s
+    * model load (first act)  : ~5-10s
+    * 2 inference steps       : ~5-15s
+    * total                   : ~35-55s
+
+    The model path defaults to
+    ``<project_root>/models/Qwen3-VL-2B-Instruct`` and can be
+    overridden via ``OBSIDIANLINK_MODEL_PATH``.
+    """
+    # Local imports: keep MineRL / torch / transformers out of the
+    # module-level import graph so ``import obsidianlink.main``
+    # itself never starts a JVM or pulls in the heavy ML stack.
+    from obsidianlink.agents.qwen_vl_client import QwenVLModelClient
+    from obsidianlink.benchmark.runner import BenchmarkRunner
+    from obsidianlink.env.minerl import MineRLEnvironment
+    from obsidianlink.tasks.diagnostic import (
+        D1_INVENTORY_PERCEPTION,
+        D1InventoryPerceptionAgent,
+        D1InventoryPerceptionEvaluator,
+    )
+
+    model_path = _resolve_model_path()
+    print("ObsidianLink")
+    print(
+        "Mode: LIVE Phase 2B D1 vertical slice with Qwen3-VL "
+        "(Task -> Runner -> Agent -> Evaluator -> Result)"
+    )
+    print("Phase 0 / Clean Restart: COMPLETE")
+    print("Phase 1 / Minimal Minecraft Agent Loop: COMPLETE")
+    print("Phase 2A / D1 Inventory Perception vertical slice: COMPLETE")
+    print("Phase 2B / D1 with local MLLM: RUNNING")
+    print(f"model_path: {model_path}")
+    print(
+        f"calling env.reset() ... (cold start ~30-60s, "
+        f"max_steps={D1_INVENTORY_PERCEPTION.max_steps})"
+    )
+    sys.stdout.flush()
+
+    env = MineRLEnvironment()
+    model = QwenVLModelClient(model_path=model_path, device="auto")
+    agent = D1InventoryPerceptionAgent(model=model)
+    evaluator = D1InventoryPerceptionEvaluator()
+
+    print(f"target env_id: {env.env_id}")
+    print(f"task_id: {D1_INVENTORY_PERCEPTION.task_id}")
+    print(f"task goal: {D1_INVENTORY_PERCEPTION.goal}")
+    sys.stdout.flush()
+
+    result = BenchmarkRunner().run(
+        task=D1_INVENTORY_PERCEPTION,
+        env=env,
+        agent=agent,
+        evaluator=evaluator,
+    )
+
+    print("\n--- Phase 2B / D1 Result (Qwen3-VL) ---")
+    print(f"task_id:        {result.task_id}")
+    print(f"success:        {result.success}")
+    print(f"steps:          {result.steps}")
+    print(f"model_calls:    {result.model_calls}")
+    print(f"invalid_actions:{result.invalid_actions}")
+    print(f"elapsed_time:   {result.elapsed_time:.2f}s")
+    print(f"vision_completions: {model.vision_completions}")
+    print(f"text_completions:   {model.completions}")
+    print(f"evidence:")
+    for key, value in result.evidence.items():
+        print(f"  {key}: {value!r}")
+    print("Phase 2B / D1 with local MLLM: COMPLETE")
+    return 0 if result.success else 1
+
+
 def _frames_equal(a: Any, b: Any) -> bool:
     """Best-effort frame equality check.
 
@@ -230,7 +409,15 @@ def main() -> int:
     if os.environ.get("OBSIDIANLINK_OFFLINE") == "1":
         _run_offline_smoke()
         return 0
-    return _run_phase1_full_smoke()
+    phase = os.environ.get("OBSIDIANLINK_PHASE", "1").strip().lower()
+    if phase in ("2a", "phase2a", "phase_2a"):
+        return _run_phase2a_d1_smoke()
+    if phase in ("2b", "phase2b", "phase_2b"):
+        return _run_phase2b_d1_qwen_smoke()
+    if phase in ("1", "phase1", "phase_1", ""):
+        return _run_phase1_full_smoke()
+    print(f"Unknown OBSIDIANLINK_PHASE={phase!r}; expected 1, 2a, or 2b.")
+    return 2
 
 
 if __name__ == "__main__":

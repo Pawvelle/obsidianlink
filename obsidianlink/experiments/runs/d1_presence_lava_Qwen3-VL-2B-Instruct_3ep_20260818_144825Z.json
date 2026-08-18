@@ -1,0 +1,66 @@
+{
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "target": "lava",
+  "task_id": "d1_lava_presence",
+  "env_id": "MineRLControlledLava-v0",
+  "num_episodes": 3,
+  "total_wall_time": 76.1630540000042,
+  "aggregate": {
+    "n_episodes": 3,
+    "success_rate": 0.0,
+    "perception_error_rate": 0.0,
+    "output_protocol_error_rate": 0.0,
+    "reasons": {
+      "exception:TypeError": 3
+    }
+  },
+  "episodes": [
+    {
+      "episode": 1,
+      "success": false,
+      "reason": "exception:TypeError",
+      "report_visible": null,
+      "ground_truth_visible": null,
+      "steps": 0,
+      "model_calls": 0,
+      "invalid_actions": 0,
+      "elapsed_time": 0.0,
+      "wall_time": 0.0,
+      "evidence": {
+        "exception": "TypeError: a bytes-like object is required, not 'NoneType'"
+      }
+    },
+    {
+      "episode": 2,
+      "success": false,
+      "reason": "exception:TypeError",
+      "report_visible": null,
+      "ground_truth_visible": null,
+      "steps": 0,
+      "model_calls": 0,
+      "invalid_actions": 0,
+      "elapsed_time": 0.0,
+      "wall_time": 0.0,
+      "evidence": {
+        "exception": "TypeError: a bytes-like object is required, not 'NoneType'"
+      }
+    },
+    {
+      "episode": 3,
+      "success": false,
+      "reason": "exception:TypeError",
+      "report_visible": null,
+      "ground_truth_visible": null,
+      "steps": 0,
+      "model_calls": 0,
+      "invalid_actions": 0,
+      "elapsed_time": 0.0,
+      "wall_time": 0.0,
+      "evidence": {
+        "exception": "TypeError: a bytes-like object is required, not 'NoneType'"
+      }
+    }
+  ]
+}

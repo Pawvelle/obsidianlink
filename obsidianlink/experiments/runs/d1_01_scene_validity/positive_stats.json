@@ -1,0 +1,33 @@
+{
+  "label": "positive",
+  "shape": [
+    360,
+    640,
+    3
+  ],
+  "dtype": "uint8",
+  "mean_rgb": [
+    21.523307291666665,
+    13.280308159722223,
+    18.806684027777777
+  ],
+  "min_rgb": [
+    0,
+    0,
+    0
+  ],
+  "max_rgb": [
+    255,
+    255,
+    255
+  ],
+  "orange_fraction": 0.031063368055555554,
+  "native_png": "obsidianlink/experiments/runs/d1_01_scene_validity/positive_native_640x360.png",
+  "upscaled_png": "obsidianlink/experiments/runs/d1_01_scene_validity/positive_upscaled.png",
+  "note": "native_png is the exact VLM input. upscaled_png is human-only (nearest-neighbour).",
+  "env_id": "MineRLD1LavaPositive-v0",
+  "warmup_steps": 20,
+  "reset_seconds": 21.124217791002593,
+  "inventory": {},
+  "selected_item": null
+}
