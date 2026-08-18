@@ -10,6 +10,10 @@ build/
 dist/
 *.egg-info/
 
+# Local IDE / editor configs that should not enter the research skeleton.
+/.vscode/
+/.idea/
+
 # Local caches that are not part of the research skeleton.
 /models/
 /runs/
