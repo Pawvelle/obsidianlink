@@ -1,0 +1,67 @@
+{
+  "task_id": "d3_02_target_approach",
+  "design": "target_approach",
+  "motor_execution": true,
+  "allowed_actions": [
+    "move",
+    "wait"
+  ],
+  "resolution": [
+    640,
+    360
+  ],
+  "max_steps": 20,
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "env_id": "MineRLD302Approach-v0",
+  "spawn_z": -1.5,
+  "target": "lava",
+  "goal_distance": 2.0,
+  "min_distance": 0.6,
+  "warmup_steps": 20,
+  "num_episodes": 1,
+  "total_wall_time": 88.29658879100316,
+  "frames_dir": "obsidianlink/experiments/runs/d3_02_approach_Qwen3-VL-2B-Instruct_1ep_20260819_071703Z_frames",
+  "aggregate": {
+    "n_episodes": 1,
+    "success_rate": 1.0,
+    "approach_error_rate": 0.0,
+    "overshoot_error_rate": 0.0,
+    "output_protocol_error_rate": 0.0,
+    "missing_world_truth_rate": 0.0,
+    "reasons": {
+      "ok": 1
+    }
+  },
+  "episodes": [
+    {
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "last_action": "move",
+      "final_distance": 0.956584465135145,
+      "xpos": 0.30000000000000004,
+      "zpos": 3.043415534864855,
+      "steps": 20,
+      "model_calls": 20,
+      "invalid_actions": 0,
+      "elapsed_time": 87.80749641700095,
+      "wall_time": 87.80801766600052,
+      "evidence": {
+        "last_action": "move",
+        "last_dx": 1,
+        "final_distance": 0.956584465135145,
+        "xpos": 0.30000000000000004,
+        "zpos": 3.043415534864855,
+        "ypos": 101.0,
+        "goal_distance": 2.0,
+        "min_distance": 0.6,
+        "raw_response": "{\n  \"action\": \"move\",\n  \"dx\": 1\n}",
+        "reason": "ok"
+      }
+    }
+  ],
+  "pilot": true,
+  "historical_exploratory": false
+}

@@ -16,9 +16,10 @@ forwards a fixed minimum of evidence to the :class:`Evaluator`:
 implements action validation. Action validation lands when the bounded
 action set has tasks that care about action legality (D3 / L1+).
 
-D2-01 additionally receives ``hidden_state`` (evaluator-only pose
-from MineRL monitors) and ``final_observation`` (post-last-step).
-D1 evaluators ignore both.
+D2 / D3 additionally receive ``hidden_state`` (evaluator-only
+pose from MineRL monitors) and ``final_observation``
+(post-last-step). D1 evaluators ignore both. D3-01 grades the
+final yaw after the last camera step.
 
 Debug mode
 ----------

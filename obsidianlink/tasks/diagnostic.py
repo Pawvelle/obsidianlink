@@ -21,8 +21,9 @@ D2 implementation. Both are visual-spatial only.
 
 Historical exploratory D2 that mixed camera-yaw centering and
 walk-and-stop into Grounding is **not** a formal D2 result.
-Those motor loops belong to future D3 (Camera Alignment /
-Target Approach) and are not implemented this round.
+Those motor loops belong to D3 (Camera Alignment /
+Target Approach). **D3-01 Camera Alignment** and **D3-02 Target
+Approach** are implemented below.
 
 Historical perception pilots kept for reproducibility, **not**
 capability conclusions:
@@ -80,6 +81,19 @@ from obsidianlink.env.d2_02_scene import (
     D2_02_ENV_IDS,
     D2_02_REGIONS,
     D2_02_TARGET_NAME,
+)
+from obsidianlink.env.d3_01_scene import (
+    D3_01_CENTER_YAW_TOLERANCE,
+    D3_01_ENV_IDS,
+    D3_01_TARGET_NAME,
+    D3_01_TARGET_YAW,
+)
+from obsidianlink.env.d3_02_scene import (
+    D3_02_ENV_ID,
+    D3_02_GOAL_DISTANCE,
+    D3_02_MIN_DISTANCE,
+    D3_02_TARGET_NAME,
+    distance_to_lava,
 )
 from obsidianlink.env.environment import Observation
 
@@ -751,10 +765,9 @@ class D1PresenceEvaluator(Evaluator):
 # D2-02 Spatial Region Grounding is implemented below.
 #
 # Historical exploratory D2 mixed camera-yaw centering and
-# walk-and-stop into Grounding. Those belong to future D3:
-#   D3 Camera Alignment  (old D2-01 motor)
-#   D3 Target Approach   (old D2-02 motor)
-# D3 is not implemented this round.
+# walk-and-stop into Grounding. Those belong to D3:
+#   D3-01 Camera Alignment  (old D2-01 motor; implemented below)
+#   D3-02 Target Approach   (old D2-02 motor; implemented below)
 
 _D2_01_GOAL = (
     "Look at the Minecraft first-person frame and report whether "
@@ -1161,6 +1174,555 @@ class D2SpatialRegionGroundingEvaluator(Evaluator):
         )
 
 
+# ---------------------------------------------------------------------------
+# D3-01 — Camera Alignment (Act)
+# ---------------------------------------------------------------------------
+#
+# Same 640×360 lava courtyard and spawn yaws as D2-01. The lava is
+# already visible. The Agent issues camera yaw (or wait) from RGB
+# until the hidden yaw is near 0, then stops. Movement is D3-02
+# and is not executed here.
+#
+# Success is the final Minecraft yaw after real camera steps, not
+# a model text claim that the target is centered.
+
+_D3_01_GOAL = (
+    "A lava pool is visible in the first-person view. Use camera "
+    "yaw to bring it to the center of the frame, then wait."
+)
+
+D3_01_MAX_STEPS = 8
+D3_01_WARMUP_STEPS = D1_01_WARMUP_STEPS
+
+D3_01_LEFT = Task(
+    task_id="d3_01_camera_alignment",
+    goal=_D3_01_GOAL,
+    max_steps=D3_01_MAX_STEPS,
+    ground_truth="left",
+)
+
+D3_01_CENTER = Task(
+    task_id="d3_01_camera_alignment",
+    goal=_D3_01_GOAL,
+    max_steps=D3_01_MAX_STEPS,
+    ground_truth="center",
+)
+
+D3_01_RIGHT = Task(
+    task_id="d3_01_camera_alignment",
+    goal=_D3_01_GOAL,
+    max_steps=D3_01_MAX_STEPS,
+    ground_truth="right",
+)
+
+D3_01_TASKS: dict[str, Task] = {
+    "left": D3_01_LEFT,
+    "center": D3_01_CENTER,
+    "right": D3_01_RIGHT,
+}
+
+D3_01_ENV_IDS_BY_CONDITION = D3_01_ENV_IDS
+
+
+def _build_camera_alignment_prompt() -> str:
+    """D3-01 prompt. Camera / wait schema only; no scene GT."""
+    return (
+        "You are observing a Minecraft player's first-person view. "
+        "Your task is the D3-01 Camera Alignment diagnostic: "
+        "a LAVA pool is visible in the scene. Use a camera yaw "
+        "action to rotate so the lava moves to the center of the "
+        "frame.\n\n"
+        "Respond with a single JSON object, and ONLY that JSON. "
+        "Do NOT wrap it in markdown code fences, and do NOT add any "
+        "explanatory text before or after.\n\n"
+        "Required schema:\n"
+        "{\n"
+        '  "action": "camera" | "wait",\n'
+        '  "yaw": <number>\n'
+        "}\n\n"
+        "Rules:\n"
+        '- action "camera" rotates the view this step. "yaw" is a '
+        "horizontal delta in degrees: negative yaw turns left, "
+        "positive yaw turns right.\n"
+        "- If lava is on the left, turn left (negative yaw). If lava "
+        "is on the right, turn right (positive yaw).\n"
+        '- If lava is already in the center, set "action" to "wait" '
+        'and "yaw" to 0.\n'
+        "- Typical |yaw| is 10 to 20 degrees per step. Do not change "
+        "pitch. Do not move, attack, use, or place.\n"
+        '- Do not include any keys outside "action" and "yaw".\n'
+        "- Do not use markdown code fences."
+    )
+
+
+def parse_camera_alignment_response(response: str) -> Any:
+    """Parse a D3-01 camera/wait command.
+
+    Returns an :class:`Action` of type CAMERA or WAIT, or ``None``
+    on protocol failure (bad JSON, missing action, or any action
+    that is not camera/wait — including move). ``None`` means the
+    Agent must WAIT and the Evaluator records
+    ``output_protocol_error``.
+    """
+    from obsidianlink.env.actions import Action, ActionType
+
+    if not isinstance(response, str) or not response.strip():
+        return None
+    try:
+        data = json.loads(response)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    type_raw = data.get("action")
+    if not isinstance(type_raw, str):
+        return None
+    label = type_raw.strip().lower()
+    if label == "camera":
+        try:
+            yaw = float(data.get("yaw", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            yaw = 0.0
+        return Action(type=ActionType.CAMERA, yaw=yaw, pitch=0.0)
+    if label == "wait":
+        return Action(type=ActionType.WAIT)
+    return None
+
+
+class D3CameraAlignmentAgent:
+    """Diagnostic agent for D3-01 Camera Alignment.
+
+    Emits CAMERA or WAIT from the model JSON. MOVE / attack / use /
+    place are not executed. Hidden spawn yaw never enters the prompt.
+    """
+
+    def __init__(self, model: Any, target_name: str = D3_01_TARGET_NAME) -> None:
+        del target_name
+        self._model = model
+        self.prompt = _build_camera_alignment_prompt()
+        self.model_calls = 0
+        self.last_report = None
+        self.last_raw_response: str | None = None
+
+    def act(self, observation: Observation) -> Any:
+        from obsidianlink.agents.model_client import call_model
+        from obsidianlink.env.actions import Action, ActionType
+
+        self.model_calls += 1
+        response = call_model(self._model, self.prompt, observation=observation)
+        self.last_raw_response = response
+        parsed = parse_camera_alignment_response(response)
+        self.last_report = parsed
+        if parsed is None:
+            return Action(type=ActionType.WAIT)
+        return parsed
+
+
+class D3CameraAlignmentEvaluator(Evaluator):
+    """Grade D3-01 from the final hidden Minecraft yaw.
+
+    Failure-mode contract
+    ---------------------
+
+    * ``output_protocol_error`` — last response was not
+      ``{"action": camera|wait, "yaw": ...}``.
+    * ``missing_world_truth`` — no usable hidden yaw (wiring).
+    * ``orientation_error`` — protocol OK, but final yaw is not
+      within :data:`D3_01_CENTER_YAW_TOLERANCE` of the target
+      facing yaw (0).
+    * ``ok`` — protocol OK and the lava is centered in yaw.
+
+    Success is **final camera pose in Minecraft**, not a model
+    sentence that claims the target is centered.
+
+    Evidence bag
+    ------------
+
+    * ``final_yaw`` / ``target_yaw`` / ``yaw_error`` / ``yaw_tolerance``
+    * ``initial_direction`` (scene condition, not the success metric)
+    * ``last_action`` / ``reason`` / ``raw_response``
+    """
+
+    def evaluate(
+        self,
+        task: Task,
+        *,
+        steps: int,
+        model_calls: int,
+        invalid_actions: int,
+        elapsed_time: float,
+        report: Any = None,
+        observation: Any = None,
+        raw_response: Any = None,
+        ground_truth: Any = None,
+        final_observation: Any = None,
+        hidden_state: Any = None,
+    ) -> Result:
+        from obsidianlink.env.actions import Action, ActionType
+
+        del observation, final_observation
+
+        final_yaw = _hidden_yaw(hidden_state)
+        yaw_error = (
+            _yaw_error(final_yaw, D3_01_TARGET_YAW) if final_yaw is not None else None
+        )
+        last_action = None
+        if isinstance(report, Action):
+            last_action = report.type.value
+        evidence: dict[str, Any] = {
+            "last_action": last_action,
+            "last_yaw_delta": (
+                float(report.yaw) if isinstance(report, Action) else None
+            ),
+            "initial_direction": ground_truth,
+            "final_yaw": final_yaw,
+            "target_yaw": D3_01_TARGET_YAW,
+            "yaw_error": yaw_error,
+            "yaw_tolerance": D3_01_CENTER_YAW_TOLERANCE,
+            "raw_response": raw_response,
+        }
+
+        if not isinstance(report, Action) or report.type not in (
+            ActionType.CAMERA,
+            ActionType.WAIT,
+        ):
+            evidence["reason"] = "output_protocol_error"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if final_yaw is None or yaw_error is None:
+            evidence["reason"] = "missing_world_truth"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if abs(yaw_error) <= D3_01_CENTER_YAW_TOLERANCE:
+            evidence["reason"] = "ok"
+            return Result(
+                task_id=task.task_id,
+                success=True,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        evidence["reason"] = "orientation_error"
+        return Result(
+            task_id=task.task_id,
+            success=False,
+            steps=steps,
+            model_calls=model_calls,
+            invalid_actions=invalid_actions,
+            elapsed_time=elapsed_time,
+            evidence=evidence,
+        )
+
+
+def _hidden_yaw(hidden_state: Any) -> float | None:
+    if not isinstance(hidden_state, Mapping):
+        return None
+    raw = hidden_state.get("yaw")
+    if raw is None:
+        return None
+    try:
+        size = getattr(raw, "size", None)
+        if size == 1:
+            return float(raw.reshape(-1)[0])
+        return float(raw)
+    except (TypeError, ValueError, AttributeError, IndexError):
+        return None
+
+
+def _yaw_error(yaw: float, target: float) -> float:
+    """Signed difference ``yaw - target`` wrapped to ``(-180, 180]``."""
+    return (float(yaw) - float(target) + 180.0) % 360.0 - 180.0
+
+
+# ---------------------------------------------------------------------------
+# D3-02 — Target Approach (Act)
+# ---------------------------------------------------------------------------
+#
+# Same 640×360 lava courtyard. Yaw is already 0 (lava centered).
+# The player starts further back. The Agent issues MOVE forward
+# or WAIT from RGB until the hidden distance to the lava AABB is
+# inside the interaction band, then stops. Camera is D3-01 and
+# is not executed here.
+#
+# Success is the final Minecraft xyz after real movement, not a
+# model text claim that the target is near.
+
+_D3_02_GOAL = (
+    "A lava pool is visible and roughly centered in the first-person "
+    "view. Walk forward toward it until you are close enough to "
+    "interact, then wait. Do not walk into the lava."
+)
+
+D3_02_MAX_STEPS = 20
+D3_02_WARMUP_STEPS = D1_01_WARMUP_STEPS
+
+D3_02_APPROACH = Task(
+    task_id="d3_02_target_approach",
+    goal=_D3_02_GOAL,
+    max_steps=D3_02_MAX_STEPS,
+    ground_truth=None,
+)
+
+
+def _build_target_approach_prompt() -> str:
+    """D3-02 prompt. Move / wait schema only; no numeric distance GT."""
+    return (
+        "You are observing a Minecraft player's first-person view. "
+        "Your task is the D3-02 Target Approach diagnostic: "
+        "a LAVA pool is already visible and roughly in the CENTER of "
+        "the frame. Walk forward toward it until you are close, then "
+        "stop. Do not walk into the lava.\n\n"
+        "Respond with a single JSON object, and ONLY that JSON. "
+        "Do NOT wrap it in markdown code fences, and do NOT add any "
+        "explanatory text before or after.\n\n"
+        "Required schema:\n"
+        "{\n"
+        '  "action": "move" | "wait",\n'
+        '  "dx": <number>\n'
+        "}\n\n"
+        "Rules:\n"
+        '- action "move" with dx 1 walks forward. action "wait" with '
+        "dx 0 stays still.\n"
+        "- If the lava still looks far, walk forward. If it already "
+        "looks close, wait.\n"
+        "- Do not walk into the lava. Do not turn the camera. Do not "
+        "strafe, attack, use, or place.\n"
+        '- Do not include any keys outside "action" and "dx".\n'
+        "- Do not use markdown code fences."
+    )
+
+
+def parse_target_approach_response(response: str) -> Any:
+    """Parse a D3-02 move/wait command.
+
+    Returns an :class:`Action` of type MOVE (forward) or WAIT, or
+    ``None`` on protocol failure (bad JSON, missing action, camera,
+    strafe, back, or any action that is not move/wait). ``None``
+    means the Agent must WAIT and the Evaluator records
+    ``output_protocol_error``.
+    """
+    from obsidianlink.env.actions import Action, ActionType
+
+    if not isinstance(response, str) or not response.strip():
+        return None
+    try:
+        data = json.loads(response)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    type_raw = data.get("action")
+    if not isinstance(type_raw, str):
+        return None
+    label = type_raw.strip().lower()
+    if label == "move":
+        try:
+            dx = int(data.get("dx", 0) or 0)
+        except (TypeError, ValueError):
+            return None
+        if dx <= 0:
+            return None
+        return Action(type=ActionType.MOVE, dx=1, dz=0)
+    if label == "wait":
+        return Action(type=ActionType.WAIT)
+    return None
+
+
+class D3TargetApproachAgent:
+    """Diagnostic agent for D3-02 Target Approach.
+
+    Emits MOVE forward or WAIT from the model JSON. CAMERA / back /
+    strafe / attack / use / place are not executed. Hidden xyz and
+    the numeric distance band never enter the prompt.
+    """
+
+    def __init__(self, model: Any, target_name: str = D3_02_TARGET_NAME) -> None:
+        del target_name
+        self._model = model
+        self.prompt = _build_target_approach_prompt()
+        self.model_calls = 0
+        self.last_report = None
+        self.last_raw_response: str | None = None
+
+    def act(self, observation: Observation) -> Any:
+        from obsidianlink.agents.model_client import call_model
+        from obsidianlink.env.actions import Action, ActionType
+
+        self.model_calls += 1
+        response = call_model(self._model, self.prompt, observation=observation)
+        self.last_raw_response = response
+        parsed = parse_target_approach_response(response)
+        self.last_report = parsed
+        if parsed is None:
+            return Action(type=ActionType.WAIT)
+        return parsed
+
+
+class D3TargetApproachEvaluator(Evaluator):
+    """Grade D3-02 from the final hidden distance to the lava AABB.
+
+    Failure-mode contract
+    ---------------------
+
+    * ``output_protocol_error`` — last response was not
+      ``{"action": move|wait, "dx": ...}``.
+    * ``missing_world_truth`` — no usable hidden x/z (wiring).
+    * ``approach_error`` — protocol OK, but still further than
+      :data:`D3_02_GOAL_DISTANCE`.
+    * ``overshoot_error`` — protocol OK, but closer than
+      :data:`D3_02_MIN_DISTANCE` (walked into / through the pool).
+    * ``ok`` — protocol OK and distance is in the success band.
+
+    Success is **final player pose in Minecraft**, not a model
+    sentence that claims the target is near.
+
+    Evidence bag
+    ------------
+
+    * ``final_distance`` / ``xpos`` / ``zpos`` / ``ypos``
+    * ``goal_distance`` / ``min_distance``
+    * ``last_action`` / ``reason`` / ``raw_response``
+    """
+
+    def evaluate(
+        self,
+        task: Task,
+        *,
+        steps: int,
+        model_calls: int,
+        invalid_actions: int,
+        elapsed_time: float,
+        report: Any = None,
+        observation: Any = None,
+        raw_response: Any = None,
+        ground_truth: Any = None,
+        final_observation: Any = None,
+        hidden_state: Any = None,
+    ) -> Result:
+        from obsidianlink.env.actions import Action, ActionType
+
+        del observation, final_observation, ground_truth
+
+        xpos = _hidden_float(hidden_state, "xpos")
+        zpos = _hidden_float(hidden_state, "zpos")
+        ypos = _hidden_float(hidden_state, "ypos")
+        final_distance = (
+            distance_to_lava(xpos, zpos)
+            if xpos is not None and zpos is not None
+            else None
+        )
+        last_action = None
+        if isinstance(report, Action):
+            last_action = report.type.value
+        evidence: dict[str, Any] = {
+            "last_action": last_action,
+            "last_dx": (int(report.dx) if isinstance(report, Action) else None),
+            "final_distance": final_distance,
+            "xpos": xpos,
+            "zpos": zpos,
+            "ypos": ypos,
+            "goal_distance": D3_02_GOAL_DISTANCE,
+            "min_distance": D3_02_MIN_DISTANCE,
+            "raw_response": raw_response,
+        }
+
+        if not isinstance(report, Action) or report.type not in (
+            ActionType.MOVE,
+            ActionType.WAIT,
+        ):
+            evidence["reason"] = "output_protocol_error"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if final_distance is None:
+            evidence["reason"] = "missing_world_truth"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if final_distance < D3_02_MIN_DISTANCE:
+            evidence["reason"] = "overshoot_error"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if final_distance <= D3_02_GOAL_DISTANCE:
+            evidence["reason"] = "ok"
+            return Result(
+                task_id=task.task_id,
+                success=True,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        evidence["reason"] = "approach_error"
+        return Result(
+            task_id=task.task_id,
+            success=False,
+            steps=steps,
+            model_calls=model_calls,
+            invalid_actions=invalid_actions,
+            elapsed_time=elapsed_time,
+            evidence=evidence,
+        )
+
+
+def _hidden_float(hidden_state: Any, key: str) -> float | None:
+    if not isinstance(hidden_state, Mapping):
+        return None
+    raw = hidden_state.get(key)
+    if raw is None:
+        return None
+    try:
+        size = getattr(raw, "size", None)
+        if size == 1:
+            return float(raw.reshape(-1)[0])
+        return float(raw)
+    except (TypeError, ValueError, AttributeError, IndexError):
+        return None
+
+
 __all__ = [
     # Phase 2A / 2B inventory pilot
     "D1_INVENTORY_PERCEPTION",
@@ -1203,5 +1765,24 @@ __all__ = [
     "D2_02_WARMUP_STEPS",
     "D2SpatialRegionGroundingAgent",
     "D2SpatialRegionGroundingEvaluator",
+    # D3-01 Camera Alignment
+    "D3_01_LEFT",
+    "D3_01_CENTER",
+    "D3_01_RIGHT",
+    "D3_01_TASKS",
+    "D3_01_ENV_IDS_BY_CONDITION",
+    "D3_01_MAX_STEPS",
+    "D3_01_WARMUP_STEPS",
+    "parse_camera_alignment_response",
+    "D3CameraAlignmentAgent",
+    "D3CameraAlignmentEvaluator",
+    # D3-02 Target Approach
+    "D3_02_APPROACH",
+    "D3_02_ENV_ID",
+    "D3_02_MAX_STEPS",
+    "D3_02_WARMUP_STEPS",
+    "parse_target_approach_response",
+    "D3TargetApproachAgent",
+    "D3TargetApproachEvaluator",
 ]
 

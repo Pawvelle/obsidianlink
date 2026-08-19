@@ -16,9 +16,12 @@ Diagnostic split (frozen)::
 no motor) and **D2-02 Spatial Region Grounding** (3×3 regions;
 still no motor) are the current D2 implementation.
 
+**D3-01 Camera Alignment** (camera yaw to center a visible lava
+target) and **D3-02 Target Approach** (walk forward to an
+interaction distance) are the current Manipulation tasks.
+
 Historical exploratory D2 that mixed camera alignment / target
-approach into Grounding is not a formal D2 result. Those motor
-loops belong to future D3 and are not implemented this round.
+approach into Grounding is not a formal D2 result.
 
 Historical, **not** capability conclusions:
 
@@ -68,6 +71,23 @@ from obsidianlink.tasks.diagnostic import (
     D2_02_WARMUP_STEPS,
     D2SpatialRegionGroundingAgent,
     D2SpatialRegionGroundingEvaluator,
+    D3_01_CENTER,
+    D3_01_ENV_IDS_BY_CONDITION,
+    D3_01_LEFT,
+    D3_01_MAX_STEPS,
+    D3_01_RIGHT,
+    D3_01_TASKS,
+    D3_01_WARMUP_STEPS,
+    parse_camera_alignment_response,
+    D3CameraAlignmentAgent,
+    D3CameraAlignmentEvaluator,
+    D3_02_APPROACH,
+    D3_02_ENV_ID,
+    D3_02_MAX_STEPS,
+    D3_02_WARMUP_STEPS,
+    parse_target_approach_response,
+    D3TargetApproachAgent,
+    D3TargetApproachEvaluator,
 )
 
 __all__ = [
@@ -112,4 +132,23 @@ __all__ = [
     "D2_02_WARMUP_STEPS",
     "D2SpatialRegionGroundingAgent",
     "D2SpatialRegionGroundingEvaluator",
+    # D3-01 Camera Alignment
+    "D3_01_LEFT",
+    "D3_01_CENTER",
+    "D3_01_RIGHT",
+    "D3_01_TASKS",
+    "D3_01_ENV_IDS_BY_CONDITION",
+    "D3_01_MAX_STEPS",
+    "D3_01_WARMUP_STEPS",
+    "parse_camera_alignment_response",
+    "D3CameraAlignmentAgent",
+    "D3CameraAlignmentEvaluator",
+    # D3-02 Target Approach
+    "D3_02_APPROACH",
+    "D3_02_ENV_ID",
+    "D3_02_MAX_STEPS",
+    "D3_02_WARMUP_STEPS",
+    "parse_target_approach_response",
+    "D3TargetApproachAgent",
+    "D3TargetApproachEvaluator",
 ]

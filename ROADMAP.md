@@ -4,7 +4,7 @@
 
 ## Current Phase
 
-**D2 Grounding — D2-01 Direction Grounding 与 D2-02 Spatial Region Grounding 均已实现。**
+**D3 Manipulation MVP 已完成：D3-01 Camera Alignment + D3-02 Target Approach。**
 
 Diagnostic 固定拆分：
 
@@ -19,6 +19,11 @@ D2 只做视觉空间 Grounding。禁止 camera / move / attack / use / place。
 * **D2-01 Direction Grounding**（已实现）：受控 lava 场景，left / center / right，`{"target","direction"}`，hidden GT，`max_steps=1`，WAIT only。
 * **D2-02 Spatial Region Grounding**（已实现）：同一院落，yaw×pitch 把岩浆放到 3×3 区域（`upper_left` … `lower_right`），`{"target","region"}`，仍无 motor。
 
+D3 只做已 grounding 目标上的动作。当前固定两部分：
+
+* **D3-01 Camera Alignment**（已实现）：同一岩浆院落与 D2-01 spawn yaw。Agent 发 `{"action":"camera"|"wait","yaw":...}`，`max_steps=8`。MOVE 不执行。成功 = 最终 hidden yaw 距 0 在 ±12° 内。
+* **D3-02 Target Approach**（已实现）：同一院落，yaw=0 已居中，出生点稍后。Agent 发 `{"action":"move"|"wait","dx":...}`，`max_steps=20`。只允许前进 / 等待。成功 = 最终到岩浆 AABB 的 hidden 距离在 0.6–2.0 格。
+
 D1 v2 原则：单帧、单目标、二分类、受控场景、可靠 hidden ground truth、肉眼清晰、POV 640×360。
 
 **D1-01 Lava Presence**：正负场景 + 2B/4B 各 1 episode，评测链路通。
@@ -32,18 +37,21 @@ D1 v2 原则：单帧、单目标、二分类、受控场景、可靠 hidden gro
 - Phase 2A/2B inventory D1
 - Phase 2C lava presence
 - 旧 64×64 D1 v2 抓帧
-- 早期错误 D2：camera yaw 居中（旧 D2-01）与 walk-and-stop（旧 D2-02）。historical / exploratory pilot，不是正式 D2 result。属于未来 D3。
+- 早期错误 D2：camera yaw 居中（旧 D2-01）与 walk-and-stop（旧 D2-02）。historical / exploratory pilot，不是正式 D2 result。已分别作为正式 D3-01 / D3-02 重做。
 
 ## Current Task
 
-**D2-02 Spatial Region Grounding 已关闭。** Diagnostic Grounding（Where?）最小闭环完成。下一步不要扩导航、检测或正式 D3。
+**D3-02 Target Approach 已关闭。D3 Manipulation MVP（D3-01 + D3-02）完成。不要开始其他 D3 task，也不要开始 L1。**
 
 D1 Pilot 已关闭，不再扩 D1 物体类、不调 prompt、不做 D1 大规模统计。
+D2 Grounding 已关闭，不把 motor 写回 D2。
 
-D2-01 帧：`obsidianlink/experiments/runs/d2_01_scene_validity/`
+D1 / D2-01 帧：`obsidianlink/experiments/runs/d2_01_scene_validity/`
 D2-02 帧：`obsidianlink/experiments/runs/d2_02_region_validity/`
+D3-01 帧：`obsidianlink/experiments/runs/d3_01_scene_validity/`
+D3-02 帧：`obsidianlink/experiments/runs/d3_02_scene_validity/`
 
-历史 exploratory 帧（保留）：
+历史 exploratory 帧（保留，非正式 D2）：
 
 - 旧 D2-01 camera alignment：`obsidianlink/experiments/runs/d2_01_direction_Qwen3-VL-*`
 - 旧 D2-02 target approach：`obsidianlink/experiments/runs/d2_02_scene_validity/` 与 `d2_02_approach_Qwen3-VL-*`
@@ -115,7 +123,7 @@ OBSIDIANLINK_OFFLINE=1 conda run -n mc-agent python main.py
 PYTHONPATH=. conda run -n mc-agent python -m pytest tests/
 ```
 
-191 个离线单测覆盖 D1 / Phase 1 / D2-01 Direction Grounding / D2-02 Spatial Region Grounding（均无 motor）。
+224 个离线单测覆盖 D1 / Phase 1 / D2-01 / D2-02 / D3-01 Camera Alignment / D3-02 Target Approach。
 
 ## Completed
 
@@ -205,13 +213,30 @@ PYTHONPATH=. conda run -n mc-agent python -m pytest tests/
   * Live n=1（pipeline / pilot，非 capability）：Qwen3-VL-2B 3/9 ok（protocol 4、grounding 2）；Qwen3-VL-4B 6/9 ok（protocol 1、grounding 2）。未因结果改 prompt。
 
 * **Historical / exploratory D2 (not a formal D2 result, 2026-08-19)**
-  * 旧 D2-01 把 direction classification 与 camera yaw 居中绑在一起（`max_steps=8`，`orientation_error`）。Live n=1：2B 3/3 ok；4B 1/3。属于未来 **D3 Camera Alignment**。
-  * 旧 D2-02 把 walk-and-stop 写进 Grounding（`approach_error` / `overshoot_error`）。Live n=1：2B WAIT 原地；4B 走过头。属于未来 **D3 Target Approach**。
-  * 实验 JSON / 帧保留在 `obsidianlink/experiments/runs/`，不作 D2 capability 结论。本轮不实现 D3。
+  * 旧 D2-01 把 direction classification 与 camera yaw 居中绑在一起（`max_steps=8`，`orientation_error`）。Live n=1：2B 3/3 ok；4B 1/3。现已作为正式 **D3-01 Camera Alignment** 重做。
+  * 旧 D2-02 把 walk-and-stop 写进 Grounding（`approach_error` / `overshoot_error`）。Live n=1：2B WAIT 原地；4B 走过头。现已作为正式 **D3-02 Target Approach** 重做。
+  * 实验 JSON / 帧保留在 `obsidianlink/experiments/runs/`，不作 D2 capability 结论。
+
+* **D3-01 Camera Alignment — complete (2026-08-19)**
+  * 定义：目标已可见并可 grounding。Agent 用 camera yaw 把岩浆转到画面中央并停止。无 movement / attack / use / place。
+  * 复用 D2-01 岩浆院落与 spawn yaw（left +35° / center 0° / right −35°），新 env id `MineRLD301*`，POV 640×360，`max_steps=8`。
+  * 闭环：RGB → Agent → camera/wait → Minecraft → 新 RGB。MOVE 被夹成 WAIT。
+  * Evaluator 读执行后的 hidden yaw（MineRL location monitor / gym info），目标 yaw = 0，容差 ±12°。不根据模型文字声明判成功。
+  * Failure modes：`ok` / `orientation_error` / `output_protocol_error` / `missing_world_truth`。
+  * Scene-validity：left/center/right 质心 nx ≈ 0.21 / 0.50 / 0.79；`+20` camera 后 hidden yaw 0 → 20。
+  * Live n=1（pipeline / pilot，非 capability）：Qwen3-VL-2B 0/3（全部 `orientation_error`，protocol 正常）；Qwen3-VL-4B 3/3 ok。未因结果改 prompt。
+
+* **D3-02 Target Approach — complete (2026-08-19)**
+  * 定义：目标已可见且基本居中。Agent 用前进走到交互距离并停止。无 camera / strafe / attack / use / place。不测 D2 grounding（无 far/near 字段）。
+  * 同一岩浆院落，yaw=0，spawn z=−1.5（warmup 后约 4.6 格）。新 env id `MineRLD302Approach-v0`，POV 640×360，`max_steps=20`。
+  * 闭环：RGB → Agent → move/wait → Minecraft → 新 RGB。CAMERA / 后退被夹成 WAIT。
+  * Evaluator 读执行后的 hidden xyz，计算到岩浆 AABB 的水平距离。成功带 0.6–2.0 格。过远 `approach_error`，过近 `overshoot_error`。不根据模型文字声明判成功。
+  * Scene-validity：起点岩浆居中且偏远（nx ≈ 0.48，d ≈ 4.65）；脚本化前进第 14–19 步进入成功带，第 20 步 overshoot（0.52）。
+  * Live n=1（pipeline / pilot，非 capability）：Qwen3-VL-2B 1/1 ok（最终 d ≈ 0.96）；Qwen3-VL-4B 0/1 `overshoot_error`（d ≈ 0.53，一路前进未停）。未因结果改 prompt。
 
 ## Next
 
-**D3 Manipulation（Camera Alignment / Target Approach），或根据 D2 真实失败决定下一步。** 不增加导航 / 规划 / 检测框架。不把 motor 写回 D2。
+**D3 Manipulation MVP 已关闭。不要扩展 attack / placement / item use，也不要开始 L1。** 不增加导航 / 规划 / 检测框架。不把 motor 写回 D2。
 
 ## Blocked
 

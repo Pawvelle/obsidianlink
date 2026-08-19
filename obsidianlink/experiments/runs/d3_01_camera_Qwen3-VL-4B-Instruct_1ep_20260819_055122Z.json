@@ -1,0 +1,156 @@
+{
+  "task_id": "d3_01_camera_alignment",
+  "design": "camera_alignment",
+  "motor_execution": true,
+  "allowed_actions": [
+    "camera",
+    "wait"
+  ],
+  "resolution": [
+    640,
+    360
+  ],
+  "max_steps": 8,
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-4B-Instruct",
+  "model_name": "Qwen3-VL-4B-Instruct",
+  "device": "auto",
+  "conditions": [
+    "left",
+    "center",
+    "right"
+  ],
+  "env_ids": {
+    "left": "MineRLD301Left-v0",
+    "center": "MineRLD301Center-v0",
+    "right": "MineRLD301Right-v0"
+  },
+  "spawn_yaws": {
+    "left": 35.0,
+    "center": 0.0,
+    "right": -35.0
+  },
+  "target": "lava",
+  "target_yaw": 0.0,
+  "yaw_tolerance": 12.0,
+  "warmup_steps": 20,
+  "num_episodes_per_condition": 1,
+  "num_episodes": 3,
+  "total_wall_time": 249.85060045799946,
+  "frames_dir": "obsidianlink/experiments/runs/d3_01_camera_Qwen3-VL-4B-Instruct_1ep_20260819_055122Z_frames",
+  "aggregate": {
+    "n_episodes": 3,
+    "success_rate": 1.0,
+    "orientation_error_rate": 0.0,
+    "output_protocol_error_rate": 0.0,
+    "missing_world_truth_rate": 0.0,
+    "reasons": {
+      "ok": 3
+    },
+    "by_condition": {
+      "left": {
+        "n": 1,
+        "n_success": 1,
+        "n_orientation_error": 0,
+        "n_protocol_error": 0,
+        "n_missing_world_truth": 0
+      },
+      "center": {
+        "n": 1,
+        "n_success": 1,
+        "n_orientation_error": 0,
+        "n_protocol_error": 0,
+        "n_missing_world_truth": 0
+      },
+      "right": {
+        "n": 1,
+        "n_success": 1,
+        "n_orientation_error": 0,
+        "n_protocol_error": 0,
+        "n_missing_world_truth": 0
+      }
+    }
+  },
+  "episodes": [
+    {
+      "condition": "left",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "last_action": "camera",
+      "final_yaw": -3.7550926e-06,
+      "yaw_error": -3.7550925924279e-06,
+      "initial_direction": "left",
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 88.66497037499903,
+      "wall_time": 88.6656984580004,
+      "evidence": {
+        "last_action": "camera",
+        "last_yaw_delta": 0.0,
+        "initial_direction": "left",
+        "final_yaw": -3.7550926e-06,
+        "target_yaw": 0.0,
+        "yaw_error": -3.7550925924279e-06,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"action\": \"camera\",\n  \"yaw\": 0\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "center",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "last_action": "camera",
+      "final_yaw": 5.0,
+      "yaw_error": 5.0,
+      "initial_direction": "center",
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 78.03869829200084,
+      "wall_time": 78.03942229099994,
+      "evidence": {
+        "last_action": "camera",
+        "last_yaw_delta": 0.0,
+        "initial_direction": "center",
+        "final_yaw": 5.0,
+        "target_yaw": 0.0,
+        "yaw_error": 5.0,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"action\": \"camera\",\n  \"yaw\": 0\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "right",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "last_action": "camera",
+      "final_yaw": -4.9999967,
+      "yaw_error": -4.999996699999997,
+      "initial_direction": "right",
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 82.63387033400068,
+      "wall_time": 82.63576795900008,
+      "evidence": {
+        "last_action": "camera",
+        "last_yaw_delta": 0.0,
+        "initial_direction": "right",
+        "final_yaw": -4.9999967,
+        "target_yaw": 0.0,
+        "yaw_error": -4.999996699999997,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"action\": \"camera\",\n  \"yaw\": 0\n}",
+        "reason": "ok"
+      }
+    }
+  ],
+  "d3_02": false,
+  "pilot": true,
+  "historical_exploratory": false
+}

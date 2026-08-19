@@ -14,11 +14,11 @@ episode finishes, plus optional channels specific to a task family:
 * ``final_observation`` — the observation *after* the last
   ``env.step()``. D2 uses this when a visual check of the
   post-action frame is useful; D1 ignores it.
-* ``hidden_state`` — evaluator-only world snapshot (e.g. D2-01
+* ``hidden_state`` — evaluator-only world snapshot (e.g. D3-01
   yaw from MineRL monitors). Must never have been shown to the
   Agent.
 * ``ground_truth`` — task-level hidden truth (D1 presence bool,
-  D2-01 initial direction).
+  D2-01 initial direction, D3-01 spawn-yaw condition).
 
 The primary metric set (success / steps / model_calls /
 invalid_actions / elapsed_time) is fixed by the Development Plan; the

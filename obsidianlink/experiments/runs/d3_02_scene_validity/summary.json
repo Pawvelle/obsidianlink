@@ -1,0 +1,292 @@
+{
+  "env_id": "MineRLD302Approach-v0",
+  "spawn_z": -1.5,
+  "warmup_steps": 20,
+  "goal_distance": 2.0,
+  "min_distance": 0.6,
+  "start": {
+    "label": "start",
+    "shape": [
+      360,
+      640,
+      3
+    ],
+    "mean_rgb": [
+      18.79240451388889,
+      13.294305555555555,
+      19.7990234375
+    ],
+    "native_png": "obsidianlink/experiments/runs/d3_02_scene_validity/start_native_640x360.png",
+    "orange_fraction": 0.017808159722222223,
+    "orange_centroid_x": 308.20740921277115,
+    "orange_centroid_nx": 0.4815740768949549,
+    "hidden_state": {
+      "yaw": 0.0,
+      "pitch": 25.0,
+      "xpos": 0.30000000000000004,
+      "ypos": 101.0,
+      "zpos": -0.6453999936580654
+    },
+    "distance_to_lava": 4.645399993658065,
+    "reset_seconds": 26.274089041999105
+  },
+  "after_walk": {
+    "label": "after_walk",
+    "shape": [
+      360,
+      640,
+      3
+    ],
+    "mean_rgb": [
+      52.603993055555556,
+      26.743567708333334,
+      18.853246527777777
+    ],
+    "native_png": "obsidianlink/experiments/runs/d3_02_scene_validity/after_walk_native_640x360.png",
+    "orange_fraction": 0.20151041666666666,
+    "orange_centroid_x": 285.2246919962092,
+    "orange_centroid_nx": 0.44566358124407685,
+    "hidden_state": {
+      "yaw": 0.0,
+      "pitch": 25.0,
+      "xpos": 0.30000000000000004,
+      "ypos": 101.0,
+      "zpos": 3.4778452902652846
+    },
+    "distance_to_lava": 0.5221547097347154
+  },
+  "walk_log": [
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": -0.5175883833650105
+      },
+      "distance_to_lava": 4.517588383365011,
+      "step": 1
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": -0.34980323267161173
+      },
+      "distance_to_lava": 4.349803232671611,
+      "step": 2
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": -0.16019252638452972
+      },
+      "distance_to_lava": 4.16019252638453,
+      "step": 3
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.04133493464086577
+      },
+      "distance_to_lava": 3.9586650653591344,
+      "step": 4
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.24936894450913313
+      },
+      "distance_to_lava": 3.750631055490867,
+      "step": 5
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.4609555304582496
+      },
+      "distance_to_lava": 3.5390444695417504,
+      "step": 6
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.6744818231728118
+      },
+      "distance_to_lava": 3.325518176827188,
+      "step": 7
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.8890671959043221
+      },
+      "distance_to_lava": 3.110932804095678,
+      "step": 8
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.1042308263922525
+      },
+      "distance_to_lava": 2.8957691736077473,
+      "step": 9
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.3197101856518607
+      },
+      "distance_to_lava": 2.6802898143481393,
+      "step": 10
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.5353619328408286
+      },
+      "distance_to_lava": 2.4646380671591714,
+      "step": 11
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.7511078038501593
+      },
+      "distance_to_lava": 2.248892196149841,
+      "step": 12
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.9669050664713776
+      },
+      "distance_to_lava": 2.0330949335286226,
+      "step": 13
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 2.182730388915946
+      },
+      "distance_to_lava": 1.817269611084054,
+      "step": 14
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 2.398571032025842
+      },
+      "distance_to_lava": 1.601428967974158,
+      "step": 15
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 2.6144200402199798
+      },
+      "distance_to_lava": 1.3855799597800202,
+      "step": 16
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 2.8302736157506434
+      },
+      "distance_to_lava": 1.1697263842493566,
+      "step": 17
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 3.04612968504734
+      },
+      "distance_to_lava": 0.9538703149526602,
+      "step": 18
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 3.2619871159404483
+      },
+      "distance_to_lava": 0.7380128840595517,
+      "step": 19
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 3.4778452902652846
+      },
+      "distance_to_lava": 0.5221547097347154,
+      "step": 20
+    }
+  ],
+  "steps_in_success_band": [
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "hidden_xyz_updated": true,
+  "vlm_ran": false,
+  "motor_execution": true,
+  "design": "target_approach"
+}

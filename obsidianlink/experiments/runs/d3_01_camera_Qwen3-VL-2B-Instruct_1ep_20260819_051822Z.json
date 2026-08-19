@@ -1,0 +1,156 @@
+{
+  "task_id": "d3_01_camera_alignment",
+  "design": "camera_alignment",
+  "motor_execution": true,
+  "allowed_actions": [
+    "camera",
+    "wait"
+  ],
+  "resolution": [
+    640,
+    360
+  ],
+  "max_steps": 8,
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "conditions": [
+    "left",
+    "center",
+    "right"
+  ],
+  "env_ids": {
+    "left": "MineRLD301Left-v0",
+    "center": "MineRLD301Center-v0",
+    "right": "MineRLD301Right-v0"
+  },
+  "spawn_yaws": {
+    "left": 35.0,
+    "center": 0.0,
+    "right": -35.0
+  },
+  "target": "lava",
+  "target_yaw": 0.0,
+  "yaw_tolerance": 12.0,
+  "warmup_steps": 20,
+  "num_episodes_per_condition": 1,
+  "num_episodes": 3,
+  "total_wall_time": 162.63213041699964,
+  "frames_dir": "obsidianlink/experiments/runs/d3_01_camera_Qwen3-VL-2B-Instruct_1ep_20260819_051822Z_frames",
+  "aggregate": {
+    "n_episodes": 3,
+    "success_rate": 0.0,
+    "orientation_error_rate": 1.0,
+    "output_protocol_error_rate": 0.0,
+    "missing_world_truth_rate": 0.0,
+    "reasons": {
+      "orientation_error": 3
+    },
+    "by_condition": {
+      "left": {
+        "n": 1,
+        "n_success": 0,
+        "n_orientation_error": 1,
+        "n_protocol_error": 0,
+        "n_missing_world_truth": 0
+      },
+      "center": {
+        "n": 1,
+        "n_success": 0,
+        "n_orientation_error": 1,
+        "n_protocol_error": 0,
+        "n_missing_world_truth": 0
+      },
+      "right": {
+        "n": 1,
+        "n_success": 0,
+        "n_orientation_error": 1,
+        "n_protocol_error": 0,
+        "n_missing_world_truth": 0
+      }
+    }
+  },
+  "episodes": [
+    {
+      "condition": "left",
+      "episode": 1,
+      "success": false,
+      "reason": "orientation_error",
+      "last_action": "camera",
+      "final_yaw": 35.0,
+      "yaw_error": 35.0,
+      "initial_direction": "left",
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 54.56074533299943,
+      "wall_time": 54.560835999998744,
+      "evidence": {
+        "last_action": "camera",
+        "last_yaw_delta": 15.0,
+        "initial_direction": "left",
+        "final_yaw": 35.0,
+        "target_yaw": 0.0,
+        "yaw_error": 35.0,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"action\": \"camera\",\n  \"yaw\": 15\n}",
+        "reason": "orientation_error"
+      }
+    },
+    {
+      "condition": "center",
+      "episode": 1,
+      "success": false,
+      "reason": "orientation_error",
+      "last_action": "camera",
+      "final_yaw": 30.000002,
+      "yaw_error": 30.000001999999995,
+      "initial_direction": "center",
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 49.00262533299974,
+      "wall_time": 49.00274216700018,
+      "evidence": {
+        "last_action": "camera",
+        "last_yaw_delta": 15.0,
+        "initial_direction": "center",
+        "final_yaw": 30.000002,
+        "target_yaw": 0.0,
+        "yaw_error": 30.000001999999995,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"action\": \"camera\",\n  \"yaw\": 15\n}",
+        "reason": "orientation_error"
+      }
+    },
+    {
+      "condition": "right",
+      "episode": 1,
+      "success": false,
+      "reason": "orientation_error",
+      "last_action": "camera",
+      "final_yaw": 25.000006,
+      "yaw_error": 25.000005999999985,
+      "initial_direction": "right",
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 58.587266208000074,
+      "wall_time": 58.58742549999988,
+      "evidence": {
+        "last_action": "camera",
+        "last_yaw_delta": 15.0,
+        "initial_direction": "right",
+        "final_yaw": 25.000006,
+        "target_yaw": 0.0,
+        "yaw_error": 25.000005999999985,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"action\": \"camera\",\n  \"yaw\": 15\n}",
+        "reason": "orientation_error"
+      }
+    }
+  ],
+  "d3_02": false,
+  "pilot": true,
+  "historical_exploratory": false
+}

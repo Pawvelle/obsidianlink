@@ -1,4 +1,4 @@
-"""Controlled-scene env for D1 v2 perception and D2-01 grounding.
+"""Controlled-scene env for D1 v2, D2 grounding, and D3-01 alignment.
 
 This is a thin wrapper around :class:`obsidianlink.env.minerl.MineRLEnvironment`
 that points at one of the custom herobraine env specs defined in
@@ -16,10 +16,11 @@ bool meaning "is this target present in the current world?".
 
 D2-01 / D2-02 hidden ground truth is the intended screen-space
 label (direction or 3×3 region), derived from spawn pose at
-scene construction and attached to ``Task.ground_truth``. It
-never enters :class:`Observation`. ``hidden_state`` remains
-evaluator-only plumbing (pose monitors are optional) and is
-**not** part of :class:`Observation`.
+scene construction and attached to ``Task.ground_truth``. D3-01 success is the **final** hidden yaw after camera actions.
+D3-02 success is the **final** distance to the lava AABB after
+movement. Neither ever enters :class:`Observation`. ``hidden_state``
+remains evaluator-only plumbing (D3 registers pose monitors)
+and is **not** part of :class:`Observation`.
 
 **Crucially**, ``target_truths`` and ``hidden_state`` are NOT
 part of the agent-visible :class:`Observation` and are never
@@ -56,6 +57,10 @@ _ENV_TARGET_TRUTHS: dict[str, dict[str, bool]] = {
     "MineRLD201Left-v0": {"lava": True},
     "MineRLD201Center-v0": {"lava": True},
     "MineRLD201Right-v0": {"lava": True},
+    "MineRLD301Left-v0": {"lava": True},
+    "MineRLD301Center-v0": {"lava": True},
+    "MineRLD301Right-v0": {"lava": True},
+    "MineRLD302Approach-v0": {"lava": True},
     "MineRLD202UpperLeft-v0": {"lava": True},
     "MineRLD202UpperCenter-v0": {"lava": True},
     "MineRLD202UpperRight-v0": {"lava": True},

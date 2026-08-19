@@ -21,6 +21,13 @@ Generations that live here:
   and pitch place the lava in one cell of a 3×3 screen grid.
   Still classification only. Hidden GT is the scene's
   (yaw, pitch) → region mapping.
+* **D3-01 Camera Alignment.** Same lava-positive courtyard and
+  spawn yaws as D2-01. The Agent issues camera yaw to center
+  the lava. Location/yaw is a MineRL *monitor* (gym info),
+  never an agent-visible observation.
+* **D3-02 Target Approach.** Same courtyard; yaw already 0.
+  The player starts further back. The Agent walks forward.
+  Location/xyz is a MineRL *monitor*, never an Observation.
 
 Ground truth is a class attribute on the spec. It is read by the
 evaluator through ``Task.ground_truth`` and must never enter the
@@ -59,6 +66,20 @@ from obsidianlink.env.d2_02_scene import (
     D2_02_ENV_IDS,
     D2_02_REGIONS,
     D2_02_SPAWN_POSES,
+)
+from obsidianlink.env.d3_01_scene import (
+    D3_01_CENTER_ENV_ID,
+    D3_01_LEFT_ENV_ID,
+    D3_01_RIGHT_ENV_ID,
+    D3_01_SPAWN_YAWS,
+)
+from obsidianlink.env.d3_02_scene import (
+    D3_02_ENV_ID,
+    D3_02_PLAYER_PITCH,
+    D3_02_PLAYER_X,
+    D3_02_PLAYER_Y,
+    D3_02_PLAYER_YAW,
+    D3_02_PLAYER_Z,
 )
 
 
@@ -501,6 +522,46 @@ class D201RightSpec(_D201Spec):
 
 
 # ---------------------------------------------------------------------------
+# D3-01 — Camera Alignment (Act)
+# ---------------------------------------------------------------------------
+#
+# Same lava-positive courtyard and spawn yaws as D2-01. Hidden
+# success is the *final* yaw after camera actions (near 0).
+# Location monitors stay evaluator-only. No movement.
+
+
+class _D301Spec(_D201Spec):
+    """D2-01 courtyard plus evaluator-only location monitors."""
+
+    def create_monitors(self) -> List[Handler]:
+        return [handlers.ObservationFromCurrentLocation()]
+
+
+class D301LeftSpec(_D301Spec):
+    spawn_yaw = D3_01_SPAWN_YAWS["left"]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("name", D3_01_LEFT_ENV_ID)
+        super().__init__(*args, **kwargs)
+
+
+class D301CenterSpec(_D301Spec):
+    spawn_yaw = D3_01_SPAWN_YAWS["center"]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("name", D3_01_CENTER_ENV_ID)
+        super().__init__(*args, **kwargs)
+
+
+class D301RightSpec(_D301Spec):
+    spawn_yaw = D3_01_SPAWN_YAWS["right"]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("name", D3_01_RIGHT_ENV_ID)
+        super().__init__(*args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
 # D2-02 — Spatial Region Grounding (Where, 3×3)
 # ---------------------------------------------------------------------------
 #
@@ -558,13 +619,59 @@ _D202_SPEC_CLASSES = [_make_d202_spec(region) for region in D2_02_REGIONS]
 
 
 # ---------------------------------------------------------------------------
+# D3-02 — Target Approach (Act)
+# ---------------------------------------------------------------------------
+#
+# Same lava-positive courtyard. Yaw is already 0 (lava centered).
+# Spawn is further back. Hidden success is the final distance to
+# the lava AABB after movement. Location monitors stay evaluator-only.
+
+
+def _d3_02_agent_start() -> List[Handler]:
+    """D1-01 viewpoint, already facing the lava, starting further back."""
+    return [
+        handlers.GuiScale(1.0),
+        handlers.GammaSetting(2.0),
+        handlers.FOVSetting(70.0),
+        handlers.FakeCursorSize(0),
+        handlers.AgentStartPlacement(
+            x=D3_02_PLAYER_X,
+            y=D3_02_PLAYER_Y,
+            z=D3_02_PLAYER_Z,
+            yaw=D3_02_PLAYER_YAW,
+            pitch=D3_02_PLAYER_PITCH,
+        ),
+    ]
+
+
+class D302ApproachSpec(_D1V2LavaSpec):
+    """Lava-positive courtyard; evaluator-only location monitors."""
+
+    block_type = "lava"
+    target_present = True
+    target_name = "lava"
+    _lava_present = True
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("name", D3_02_ENV_ID)
+        super().__init__(*args, **kwargs)
+
+    def create_agent_start(self) -> List[Handler]:
+        return _d3_02_agent_start()
+
+    def create_monitors(self) -> List[Handler]:
+        return [handlers.ObservationFromCurrentLocation()]
+
+
+# ---------------------------------------------------------------------------
 # Registration with MineRL / gym
 # ---------------------------------------------------------------------------
 
 # Historical Phase 2C spec stays registered so the original
 # lava-presence script still runs. D1 v2 registers lava + water
 # positive/negative. D2-01 registers left / center / right.
-# D2-02 registers the 3×3 region poses.
+# D2-02 registers the 3×3 region poses. D3-01 / D3-02 register
+# camera-alignment and target-approach scenes.
 _REGISTERED_SPECS: List[_ControlledPresenceSpec] = [
     ControlledLavaSpec(),  # Phase 2C pilot — do not use for D1 v2
     D1LavaPositiveSpec(),
@@ -575,11 +682,15 @@ _REGISTERED_SPECS: List[_ControlledPresenceSpec] = [
     D201CenterSpec(),
     D201RightSpec(),
     *[_cls() for _cls in _D202_SPEC_CLASSES],
+    D301LeftSpec(),
+    D301CenterSpec(),
+    D301RightSpec(),
+    D302ApproachSpec(),
 ]
 
 
 def register_controlled_specs() -> None:
-    """Register D1 v2, D2-01, D2-02, and the Phase 2C lava pilot.
+    """Register D1 v2, D2, D3-01, D3-02, and the Phase 2C lava pilot.
 
     Idempotent: a spec that is already in :data:`gym.envs.registry`
     is left alone.
@@ -605,5 +716,9 @@ __all__ = [
     "D201LeftSpec",
     "D201CenterSpec",
     "D201RightSpec",
+    "D301LeftSpec",
+    "D301CenterSpec",
+    "D301RightSpec",
+    "D302ApproachSpec",
     "register_controlled_specs",
 ]
