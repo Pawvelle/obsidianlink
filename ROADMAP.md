@@ -41,6 +41,14 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
 
 该 spike 是 scripted/oracle mechanics feasibility，不是正式 L1 Agent 或 live L1 benchmark evidence。正式 L1 不用预建 frame，也不使用已知不可靠的 EquipAction。
 
+**2026-08-19 L1 Controlled Environment v0.1**（`obsidianlink/env/l1_scene.py`，live `l1_env_smoke_20260819_175245Z`）：
+
+* 施工面是超平坦 **草地**（`FLAT_WORLD`），不是黑曜石地板。DrawBlock 只画 4×4 lava pool
+* 原因：Malmo DrawingDecorator 只能画 `lava` / `obsidian`；黑曜石地板会让 Agent 把地面当 portal 材料
+* spawn `(0.5, 4.0, 0.5)`；inventory 与 `hotbar.1-9` 与上一版相同
+* live `C2_grass_floor` 通过（`grass_frac≈0.76`）；无预建 portal，无 EquipAction
+* 这是 environment smoke，不是 Oracle、Evaluator 或 ReactiveAgent L1 实验
+
 ## Completed
 
 * Research direction frozen
@@ -63,10 +71,11 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
   * Live 2026-08-19：Qwen3-VL-2B，`vision_completions=1`，`success=True`，GT 只在 hidden_state
 * Live Minecraft Wiki Tool
 * Tool-enabled ReactiveAgent
+* **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
 
 ## Next
 
-为正式 L1 单独验证受控环境与 evaluator 后，运行首个 tool-enabled ReactiveAgent L1 pilot；在此之前不要开始 L2 / Planner / Reflection。
+实现 L1 Evaluator（不依赖 ObservationFromGrid），再做 Scripted / Oracle 机械验证；然后才是 tool-enabled ReactiveAgent L1 pilot。在此之前不要开始 L2 / Planner / Reflection。
 
 ## Blocked
 

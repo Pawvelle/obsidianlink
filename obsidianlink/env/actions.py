@@ -4,9 +4,10 @@ Do not assume every verb is live-reliable. Current evidence:
 
 * MOVE / CAMERA / ATTACK / WAIT — exercised on live MineRL (Phase 1).
 * USE — present in the adapter; reliability is task-dependent.
-* PLACE / EQUIP — declared so a later L1 can use them; Malmo
-  ``PlaceBlock`` has crashed the server on this stack. Do not treat
-  them as verified until a live task produces world-effect evidence.
+* HOTBAR — L1 item select. MineRL 1.0.2 / MCP-Reborn cannot use
+  EquipAction (``equip none`` crashes ``constructKeyboardState``).
+* PLACE / EQUIP — declared for completeness. Malmo ``PlaceBlock`` has
+  crashed the server on this stack. Do not send EquipAction on L1.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ class ActionType(Enum):
     USE = "use"
     PLACE = "place"
     EQUIP = "equip"
+    HOTBAR = "hotbar"
     WAIT = "wait"
 
 
@@ -37,7 +39,8 @@ class Action:
     yaw: float = 0.0
     pitch: float = 0.0
 
-    # USE / PLACE / EQUIP payload. Free-form item or block name.
+    # USE / PLACE / EQUIP / HOTBAR payload.
+    # HOTBAR target is slot ``"1"``–``"9"`` (or ``"hotbar.N"``).
     target: str = ""
 
 

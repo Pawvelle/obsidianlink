@@ -45,6 +45,24 @@ Live evidence (no pre-built portal frame):
 
 The earlier `l1_spike_20260819_124215Z.json` is the EquipAction crash repro.
 
+### L1 controlled environment v0.1 smoke — 2026-08-19
+
+The first live smoke (`l1_env_smoke_20260819_174234Z`) used an obsidian
+courtyard floor because DrawingDecorator can only draw `lava` /
+`obsidian`. That floor was replaced: an Agent could treat the ground as
+portal material.
+
+Current live smoke: `l1_env_smoke_20260819_175245Z.json` and
+`l1_env_smoke_20260819_175245Z_frames/`:
+
+* spawn `(0.5, 4.0, 0.5)` on superflat **grass** (not obsidian)
+* DrawBlock is lava-pool only; no obsidian floor or walls
+* 4×4 lava pool visible in POV (`lava_frac≈0.056`, `grass_frac≈0.76`)
+* inventory and `hotbar.1-5` unchanged
+* no EquipAction, no ObservationFromGrid, no pre-built portal
+
+This is **not** an L1 Agent or Oracle capability result (`oracle_or_agent_run: false`).
+
 ### Other historical pilots
 
 D1 / D2 / D3 live JSON files remain useful as pipeline / scene-validity

@@ -1,0 +1,314 @@
+{
+  "kind": "l1_controlled_env_v0.1_smoke",
+  "env_id": "MineRLL1Controlled-v0",
+  "started_utc": "20260819_174234Z",
+  "prebuilt_portal_frame": false,
+  "used_equip_action": false,
+  "used_observation_from_grid": false,
+  "oracle_or_agent_run": false,
+  "checks": {
+    "A_reset": {
+      "ok": true,
+      "selected_item": "water_bucket"
+    },
+    "B_spawn": {
+      "ok": true,
+      "pose": {
+        "xpos": 0.5,
+        "ypos": 101.0,
+        "zpos": 0.5,
+        "yaw": 0.0,
+        "pitch": 25.0
+      }
+    },
+    "D_inventory": {
+      "ok": true,
+      "got": {
+        "bucket": 1,
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1,
+        "water_bucket": 1
+      },
+      "missing": [],
+      "mismatches": {},
+      "lava_bucket": 0
+    },
+    "F_rgb": {
+      "ok": true,
+      "visual": {
+        "present": true,
+        "shape": [
+          360,
+          640,
+          3
+        ],
+        "dtype": "uint8",
+        "frame_mean": 28.58224392361111,
+        "lava_frac": 0.05584574854651163,
+        "portal_frac": 0.0,
+        "region_mean_r": 26.025959014892578,
+        "region_mean_g": 16.097883224487305,
+        "region_mean_b": 23.55046272277832
+      }
+    },
+    "no_equip_in_action_space": {
+      "ok": true,
+      "has_hotbar": true
+    },
+    "no_prebuilt_portal_visual": {
+      "ok": true,
+      "portal_frac": 0.0
+    },
+    "C_lava_visible": {
+      "ok": true,
+      "lava_frac": 0.05584574854651163
+    },
+    "E_hotbar": {
+      "ok": true,
+      "slots": {
+        "hotbar.1": {
+          "expected": "water_bucket",
+          "selected_item": "water_bucket",
+          "ok": true
+        },
+        "hotbar.2": {
+          "expected": "bucket",
+          "selected_item": "bucket",
+          "ok": true
+        },
+        "hotbar.3": {
+          "expected": "cobblestone",
+          "selected_item": "cobblestone",
+          "ok": true
+        },
+        "hotbar.4": {
+          "expected": "iron_pickaxe",
+          "selected_item": "iron_pickaxe",
+          "ok": true
+        },
+        "hotbar.5": {
+          "expected": "flint_and_steel",
+          "selected_item": "flint_and_steel",
+          "ok": true
+        }
+      }
+    },
+    "F_selected_item": {
+      "ok": true,
+      "note": "selected_item tracked EquippedItemObservation after hotbar keys"
+    },
+    "G_close": {
+      "ok": true
+    },
+    "H_fresh_reset": {
+      "ok": true,
+      "inventory": {
+        "ok": true,
+        "got": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "missing": [],
+        "mismatches": {},
+        "lava_bucket": 0
+      },
+      "pose": {
+        "xpos": 0.5,
+        "ypos": 101.0,
+        "zpos": 0.5,
+        "yaw": 0.0,
+        "pitch": 25.0
+      },
+      "lava_frac": 0.05584574854651163
+    }
+  },
+  "limitations": [],
+  "error": null,
+  "reset1": {
+    "inventory": {
+      "bucket": 1,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "water_bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "dtype": "uint8",
+      "frame_mean": 28.58224392361111,
+      "lava_frac": 0.05584574854651163,
+      "portal_frac": 0.0,
+      "region_mean_r": 26.025959014892578,
+      "region_mean_g": 16.097883224487305,
+      "region_mean_b": 23.55046272277832
+    },
+    "pose": {
+      "xpos": 0.5,
+      "ypos": 101.0,
+      "zpos": 0.5,
+      "yaw": 0.0,
+      "pitch": 25.0
+    },
+    "action_space_keys": [
+      "attack",
+      "back",
+      "camera",
+      "forward",
+      "hotbar.1",
+      "hotbar.2",
+      "hotbar.3",
+      "hotbar.4",
+      "hotbar.5",
+      "hotbar.6",
+      "hotbar.7",
+      "hotbar.8",
+      "hotbar.9",
+      "jump",
+      "left",
+      "right",
+      "sneak",
+      "sprint",
+      "use"
+    ]
+  },
+  "action_space_keys": [
+    "attack",
+    "back",
+    "camera",
+    "forward",
+    "hotbar.1",
+    "hotbar.2",
+    "hotbar.3",
+    "hotbar.4",
+    "hotbar.5",
+    "hotbar.6",
+    "hotbar.7",
+    "hotbar.8",
+    "hotbar.9",
+    "jump",
+    "left",
+    "right",
+    "sneak",
+    "sprint",
+    "use"
+  ],
+  "after_strafe": {
+    "inventory": {
+      "bucket": 1,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "flint_and_steel",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "dtype": "uint8",
+      "frame_mean": 25.65853732638889,
+      "lava_frac": 0.05555050872093023,
+      "portal_frac": 0.0,
+      "region_mean_r": 26.661632537841797,
+      "region_mean_g": 17.01289939880371,
+      "region_mean_b": 24.20734977722168
+    },
+    "pose": {
+      "xpos": 0.6515080114215019,
+      "ypos": 101.0,
+      "zpos": 0.5,
+      "yaw": 0.0,
+      "pitch": 25.0
+    },
+    "action_space_keys": [
+      "attack",
+      "back",
+      "camera",
+      "forward",
+      "hotbar.1",
+      "hotbar.2",
+      "hotbar.3",
+      "hotbar.4",
+      "hotbar.5",
+      "hotbar.6",
+      "hotbar.7",
+      "hotbar.8",
+      "hotbar.9",
+      "jump",
+      "left",
+      "right",
+      "sneak",
+      "sprint",
+      "use"
+    ]
+  },
+  "reset2": {
+    "inventory": {
+      "bucket": 1,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "water_bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "dtype": "uint8",
+      "frame_mean": 28.53083912037037,
+      "lava_frac": 0.05584574854651163,
+      "portal_frac": 0.0,
+      "region_mean_r": 26.004587173461914,
+      "region_mean_g": 16.09786033630371,
+      "region_mean_b": 23.492868423461914
+    },
+    "pose": {
+      "xpos": 0.5,
+      "ypos": 101.0,
+      "zpos": 0.5,
+      "yaw": 0.0,
+      "pitch": 25.0
+    },
+    "action_space_keys": [
+      "attack",
+      "back",
+      "camera",
+      "forward",
+      "hotbar.1",
+      "hotbar.2",
+      "hotbar.3",
+      "hotbar.4",
+      "hotbar.5",
+      "hotbar.6",
+      "hotbar.7",
+      "hotbar.8",
+      "hotbar.9",
+      "jump",
+      "left",
+      "right",
+      "sneak",
+      "sprint",
+      "use"
+    ]
+  },
+  "wall_time": 55.469038417000775,
+  "frames_dir": "/Users/joey/Documents/Projects/ObsidianLink/obsidianlink/experiments/runs/l1_env_smoke_20260819_174234Z_frames",
+  "success": true
+}

@@ -88,10 +88,11 @@ class MineRLEnvironment(Environment):
             )
         inventory = _summarize_inventory(raw.get("inventory"))
         self._last_hidden = _hidden_from_raw_and_info(raw, info)
+        selected = _equipped_item_name(raw) or _selected_hotbar_item(inventory)
         return Observation(
             frame=raw.get("pov"),
             inventory=inventory,
-            selected_item=_selected_hotbar_item(inventory),
+            selected_item=selected,
         )
 
     @staticmethod
@@ -128,8 +129,52 @@ class MineRLEnvironment(Environment):
             else:
                 out["place"] = "none"
         if action.type is ActionType.EQUIP and "equip" in keyset and action.target:
+            # L1 specs omit EquipAction. Sending ``equip none`` crashes
+            # MineRL 1.0.2 MCP-Reborn. Prefer ActionType.HOTBAR.
             out["equip"] = action.target
+        if action.type is ActionType.HOTBAR:
+            slot = _hotbar_slot(action.target)
+            if slot is not None:
+                key = f"hotbar.{slot}"
+                if key in keyset:
+                    out[key] = 1
         return out
+
+
+def _hotbar_slot(target: str) -> int | None:
+    """Parse ``"3"`` or ``"hotbar.3"`` into 1–9. Invalid → None."""
+    raw = str(target).strip().lower()
+    if raw.startswith("hotbar."):
+        raw = raw.split(".", 1)[1]
+    try:
+        slot = int(raw)
+    except (TypeError, ValueError):
+        return None
+    if 1 <= slot <= 9:
+        return slot
+    return None
+
+
+def _equipped_item_name(raw: Mapping[str, Any]) -> str | None:
+    """Main-hand type from EquippedItemObservation, if present."""
+    eq = raw.get("equipped_items")
+    if not isinstance(eq, Mapping):
+        return None
+    hand = eq.get("mainhand", eq)
+    if not isinstance(hand, Mapping):
+        return None
+    item = hand.get("type")
+    if item is None:
+        return None
+    if hasattr(item, "item"):
+        try:
+            item = item.item()
+        except (TypeError, ValueError, AttributeError):
+            pass
+    name = str(item).strip()
+    if name in {"", "none", "air", "None"}:
+        return None
+    return name
 
 
 def _summarize_inventory(inventory: Any) -> dict[str, int]:
