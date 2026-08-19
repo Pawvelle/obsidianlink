@@ -1,0 +1,31 @@
+{
+  "historical": false,
+  "valid_for_l1_conclusion": false,
+  "kind": "architecture_reset_validation",
+  "date": "2026-08-19",
+  "validation_a": {
+    "env_id": "MineRLTreechop-v0",
+    "frame_shape": [64, 64, 3],
+    "frame_mean_before": 117.54353841145833,
+    "frame_mean_after": 115.345947265625,
+    "steps": 16,
+    "elapsed_s": 24.7,
+    "ok": true
+  },
+  "validation_b_c_d": {
+    "task_id": "d1_01_lava_presence",
+    "condition": "positive",
+    "model": "Qwen3-VL-2B-Instruct",
+    "success": true,
+    "reason": "ok",
+    "used_vision": true,
+    "vision_completions": 1,
+    "text_completions": 0,
+    "observation_fields": ["frame", "inventory", "selected_item"],
+    "hidden_state_keys": ["pitch", "target_truths", "xpos", "yaw", "ypos", "zpos"],
+    "report_visible": true,
+    "ground_truth_visible": true,
+    "raw_response": "{\"visible\": true}",
+    "ok": true
+  }
+}

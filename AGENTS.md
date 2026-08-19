@@ -49,7 +49,7 @@ conda run -n mc-agent python ...
 
 - 系统默认 Java 是 Temurin OpenJDK 25.0.3。这不是 MineRL 运行时。MineRL / Minecraft 必须使用 `mc-agent` 内的 Java 8。
 - MineRL 1.0.2 对应 Minecraft 1.16.5（来自已安装包说明，以及 2026-07-16 历史 crash report）。本次检查没有重新启动 Minecraft。
-- Phase 1 起仓库已接入 MineRL：`obsidianlink.env.minerl.MineRLEnvironment` 与 `ControlledSceneEnv`。`import minerl` 仍来自 `mc-agent` site-packages，不指向 `vendor/minerl`。
+- Phase 1 起仓库已接入 MineRL：`obsidianlink.env.minerl.MineRLEnvironment` 与 `obsidianlink.env.scene.ControlledSceneEnv`。`import minerl` 仍来自 `mc-agent` site-packages，不指向 `vendor/minerl`。
 - `vendor/minerl` 在本机存在，但被 `.gitignore` 忽略。
 
 ## 3. Environment Rules
@@ -94,4 +94,4 @@ conda run -n mc-agent python -c "import minerl, gym, numpy; print('minerl/gym/nu
 
 当前阶段：**Phase 2 — Benchmark MVP 已完成。下一阶段是 Phase 3 — Single-Agent Portal Benchmark。**
 
-当前目标：在用户明确要求时实现 **L1 Controlled Construction**。不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不要把 motor 写回 D2。未接到实现 L1 的明确指令时，不要开始写 L1 代码。
+当前目标：**L1 Controlled Construction — pending redesign after architecture reset。** 正式 L1 必须由 Agent 完成 Casting → Frame → Ignition → Nether Entry。不要把 pre-built portal frame 当作正式 L1。不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不要把 motor 写回 D2。未接到实现 L1 的明确指令时，不要开始写 L1 代码。

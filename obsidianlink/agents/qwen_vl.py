@@ -1,48 +1,12 @@
-"""Local Qwen3-VL ModelClient.
+"""Local Qwen3-VL VisionModelClient.
 
-Wraps a local Qwen3-VL checkpoint (e.g.
-``Qwen3-VL-2B-Instruct`` / ``Qwen3-VL-4B-Instruct``) as a
-:class:`VisionModelClient`. Implements both
-:meth:`ModelClient.complete` (text-only, useful for prompts that do
-not need the frame) and
-:meth:`VisionModelClient.complete_with_vision` (frame + prompt).
-
-Design constraints
-------------------
-
-* **Lazy load.** The first ``complete_with_vision`` call loads the
-  checkpoint into memory; subsequent calls reuse the loaded model.
-  Loading is intentionally NOT done in ``__init__`` so importing
-  this module never pulls in ``torch`` / ``transformers`` (which
-  would break tests that import the rest of the package without the
-  heavy ML stack).
-* **No provider-specific code outside this module.** Other modules
-  must not import ``torch``, ``transformers`` or
-  ``qwen_vl_utils`` directly.
-* **Device = ``"auto"`` by default.** Picks ``mps`` if available
-  (Apple Silicon), else ``cpu``. CUDA is intentionally NOT a target
-  yet; this is the local-Mac development path.
-* **Frame must be an ndarray.** MineRL produces RGB ``uint8`` of
-  the env POV size (D1-01 is 640×360; Treechop / the inventory
-  pilot is 64×64); the client converts it to a PIL image for
-  Qwen3-VL.
-
-Out of scope (deferred)
------------------------
-
-* vLLM / TensorRT-LLM serving. Direct transformers inference is the
-  right path for the Phase 2B vertical slice; production serving
-  lands once we have signal from real experiments.
-* Multi-image / video inputs. Qwen3-VL supports them; we only need
-  single-frame for D1.
-* Batched inference. The Agent loop calls ``complete`` once per
-  step; batching is a research question for Phase 3.
+Lazy-loads the checkpoint on first complete / complete_with_vision.
+Importing this module does not import torch.
 """
 
 from __future__ import annotations
 
-import io
-from typing import Any, Optional
+from typing import Any
 
 from obsidianlink.agents.model_client import VisionModelClient
 

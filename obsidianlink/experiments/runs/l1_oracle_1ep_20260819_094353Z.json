@@ -1,4 +1,11 @@
 {
+  "historical": true,
+  "valid_for_l1_conclusion": false,
+  "invalid_reason": [
+    "L1 semantics changed: Casting and Frame Construction were moved into the scene",
+    "evaluator ObservationFromGrid world truth was unreliable",
+    "Reactive run did not pass Observation.frame to the vision model"
+  ],
   "task_id": "l1_controlled_construction",
   "design": "l1_controlled_construction",
   "level": "L1",

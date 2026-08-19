@@ -1,20 +1,12 @@
-"""Structured actions for the Minecraft agent loop.
+"""Bounded actions. The adapter decides how each type maps to MineRL.
 
-Phase 1 introduces a small payload for the bounded action set
-(MOVE / CAMERA / ATTACK / USE / PLACE). All payload fields default to
-"no effect" so ``Action(type=ActionType.WAIT)`` keeps working and the
-older in-process stubs continue to type-check.
+Do not assume every verb is live-reliable. Current evidence:
 
-Phase 3 adds :attr:`ActionType.EQUIP` for the L1 hotbar switch:
-L1 ships with two hotbar slots (obsidian at slot 0,
-flint_and_steel at slot 1); the agent emits
-``{"action": "equip", "target": "flint_and_steel"}`` (or
-``"obsidian"``) to switch the active item before the next PLACE / USE.
-
-The payload is intentionally flat: no nested dicts, no per-type
-subclasses. The MineRL adapter (and any future adapter) is the only
-place that decides how each ``ActionType`` is mapped onto a backend
-action space.
+* MOVE / CAMERA / ATTACK / WAIT — exercised on live MineRL (Phase 1).
+* USE — present in the adapter; reliability is task-dependent.
+* PLACE / EQUIP — declared so a later L1 can use them; Malmo
+  ``PlaceBlock`` has crashed the server on this stack. Do not treat
+  them as verified until a live task produces world-effect evidence.
 """
 
 from __future__ import annotations
@@ -37,25 +29,16 @@ class ActionType(Enum):
 class Action:
     type: ActionType
 
-    # Movement payload (MOVE). Sign convention:
-    #   dx > 0  -> forward
-    #   dx < 0  -> back
-    #   dz > 0  -> right
-    #   dz < 0  -> left
+    # MOVE. dx>0 forward, dx<0 back, dz>0 right, dz<0 left.
     dx: int = 0
     dz: int = 0
 
-    # Look payload (CAMERA), in degrees, applied as a delta this step.
+    # CAMERA delta, degrees. MineRL consumes ``[pitch, yaw]``.
     yaw: float = 0.0
     pitch: float = 0.0
 
-    # Targeting / placement payload (ATTACK, USE, PLACE, EQUIP).
-    # ``target`` is a free-form block / item name (e.g. "dirt",
-    # "flint_and_steel"). ``slot`` is a 1-based hotbar slot
-    # index (1..9) and is reserved for future use; the L1 path
-    # uses ``target`` with EQUIP to switch hotbar items.
+    # USE / PLACE / EQUIP payload. Free-form item or block name.
     target: str = ""
-    slot: int = 0
 
 
 __all__ = ["Action", "ActionType"]

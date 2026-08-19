@@ -1,25 +1,13 @@
-"""Episode result. Keep the metric set small until a research question needs more.
-
-The first-version metric set is fixed by the Development Plan:
-
-* ``success``
-* ``steps`` (environment steps)
-* ``model_calls``
-* ``invalid_actions``
-* ``elapsed_time``
-
-``evidence`` is a free-form bag for evaluator-specific signals (e.g.
-the perception report the Agent emitted, the ground-truth snapshot the
-Evaluator compared against, per-field match details). It is NOT a
-replacement for the primary metric set; it exists so individual D / L
-tasks can attach their own diagnostic breadcrumbs without bloating the
-shared metric surface.
-"""
+"""Episode result. Small metric set plus failure-attribution evidence."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Mapping
+
+AGENT_FAILURE = "agent_failure"
+ENVIRONMENT_FAILURE = "environment_failure"
+EVALUATOR_FAILURE = "evaluator_failure"
 
 
 @dataclass(frozen=True)

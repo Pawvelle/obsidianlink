@@ -1,54 +1,4 @@
-"""MineRL environment adapter (Phase 1).
-
-Scope:
-
-* ``reset()`` launches the configured MineRL environment and returns the
-  first agent-visible ``Observation`` (RGB frame + inventory snapshot).
-* ``step(action)`` translates an :class:`Action` into the MineRL
-  Dict action space and forwards it.
-* ``close()`` shuts the underlying MineRL / Malmo instance down cleanly.
-
-The adapter introspects the MineRL ``action_space.spaces`` on the first
-``step()`` call so it only emits keys the live env actually understands
-(``MineRLTreechop-v0`` has no ``place``; ``MineRLNavigate-v0`` does).
-This keeps the same code path correct across the two missions without
-branching on env id.
-
-Out of scope (deferred):
-
-* Vision / inventory wiring beyond what MineRL hands us.
-* Benchmark tasks, evaluators, planners, multi-agent.
-
-Importing this module must NOT start MineRL. The actual ``gym.make`` call
-happens inside ``reset()`` so the rest of the package stays cheap to
-import and unit-testable without Java.
-
-L1 / Phase 3 additions
-----------------------
-
-L1 Controlled Construction is the first End-to-End Portal level.
-The agent must switch between obsidian (slot 0) and
-flint_and_steel (slot 1) without leaving the existing
-``ActionType`` enum, and it must ``USE`` flint_and_steel
-without also placing a block.
-
-* When :attr:`Action.slot` is in ``1..9`` we emit a press-release
-  pair ``hotbar.{slot} 1`` / ``hotbar.{slot} 0`` as part of the
-  same step. The action then runs on the newly selected hotbar
-  slot. This is the smallest possible extension: the
-  ``ModelClient`` contract is unchanged, the existing
-  ``ReactiveAgent`` does not need to learn a new action verb,
-  and D / L tasks that ignore ``slot`` are unaffected because
-  they never set it.
-* The ``"place"`` key is only set when the action's
-  :class:`ActionType` is :attr:`ActionType.PLACE`. Earlier the
-  adapter set ``place = action.target`` for both PLACE and USE
-  (which leaked a ``"dirt"`` default into USE when the agent
-  omitted ``target``); D1-02 worked around this by giving the
-  bucket via inventory and ignoring the place value, but for L1
-  a ``USE`` action must not place any block. The fix is a
-  one-line scoping change.
-"""
+"""MineRL adapter. ``gym.make`` happens in ``reset()``, never at import."""
 
 from __future__ import annotations
 
@@ -61,20 +11,19 @@ _DEFAULT_ENV_ID = "MineRLTreechop-v0"
 
 
 class MineRLEnvironment(Environment):
-    """Adapter around a single MineRL ``gym`` environment."""
+    """Gym/MineRL backend with a strict agent/evaluator split.
+
+    Agent-visible: ``Observation`` (frame, inventory, selected_item).
+    Evaluator-only: ``hidden_state`` / ``last_info`` (pose monitors).
+    """
 
     def __init__(self, env_id: str = _DEFAULT_ENV_ID) -> None:
         self._env_id = env_id
         self._env: Any = None
         self._action_keys: tuple[str, ...] | None = None
-        self._last_pov: Any = None
-        self._last_inventory: dict[str, int] = {}
-        self._last_compass: Any = None
-        # Gym ``info`` from the most recent ``step()``. Monitors such
-        # as location/yaw live here, **not** on :class:`Observation`.
-        # ``reset()`` has no info (Gym 0.23); empty until the first
-        # step. D2-01 reads this through ControlledSceneEnv.hidden_state.
+        self._last_observation: Observation | None = None
         self._last_info: dict[str, Any] = {}
+        self._last_hidden: dict[str, Any] = {}
 
     @property
     def env_id(self) -> str:
@@ -82,53 +31,47 @@ class MineRLEnvironment(Environment):
 
     @property
     def action_space_keys(self) -> tuple[str, ...] | None:
-        """Action space keys cached after the first ``step()`` call.
-
-        ``None`` until the env has been reset at least once.
-        """
         return self._action_keys
 
     @property
     def last_info(self) -> dict[str, Any]:
-        """Copy of the gym ``info`` dict from the last ``step()``.
-
-        Empty after ``reset()`` until at least one step has run.
-        Never copied onto :class:`Observation`.
-        """
+        """Copy of gym ``info``. Never copied onto ``Observation``."""
         return dict(self._last_info)
 
+    @property
+    def hidden_state(self) -> dict[str, Any]:
+        """Evaluator-only pose snapshot. Never copied onto ``Observation``."""
+        return dict(self._last_hidden)
+
     def reset(self) -> Observation:
-        # Local imports: keep MineRL / Java / gym out of the module-level
-        # import graph so that ``import obsidianlink.env.minerl`` itself
-        # never triggers a JVM. ``import minerl`` is required because
-        # MineRL 1.0.2 registers its env ids as an import side-effect;
-        # ``import gym`` alone will not see ``MineRLNavigate-v0``.
         import gym  # type: ignore[import-untyped]
         import minerl  # type: ignore[import-untyped]  # noqa: F401
 
         if self._env is not None:
-            # Idempotent reset semantics: close any previous instance
-            # first so we never leak a JVM.
             self.close()
-        # Invalidate the action-space cache; the new env may differ.
         self._action_keys = None
         self._last_info = {}
+        self._last_hidden = {}
         self._env = gym.make(self._env_id)
         raw = self._env.reset()
-        return self._convert(raw)
+        self._last_observation = self._convert(raw, info={})
+        return self._last_observation
+
+    def observe(self) -> Observation:
+        if self._last_observation is None:
+            raise RuntimeError("observe() called before reset()")
+        return self._last_observation
 
     def step(self, action: Action) -> Observation:
         if self._env is None:
-            raise RuntimeError(
-                "MineRLEnvironment.step called before reset(); "
-                "call reset() first."
-            )
+            raise RuntimeError("step() called before reset()")
         if self._action_keys is None:
             self._action_keys = tuple(self._env.action_space.spaces.keys())
         minerl_action = self._to_minerl_action(action, self._action_keys)
         raw, _reward, _done, info = self._env.step(minerl_action)
         self._last_info = info if isinstance(info, dict) else {}
-        return self._convert(raw)
+        self._last_observation = self._convert(raw, info=self._last_info)
+        return self._last_observation
 
     def close(self) -> None:
         if self._env is not None:
@@ -136,36 +79,25 @@ class MineRLEnvironment(Environment):
                 self._env.close()
             finally:
                 self._env = None
+                self._last_observation = None
 
-    # ------------------------------------------------------------------ helpers
-
-    def _convert(self, raw: Mapping[str, Any]) -> Observation:
+    def _convert(self, raw: Mapping[str, Any], *, info: Mapping[str, Any]) -> Observation:
         if not isinstance(raw, Mapping):
             raise TypeError(
                 f"MineRL observation must be a mapping, got {type(raw).__name__}"
             )
-        self._last_pov = raw.get("pov")
-        self._last_inventory = _summarize_inventory(raw.get("inventory"))
-        self._last_compass = raw.get("compass")
+        inventory = _summarize_inventory(raw.get("inventory"))
+        self._last_hidden = _hidden_from_raw_and_info(raw, info)
         return Observation(
-            frame=self._last_pov,
-            inventory=self._last_inventory,
-            selected_item=_selected_hotbar_item(self._last_inventory),
+            frame=raw.get("pov"),
+            inventory=inventory,
+            selected_item=_selected_hotbar_item(inventory),
         )
 
     @staticmethod
-    def _to_minerl_action(
-        action: Action, keys: tuple[str, ...]
-    ) -> dict[str, Any]:
-        """Translate an :class:`Action` into a MineRL Dict action.
-
-        Only keys present in the env's ``action_space`` are emitted, so
-        the same code path works for ``MineRLTreechop-v0`` (no
-        ``place``) and ``MineRLNavigate-v0`` (with ``place``).
-        """
+    def _to_minerl_action(action: Action, keys: tuple[str, ...]) -> dict[str, Any]:
         keyset = set(keys)
         out: dict[str, Any] = {}
-
         if "forward" in keyset:
             out["forward"] = 1 if action.dx > 0 else 0
         if "back" in keyset:
@@ -176,14 +108,10 @@ class MineRLEnvironment(Environment):
             out["right"] = 1 if action.dz > 0 else 0
         if "camera" in keyset:
             # MineRL CameraAction is ``[delta_pitch, delta_yaw]``.
-            # Swapping these axes makes yaw turn into pitch, which
-            # D2-01 cannot survive. See minerl CameraAction docstring.
             out["camera"] = [float(action.pitch), float(action.yaw)]
         if "use" in keyset:
             out["use"] = 1 if action.type is ActionType.USE else 0
         if "jump" in keyset:
-            # Legacy Treechop has no ``use`` key; USE was wired to jump.
-            # When the env exposes ``use`` (D1-02), do not also jump.
             if "use" in keyset:
                 out["jump"] = 0
             else:
@@ -195,50 +123,25 @@ class MineRLEnvironment(Environment):
         if "attack" in keyset:
             out["attack"] = 1 if action.type is ActionType.ATTACK else 0
         if "place" in keyset:
-            # PLACE: place the named block if given, else "none".
-            # USE / WAIT / MOVE / CAMERA: must NOT place a block.
             if action.type is ActionType.PLACE:
-                out["place"] = action.target or "dirt"
+                out["place"] = action.target or "none"
             else:
                 out["place"] = "none"
-
-        # EQUIP (L1 / Phase 3). The agent can switch the held
-        # item by emitting ``{"action": "equip", "target":
-        # "flint_and_steel"}`` (or "obsidian"). The Malmo
-        # ``<EquipCommands/>`` mission handler is what the
-        # action key ``"equip"`` maps to. We only emit when the
-        # target is one of the items we know is in the hotbar
-        # (``obsidian`` / ``flint_and_steel``); any other target
-        # (including ``""``) is treated as a no-op so a model
-        # that mistakenly emits equip every step does not
-        # bounce the slot.
-        if action.type is ActionType.EQUIP and "equip" in keyset:
-            if action.target in _L1_EQUIPPABLE_ITEMS:
-                out["equip"] = action.target
+        if action.type is ActionType.EQUIP and "equip" in keyset and action.target:
+            out["equip"] = action.target
         return out
 
 
-# Items the L1 agent can equip via the ``equip`` action. The
-# L1 spec pre-fills these in the hotbar at the corresponding
-# slots, so an equip command always has a matching item in
-# the inventory.
-_L1_EQUIPPABLE_ITEMS: frozenset[str] = frozenset({"obsidian", "flint_and_steel"})
-
-
 def _summarize_inventory(inventory: Any) -> dict[str, int]:
-    """Reduce a MineRL inventory mapping to ``{item_name: count}``."""
     if not inventory:
         return {}
-    out: dict[str, int] = {}
     try:
         items = inventory.items()
     except AttributeError:
         return {}
+    out: dict[str, int] = {}
     for name, info in items:
-        if isinstance(info, dict):
-            qty = info.get("quantity", 0)
-        else:
-            qty = info
+        qty = info.get("quantity", 0) if isinstance(info, dict) else info
         try:
             qty_int = int(qty)
         except (TypeError, ValueError):
@@ -249,15 +152,50 @@ def _summarize_inventory(inventory: Any) -> dict[str, int]:
 
 
 def _selected_hotbar_item(inventory: Mapping[str, int]) -> str | None:
-    """Pick a single ``selected_item`` for the observation.
-
-    MineRL does not expose a hotbar cursor in a portable way across all
-    missions. For Phase 1 we surface the first non-empty inventory
-    entry as a stable, agent-visible hint.
-    """
     if not inventory:
         return None
     return next(iter(inventory.keys()), None)
+
+
+def _scalar(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        size = getattr(value, "size", None)
+        if size == 1:
+            return float(value.reshape(-1)[0])
+        return float(value)
+    except (TypeError, ValueError, AttributeError, IndexError):
+        return None
+
+
+def _pose_from_mapping(loc: Mapping[str, Any]) -> dict[str, float]:
+    pose = {
+        "yaw": _scalar(loc.get("yaw")),
+        "pitch": _scalar(loc.get("pitch")),
+        "xpos": _scalar(loc.get("xpos")),
+        "ypos": _scalar(loc.get("ypos")),
+        "zpos": _scalar(loc.get("zpos")),
+    }
+    return {k: v for k, v in pose.items() if v is not None}
+
+
+def _hidden_from_raw_and_info(
+    raw: Mapping[str, Any], info: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Pull evaluator-only pose. Never returned as ``Observation`` fields."""
+    hidden: dict[str, Any] = {}
+    for source in (info, raw):
+        if not isinstance(source, Mapping):
+            continue
+        loc = source.get("location_stats")
+        if isinstance(loc, Mapping):
+            hidden.update(_pose_from_mapping(loc))
+        else:
+            hidden.update(_pose_from_mapping(source))
+        if hidden:
+            break
+    return hidden
 
 
 __all__ = ["MineRLEnvironment"]
