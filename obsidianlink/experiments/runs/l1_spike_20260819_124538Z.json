@@ -1,0 +1,526 @@
+{
+  "kind": "l1_technical_feasibility_spike",
+  "l1_definition": "Casting \u2192 Frame \u2192 Ignition \u2192 Nether Entry",
+  "l1_definition_unchanged": true,
+  "prebuilt_portal_frame": false,
+  "drawblock_used_for": "obsidian_courtyard_casting_surface_only",
+  "valid_for_l1_agent_conclusion": false,
+  "env_id": "MineRLL1Spike-v0",
+  "started_utc": "20260819_124538Z",
+  "phases": {
+    "A_inventory": {
+      "ok": true,
+      "steps": 20,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "location_stats"
+        ],
+        "inventory": {
+          "flint_and_steel": 1,
+          "lava_bucket": 14,
+          "water_bucket": 1
+        },
+        "equipped": "water_bucket",
+        "location": {
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5,
+          "yaw": 0.0,
+          "pitch": 25.0,
+          "biome_id": 0.0,
+          "biome_temperature": 0.6,
+          "light_level": 15.0
+        },
+        "visual": {
+          "frame_mean": 21.899829282407406,
+          "lava_frac": 0.0,
+          "portal_frac": 0.0,
+          "region_mean_r": 15.21012020111084,
+          "region_mean_g": 11.104515075683594,
+          "region_mean_b": 24.3093204498291
+        },
+        "reward": 0.0
+      },
+      "expected": {
+        "water_bucket": 1,
+        "lava_bucket": 14,
+        "flint_and_steel": 1
+      },
+      "got": {
+        "flint_and_steel": 1,
+        "lava_bucket": 14,
+        "water_bucket": 1
+      },
+      "sane": true,
+      "location": {
+        "xpos": 0.5,
+        "ypos": 101.0,
+        "zpos": 0.5,
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "biome_id": 0.0,
+        "biome_temperature": 0.6,
+        "light_level": 15.0
+      }
+    },
+    "B_select_lava": {
+      "ok": true,
+      "steps": 23,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "location_stats"
+        ],
+        "inventory": {
+          "flint_and_steel": 1,
+          "lava_bucket": 14,
+          "water_bucket": 1
+        },
+        "equipped": "lava_bucket",
+        "location": {
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5,
+          "yaw": 0.0,
+          "pitch": 25.0,
+          "biome_id": 0.0,
+          "biome_temperature": 0.6,
+          "light_level": 15.0
+        },
+        "visual": {
+          "frame_mean": 18.58997540509259,
+          "lava_frac": 0.0,
+          "portal_frac": 0.0,
+          "region_mean_r": 15.982354164123535,
+          "region_mean_g": 11.890874862670898,
+          "region_mean_b": 25.033815383911133
+        },
+        "reward": 0.0
+      },
+      "equipped": "lava_bucket"
+    },
+    "C_pour_lava": {
+      "ok": true,
+      "steps": 37,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "location_stats"
+        ],
+        "inventory": {
+          "bucket": 1,
+          "flint_and_steel": 1,
+          "lava_bucket": 13,
+          "water_bucket": 1
+        },
+        "equipped": "bucket",
+        "location": {
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5,
+          "yaw": 0.0,
+          "pitch": 58.0,
+          "biome_id": 0.0,
+          "biome_temperature": 0.6,
+          "light_level": 15.0
+        },
+        "visual": {
+          "frame_mean": 38.18429976851852,
+          "lava_frac": 0.5042923328488372,
+          "portal_frac": 0.0,
+          "region_mean_r": 103.19561004638672,
+          "region_mean_g": 46.90195846557617,
+          "region_mean_b": 20.67298698425293
+        },
+        "reward": 0.0
+      },
+      "lava_before": 14,
+      "lava_after": 13,
+      "buckets_after": 1,
+      "visual_before": {
+        "frame_mean": 20.973488136574073,
+        "lava_frac": 0.0,
+        "portal_frac": 0.0,
+        "region_mean_r": 15.9453125,
+        "region_mean_g": 11.863327026367188,
+        "region_mean_b": 24.99479866027832
+      },
+      "visual_after": {
+        "frame_mean": 38.18429976851852,
+        "lava_frac": 0.5042923328488372,
+        "portal_frac": 0.0,
+        "region_mean_r": 103.19561004638672,
+        "region_mean_g": 46.90195846557617,
+        "region_mean_b": 20.67298698425293
+      }
+    },
+    "D_water_on_lava": {
+      "ok": true,
+      "steps": 57,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "location_stats"
+        ],
+        "inventory": {
+          "bucket": 2,
+          "flint_and_steel": 1,
+          "lava_bucket": 13
+        },
+        "equipped": "bucket",
+        "location": {
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.21650001475340208,
+          "yaw": 0.0,
+          "pitch": 58.0,
+          "biome_id": 0.0,
+          "biome_temperature": 0.6,
+          "light_level": 14.0
+        },
+        "visual": {
+          "frame_mean": 50.357921006944444,
+          "lava_frac": 0.0,
+          "portal_frac": 0.0,
+          "region_mean_r": 34.96522903442383,
+          "region_mean_g": 63.17153549194336,
+          "region_mean_b": 121.47892761230469
+        },
+        "reward": 0.0
+      },
+      "water_used": true,
+      "lava_visual_dropped": true,
+      "inventory": {
+        "bucket": 2,
+        "flint_and_steel": 1,
+        "lava_bucket": 13
+      },
+      "visual_after": {
+        "frame_mean": 50.357921006944444,
+        "lava_frac": 0.0,
+        "portal_frac": 0.0,
+        "region_mean_r": 34.96522903442383,
+        "region_mean_g": 63.17153549194336,
+        "region_mean_b": 121.47892761230469
+      },
+      "visual_lava": {
+        "frame_mean": 38.18429976851852,
+        "lava_frac": 0.5042923328488372,
+        "portal_frac": 0.0,
+        "region_mean_r": 103.19561004638672,
+        "region_mean_g": 46.90195846557617,
+        "region_mean_b": 20.67298698425293
+      }
+    },
+    "E_pickup_water": {
+      "ok": true,
+      "steps": 70,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "location_stats"
+        ],
+        "inventory": {
+          "bucket": 1,
+          "flint_and_steel": 1,
+          "lava_bucket": 13,
+          "water_bucket": 1
+        },
+        "equipped": "water_bucket",
+        "location": {
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": -0.5580213161359713,
+          "yaw": 0.0,
+          "pitch": 58.0,
+          "biome_id": 0.0,
+          "biome_temperature": 0.6,
+          "light_level": 14.0
+        },
+        "visual": {
+          "frame_mean": 63.50279513888889,
+          "lava_frac": 0.0,
+          "portal_frac": 0.0,
+          "region_mean_r": 33.81238555908203,
+          "region_mean_g": 57.3989372253418,
+          "region_mean_b": 110.25138854980469
+        },
+        "reward": 0.0
+      },
+      "picked": true,
+      "inventory": {
+        "bucket": 1,
+        "flint_and_steel": 1,
+        "lava_bucket": 13,
+        "water_bucket": 1
+      },
+      "note": "water_bucket is reusable; lava_bucket is consumed"
+    },
+    "F_extra_casts": {
+      "ok": true,
+      "steps": 114,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "error"
+        ],
+        "inventory": {
+          "air": 1779,
+          "bucket": 604,
+          "flint_and_steel": 388,
+          "lava_bucket": 215,
+          "obsidian": 993,
+          "water_bucket": 1716
+        },
+        "equipped": "water_bucket",
+        "location": {},
+        "visual": {
+          "frame_mean": 127.49954861111111,
+          "lava_frac": 0.09054778343023256,
+          "portal_frac": 0.09920058139534883,
+          "region_mean_r": 127.92071533203125,
+          "region_mean_g": 128.39735412597656,
+          "region_mean_b": 127.82560729980469
+        },
+        "reward": 0.0
+      },
+      "extra_casts": 1,
+      "lava_consumed": -202,
+      "note": "FPS aiming; extra casts may miss even if the mechanic works"
+    },
+    "F2_frame_complete": {
+      "ok": false,
+      "steps": 114,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "error"
+        ],
+        "inventory": {
+          "air": 1779,
+          "bucket": 604,
+          "flint_and_steel": 388,
+          "lava_bucket": 215,
+          "obsidian": 993,
+          "water_bucket": 1716
+        },
+        "equipped": "water_bucket",
+        "location": {},
+        "visual": {
+          "frame_mean": 127.49954861111111,
+          "lava_frac": 0.09054778343023256,
+          "portal_frac": 0.09920058139534883,
+          "region_mean_r": 127.92071533203125,
+          "region_mean_g": 128.39735412597656,
+          "region_mean_b": 127.82560729980469
+        },
+        "reward": 0.0
+      },
+      "lava_used": -201,
+      "needed_for_cornerless_frame": 10,
+      "note": "No ObservationFromGrid. Proxy = lava buckets consumed. Not a geometric proof."
+    },
+    "G_ignition": {
+      "ok": true,
+      "steps": 114,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "error"
+        ],
+        "inventory": {
+          "air": 1779,
+          "bucket": 604,
+          "flint_and_steel": 388,
+          "lava_bucket": 215,
+          "obsidian": 993,
+          "water_bucket": 1716
+        },
+        "equipped": "water_bucket",
+        "location": {},
+        "visual": {
+          "frame_mean": 127.49954861111111,
+          "lava_frac": 0.09054778343023256,
+          "portal_frac": 0.09920058139534883,
+          "region_mean_r": 127.92071533203125,
+          "region_mean_g": 128.39735412597656,
+          "region_mean_b": 127.82560729980469
+        },
+        "reward": 0.0
+      },
+      "portal_frac": 0.09920058139534883,
+      "total_reward": 0.0,
+      "equipped": "water_bucket"
+    },
+    "H_nether_entry": {
+      "ok": false,
+      "steps": 114,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "error"
+        ],
+        "inventory": {
+          "air": 1779,
+          "bucket": 604,
+          "flint_and_steel": 388,
+          "lava_bucket": 215,
+          "obsidian": 993,
+          "water_bucket": 1716
+        },
+        "equipped": "water_bucket",
+        "location": {},
+        "visual": {
+          "frame_mean": 127.49954861111111,
+          "lava_frac": 0.09054778343023256,
+          "portal_frac": 0.09920058139534883,
+          "region_mean_r": 127.92071533203125,
+          "region_mean_g": 128.39735412597656,
+          "region_mean_b": 127.82560729980469
+        },
+        "reward": 0.0
+      },
+      "loc_before": {},
+      "loc_after": {},
+      "ypos_delta": 0,
+      "biome_changed": false,
+      "likely_void": false,
+      "total_reward": 0.0
+    }
+  },
+  "limitations": [
+    "EquipAction is unusable on MineRL 1.0.2 MCP-Reborn: no_op emits 'equip none' and constructKeyboardState Integer.parseInt crashes the episode. Spike uses hotbar.1-9 instead.",
+    "env step error: Connection timed out!",
+    "RuntimeError: Attempted to step an environment server with done=True",
+    "RuntimeError: Attempted to step an environment server with done=True",
+    "RuntimeError: Attempted to step an environment server with done=True"
+  ],
+  "oracle_last_effect": "multi_cast",
+  "oracle_last_effect_raw_script": "ignition",
+  "oracle_last_effect_note": "Script labeled ignition because portal_frac fired on the post-timeout random observation. Human frame review: flint was never used. Last real effect is repeat bucket casting.",
+  "portal_touch_reward_enabled": true,
+  "action_space_keys": [
+    "attack",
+    "back",
+    "camera",
+    "forward",
+    "hotbar.1",
+    "hotbar.2",
+    "hotbar.3",
+    "hotbar.4",
+    "hotbar.5",
+    "hotbar.6",
+    "hotbar.7",
+    "hotbar.8",
+    "hotbar.9",
+    "jump",
+    "left",
+    "right",
+    "sneak",
+    "sprint",
+    "use"
+  ],
+  "obs_space_keys": [
+    "equipped_items",
+    "inventory",
+    "pov"
+  ],
+  "steps": 114,
+  "total_reward": 0.0,
+  "done": true,
+  "final_snapshot": {
+    "obs_keys": [
+      "equipped_items",
+      "inventory",
+      "pov"
+    ],
+    "info_keys": [
+      "error"
+    ],
+    "inventory": {
+      "air": 1779,
+      "bucket": 604,
+      "flint_and_steel": 388,
+      "lava_bucket": 215,
+      "obsidian": 993,
+      "water_bucket": 1716
+    },
+    "equipped": "water_bucket",
+    "location": {},
+    "visual": {
+      "frame_mean": 127.49954861111111,
+      "lava_frac": 0.09054778343023256,
+      "portal_frac": 0.09920058139534883,
+      "region_mean_r": 127.92071533203125,
+      "region_mean_g": 128.39735412597656,
+      "region_mean_b": 127.82560729980469
+    },
+    "reward": 0.0
+  },
+  "wall_time": 275.7855195000011,
+  "frames_dir": "/Users/joey/Documents/Projects/ObsidianLink/obsidianlink/experiments/runs/l1_spike_20260819_124538Z_frames",
+  "action_effects": {
+    "hotbar_select": true,
+    "use_lava_bucket": true,
+    "use_water_bucket": true,
+    "pickup_water": true,
+    "repeat_cast": true,
+    "ignite": false,
+    "nether_entry": false
+  },
+  "bucket_casting_feasible": true,
+  "recommendation": "continue_official_l1_with_aiming_and_evaluator_work",
+  "human_frame_review": {
+    "00_reset.png": "Placement at courtyard. Hotbar: water, 7 lava, flint. Hot Stuff advancement from lava_bucket in inventory.",
+    "02_after_lava_use.png": "One lava source on the obsidian floor. Slot 2 is empty bucket. lava 14→13 confirmed.",
+    "03_after_water_use.png": "Water covering the lava site. Slot 1 empty bucket. Lava visually gone.",
+    "04_after_pickup.png": "Water bucket restored. Cast obsidian block visible (raised, not just the floor).",
+    "05_extra_cast_1.png": "Second empty bucket in slot 3; another raised obsidian. Repeat cast worked once.",
+    "06_after_ignite.png": "Invalid: env already timed out; random observation. Do not treat as ignition.",
+    "07_after_enter_attempt.png": "Invalid: same timeout observation."
+  },
+  "evaluator_truth_candidates": {
+    "inventory_delta": "lava_bucket count down; water_bucket \u2194 bucket. No ObservationFromGrid.",
+    "visual_pov": "lava_frac / portal_frac on saved RGB frames (human + heuristic).",
+    "location_stats": "xpos/ypos/zpos/yaw/pitch/biome_id via ObservationFromFullStats / gym info.",
+    "reward_for_touching_nether_portal": "RewardForTouchingBlockType; isolated from NavigationDecorator.",
+    "not_used": "ObservationFromGrid (known unreliable on this Malmo stack)."
+  }
+}

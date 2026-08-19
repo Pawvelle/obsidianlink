@@ -1,0 +1,104 @@
+{
+  "kind": "l1_technical_feasibility_spike",
+  "l1_definition": "Casting \u2192 Frame \u2192 Ignition \u2192 Nether Entry",
+  "l1_definition_unchanged": true,
+  "prebuilt_portal_frame": false,
+  "drawblock_used_for": "obsidian_courtyard_casting_surface_only",
+  "valid_for_l1_agent_conclusion": false,
+  "env_id": "MineRLL1Spike-v0",
+  "started_utc": "20260819_124215Z",
+  "phases": {
+    "A_inventory": {
+      "ok": true,
+      "steps": 1,
+      "snapshot": {
+        "obs_keys": [
+          "equipped_items",
+          "inventory",
+          "pov"
+        ],
+        "info_keys": [
+          "error"
+        ],
+        "inventory": {
+          "air": 2265,
+          "bucket": 2275,
+          "flint_and_steel": 1476,
+          "lava_bucket": 1976,
+          "obsidian": 886,
+          "water_bucket": 1962
+        },
+        "equipped": "none",
+        "location": {},
+        "visual": {
+          "frame_mean": 127.56054253472222,
+          "lava_frac": 0.09034338662790697,
+          "portal_frac": 0.10165334302325581,
+          "region_mean_r": 128.03944396972656,
+          "region_mean_g": 127.07646942138672,
+          "region_mean_b": 128.08016967773438
+        },
+        "reward": 0.0
+      },
+      "expected": {
+        "water_bucket": 1,
+        "lava_bucket": 14,
+        "flint_and_steel": 1
+      },
+      "got": {
+        "air": 2265,
+        "bucket": 2275,
+        "flint_and_steel": 1476,
+        "lava_bucket": 1976,
+        "obsidian": 886,
+        "water_bucket": 1962
+      }
+    }
+  },
+  "limitations": [
+    "RuntimeError: Attempted to step an environment server with done=True"
+  ],
+  "oracle_last_effect": null,
+  "recommendation": "record_limitation_do_not_change_l1_definition",
+  "portal_touch_reward_enabled": true,
+  "action_space_keys": [
+    "attack",
+    "back",
+    "camera",
+    "equip",
+    "forward",
+    "jump",
+    "left",
+    "right",
+    "sneak",
+    "sprint",
+    "use"
+  ],
+  "obs_space_keys": [
+    "equipped_items",
+    "inventory",
+    "pov"
+  ],
+  "error": "RuntimeError: Attempted to step an environment server with done=True",
+  "traceback": "Traceback (most recent call last):\n  File \"/Users/joey/Documents/Projects/ObsidianLink/obsidianlink/experiments/spike_l1_feasibility.py\", line 735, in main\n    last = run_oracle(session)\n  File \"/Users/joey/Documents/Projects/ObsidianLink/obsidianlink/experiments/spike_l1_feasibility.py\", line 430, in run_oracle\n    session.equip(\"lava_bucket\")\n  File \"/Users/joey/Documents/Projects/ObsidianLink/obsidianlink/experiments/spike_l1_feasibility.py\", line 378, in equip\n    snap = self.step(equip=item)\n  File \"/Users/joey/Documents/Projects/ObsidianLink/obsidianlink/experiments/spike_l1_feasibility.py\", line 340, in step\n    self.obs, reward, done, info = self.env.step(action)\n  File \"/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/gym/wrappers/time_limit.py\", line 17, in step\n    observation, reward, done, info = self.env.step(action)\n  File \"/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/gym/wrappers/order_enforcing.py\", line 13, in step\n    observation, reward, done, info = self.env.step(action)\n  File \"/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/env/_singleagent.py\", line 31, in step\n    obs, rew, done, info = super().step(multi_agent_action)\n  File \"/opt/anaconda3/envs/mc-agent/lib/python3.10/site-packages/minerl/env/_multiagent.py\", line 373, in step\n    raise RuntimeError(\"Attempted to step an environment server with done=True\")\nRuntimeError: Attempted to step an environment server with done=True\n",
+  "steps": 1,
+  "wall_time": 29.576079791004304,
+  "frames_dir": "/Users/joey/Documents/Projects/ObsidianLink/obsidianlink/experiments/runs/l1_spike_20260819_124215Z_frames",
+  "action_effects": {
+    "equip": false,
+    "use_lava_bucket": false,
+    "use_water_bucket": false,
+    "pickup_water": false,
+    "repeat_cast": false,
+    "ignite": false,
+    "nether_entry": false
+  },
+  "bucket_casting_feasible": false,
+  "evaluator_truth_candidates": {
+    "inventory_delta": "lava_bucket count down; water_bucket \u2194 bucket. No ObservationFromGrid.",
+    "visual_pov": "lava_frac / portal_frac on saved RGB frames (human + heuristic).",
+    "location_stats": "xpos/ypos/zpos/yaw/pitch/biome_id via ObservationFromFullStats / gym info.",
+    "reward_for_touching_nether_portal": "RewardForTouchingBlockType; isolated from NavigationDecorator.",
+    "not_used": "ObservationFromGrid (known unreliable on this Malmo stack)."
+  }
+}

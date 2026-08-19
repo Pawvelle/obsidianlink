@@ -31,6 +31,20 @@ Reasons:
 Do not treat `success=False, reason=portal_frame_incomplete` from these
 runs as an Agent capability result.
 
+### L1 technical feasibility spike — 2026-08-19
+
+`l1_spike_20260819_124538Z.json` and `l1_spike_20260819_124538Z_frames/` are a **mechanic feasibility** record, not an Agent capability result (`valid_for_l1_agent_conclusion: false`).
+
+Live evidence (no pre-built portal frame):
+
+* `InventoryAgentStart` can give water_bucket + 14 lava_bucket + flint_and_steel
+* Placement after warmup: `(0.5, 101.0, 0.5)`
+* hotbar select + `use` pours lava; lava+water casts a new obsidian block; water can be picked up
+* `EquipAction` (`equip none`) crashes this MineRL 1.0.2 / MCP-Reborn stack
+* Oracle did **not** complete a 10-block frame, ignition, or Nether entry (timeout during extra casts; later frames are invalid)
+
+The earlier `l1_spike_20260819_124215Z.json` is the EquipAction crash repro.
+
 ### Other historical pilots
 
 D1 / D2 / D3 live JSON files remain useful as pipeline / scene-validity

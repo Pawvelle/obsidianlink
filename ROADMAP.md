@@ -18,7 +18,7 @@ Phase 2  Benchmark MVP                    ✅
 
 ## Current Task
 
-**L1 Controlled Construction — pending redesign after architecture reset**
+**L1 Controlled Construction — pending official implementation**
 
 正式 L1 必须由 Agent 完成：
 
@@ -27,6 +27,17 @@ Casting → Frame → Ignition → Nether Entry
 ```
 
 不要把 scene 预建 portal frame 当作正式 L1。旧 L1 已移出 active path。
+
+**2026-08-19 technical feasibility spike**（`obsidianlink/experiments/spike_l1_feasibility.py`，live `l1_spike_20260819_124538Z`）：
+
+* bucket casting **可行**：真实 `use` lava/water 生成新的 obsidian，不是 DrawBlock 预建 frame
+* 物品准备：**可行**，`InventoryAgentStart`（不改 L1 语义）
+* 选物品：必须用 `hotbar.1-9`。`EquipAction` 会把 `equip none` 送给 MCP-Reborn 并 crash
+* Oracle 走到：inventory → hotbar → pour lava → water convert → pickup → 至少 1 次 extra cast
+* 未完成：10-block frame / flint ignition / Nether entry（extra cast 期间 connection timeout）
+* Evaluator 不要用 `ObservationFromGrid`。可用：inventory delta、`location_stats`（gym info）、POV 帧、可选 `RewardForTouchingBlockType(nether_portal)`
+
+建议继续正式实现 L1，但不要用预建 frame 或 EquipAction 走捷径。
 
 ## Completed
 
@@ -62,6 +73,7 @@ Casting → Frame → Ignition → Nether Entry
   * `PlaceBlock` handler 可能 crash server
   * `ObservationFromGrid` 可能返回全 air，不能作为 evaluator truth
 * DrawingDecorator：仅 `DrawBlock`，仅 `lava` / `obsidian`
+* `EquipAction`：MineRL 1.0.2 MCP-Reborn `constructKeyboardState` 对 `equip none` / `equip <item>` 做 `Integer.parseInt`，episode 直接结束。L1 应使用 hotbar keys
 
 ## Historical L1
 
