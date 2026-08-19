@@ -7,425 +7,400 @@
 
 # 文档目的
 
-本文档只规定 ObsidianLink 从零重启后的**代码结构、开发顺序与阶段验收条件**。 研究目标、Benchmark 定义、Portal Construction 方法、Single-Agent / Multi-Agent 研究问题以 *ObsidianLink Research-First Benchmark Master Plan* 为最高依据。
+本文档规定 ObsidianLink 的代码结构、开发顺序和阶段验收条件。研究目标、正式 Success 定义、Bucket Casting 的定位与 Single-Agent / Multi-Agent 研究问题以 *ObsidianLink Research-First Benchmark Master Plan* 为最高依据。
 
-工程开发遵循四条原则：
+工程开发遵循：
 
-1.  **先跑通实验，再扩展框架。**
+1. **先跑通真实实验，再扩展框架。**
+2. **当前阶段用不到的模块不创建。**
+3. **每个 Phase 只解决一个主要问题。**
+4. **Benchmark 是主线；Agent、工具与环境均为 Benchmark 服务。**
 
-2.  **当前阶段用不到的模块不创建。**
-
-3.  **每个 Phase 只解决一个主要问题。**
-
-4.  **Benchmark 是主线，Agent 与环境都是为 Benchmark 服务。**
-
-# 实现进度（2026-08-19）
-
-以下只记录仓库实现进度，**不改变**上文工程原则或下文 Phase 定义。
+# 当前实现进度（2026-08-19）
 
 - Phase 1 Minimal Minecraft Agent Loop ✅
-- Phase 2 Benchmark MVP ✅（D1 / D2 / D3 代表性 diagnostic 已落地；live 为 pipeline / pilot）
-- 下一阶段：Phase 3 Single-Agent Portal Benchmark
-- 下一任务：L1 Controlled Construction（尚未开始）
+- Phase 2 Benchmark MVP ✅（代表性 diagnostic：D1 Lava Presence）
+- Phase 3 Single-Agent Portal Benchmark — 进行中
+- `MinecraftWikiTool` ✅：使用 live Minecraft Wiki 公开搜索接口；不 snapshot、抓取、嵌入或镜像 Wiki
+- Tool-enabled `ReactiveAgent` ✅：可在一次 `act()` 内执行有限的 Wiki tool loop
+- 真实 `model_calls` accounting ✅：按实际 model completion 计数
+- `wiki_calls` / `wiki_queries` / tool trace evidence ✅
+- tool loop 后仍传递当前 Observation/RGB frame ✅
+- Formal L1 Controlled Construction — 待实现；尚未 live 验证
 
-不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。未明确要求时不要开始写 L1 代码。当前进度的短状态以仓库根目录 `ROADMAP.md` 为准。
+当前简短进度以根目录 `ROADMAP.md` 为准。不要新增 D1/D2/D3 task；不要提前开发 D4/D5/D6、Planner、Reflection 或 Multi-Agent。
 
-# 初始项目结构
+# 当前项目结构
 
-项目从最小结构开始：
+```text
+obsidianlink/
+├── env/
+│   ├── environment.py
+│   ├── actions.py
+│   ├── minerl.py
+│   └── scene.py
+├── benchmark/
+│   ├── task.py
+│   ├── evaluator.py
+│   ├── runner.py
+│   └── result.py
+├── agents/
+│   ├── base.py
+│   ├── model_client.py
+│   └── reactive.py
+├── tools/
+│   └── minecraft_wiki.py
+├── tasks/
+│   └── diagnostic.py
+├── experiments/
+│   └── spike_l1_feasibility.py
+└── main.py
 
-    obsidianlink/
-    |-- env/
-    |   |-- environment.py
-    |   `-- actions.py
-    |-- benchmark/
-    |   |-- task.py
-    |   |-- evaluator.py
-    |   |-- runner.py
-    |   `-- result.py
-    |-- agents/
-    |   |-- base.py
-    |   |-- model_client.py
-    |   `-- reactive.py
-    |-- tasks/
-    |   |-- diagnostic.py
-    |   `-- portal.py
-    |-- experiments/
-    `-- main.py
+tests/
+README.md
+ROADMAP.md
+pyproject.toml
+```
 
-    tests/
-    README.md
-    ROADMAP.md
-    pyproject.toml
+`tasks/portal.py` 是 Formal L1 实现时的候选新增文件，不是当前已存在模块。
 
-初期**不要创建**以下目录：
+当前禁止为“未来完整性”预建：
 
-    dataset/
-    replay/
-    registry/
-    workflows/
-    drivers/
-    generalization/
-    multi_agent/
+```text
+knowledge_base/
+retrieval/
+rag/
+vector_store/
+tool_registry/
+workflow/
+mcp/
+dataset/
+replay/
+registry/
+drivers/
+generalization/
+multi_agent/
+```
 
-只有当对应实验真正开始时才创建。
+只有对应实验已经开始且确有需要时，才创建最小实现。
 
-# 核心接口
-
-项目早期只冻结四个最小接口。
+# 核心接口与边界
 
 ## Environment
 
-    reset() -> Observation
-    step(action) -> Observation
-    close()
+```python
+reset() -> Observation
+observe() -> Observation
+step(action) -> Observation
+close()
+```
 
-负责 Minecraft / MineRL 的启动、观察与动作执行。
+负责 Minecraft/MineRL 的启动、观察和动作执行。`Observation` 只包含 Agent 可见字段；hidden world truth 不得进入其中。
 
 ## Agent
 
-    act(observation) -> Action
+```python
+act(observation) -> Action
+```
 
-Benchmark 不关心 Agent 内部使用何种模型。
+这是 Benchmark 与 Agent 的稳定边界。Runner 不关心 Agent 内部是否使用模型、Minecraft Wiki、planner、reflection 或其他 reasoning；它最终只接收一个 Minecraft `Action`。
+
+当前 tool-enabled ReactiveAgent 的内部流程是：
+
+```text
+Observation
+→ Model
+→ optional Minecraft Wiki
+→ Model
+→ Action
+```
+
+工具属于 **Agent internals**，不是 BenchmarkRunner internals。Tool loop 有有限 safety limit；异常、无效 JSON、未知工具或网络失败必须安全降级，不使 episode crash。
 
 ## Task
 
-Task 只描述：
+`Task` 只描述：
 
-- 任务目标；
-
-- 初始条件；
-
-- 允许动作；
-
+- task goal；
+- initial condition；
+- allowed actions；
 - episode budget；
-
 - evaluation condition。
 
-Task 不包含 solver。
+Task 不包含 solver 或 Nether Portal construction recipe。
 
 ## Evaluator
 
-Evaluator 独立判断任务是否完成。
+Evaluator 独立依据 environment-side truth 判断完成状态。Agent self-report、Wiki result 或工具调用次数均不能成为 Success truth。Agent-visible observation 与 evaluator-only truth 必须严格隔离。
 
-Agent-visible observation 与 evaluator-only world truth 必须隔离。
+# Metrics 与 Evidence
+
+最小指标保持：
+
+- success；
+- environment steps；
+- model calls；
+- invalid actions；
+- episode time。
+
+Tool-enabled Agent 额外记录：
+
+- `wiki_calls`；
+- `wiki_queries`；
+- 必要时的 tool trace summary。
+
+`model_calls` 是真实 model completion 次数，不是 `Agent.act()` 调用次数。例如：
+
+```text
+Model → Wiki → Model → Action
+model_calls = 2
+wiki_calls = 1
+```
+
+这些 evidence 写入现有 `Result.evidence`；当前不建立复杂 telemetry framework，也不重写 Result schema。
 
 # 开发阶段
 
 ## Phase 1 — Minimal Minecraft Agent Loop
 
-**目标：**第一次跑通真实闭环。
+**目标：**第一次跑通真实 observation–action 闭环。
 
-只实现：
+最小实现：
 
-1.  Minecraft / MineRL 环境启动与 reset；
-
-2.  RGB observation；
-
-3.  最小 inventory / selected item observation；
-
-4.  move、camera、attack、use、place、wait 等基础动作；
-
-5.  ModelClient；
-
-6.  ReactiveAgent；
-
-7.  observation → agent → action → Minecraft 循环。
-
-第一阶段不做正式 Benchmark。
+1. Minecraft/MineRL reset、observe、step、close；
+2. RGB；
+3. inventory / selected item；
+4. bounded move、camera、attack、use/place、wait actions；
+5. ModelClient；
+6. ReactiveAgent；
+7. observation → agent → action → Minecraft。
 
 **验收：**
 
-> 一个模型能够读取真实 Minecraft observation，输出合法结构化动作，动作在 Minecraft 中产生可观察结果，并继续下一轮 observation。
+> 模型读取真实 Minecraft observation，输出合法结构化动作，动作产生可观察 world effect，并获得下一轮 observation。
 
-达到该条件立即进入 Phase 2，不继续扩展环境框架。
+本阶段已完成，不继续扩展 Environment framework。
 
 ## Phase 2 — Benchmark MVP
 
-**目标：**把 Phase 1 的 Agent Loop 变成可评测实验。
+**目标：**将 Phase 1 loop 转化为可比较的 Benchmark episode。
 
 实现：
 
-1.  Task；
-
-2.  BenchmarkRunner；
-
-3.  Evaluator；
-
-4.  Result；
-
-5.  最小 evidence 与 metrics；
-
-6.  D1–D3 少量代表性 Diagnostic tasks。
-
-第一版 metrics 只记录：
-
-- success；
-
-- environment steps；
-
-- model calls；
-
-- invalid actions；
-
-- episode time。
+1. Task；
+2. BenchmarkRunner；
+3. Evaluator；
+4. Result；
+5. agent-visible / evaluator-only boundary；
+6. 最小 evidence 与 metrics；
+7. 代表性 D1 diagnostic。
 
 **验收：**
 
-> 可以通过统一 Runner 对一个真实 Agent 执行一个 Diagnostic task，并自动生成结构化实验结果。
+> 同一 Runner 能够运行真实 Agent 与 Diagnostic task，并产出结构化 Result。
 
-完成后直接进入 L1，不等待 D1–D6 全部完善。
+本阶段已完成。D1/D2/D3 不再作为当前开发队列；D4/D5/D6 仅在 L1 实验出现对应 failure 后按需实现。
 
 ## Phase 3 — Single-Agent Portal Benchmark
 
-**目标：**形成第一个真正的 Nether Portal Benchmark。
+**目标：**形成首个真实的 Nether Portal Benchmark。
 
-开发顺序固定为：
+Formal End-to-End objective 保持 method-agnostic：
 
-L1 → L2 → L3 → L4
+```text
+Construct / complete a Nether Portal
+→ Activate it
+→ Enter the Nether
+```
 
-每个 Level 必须遵循：
+Bucket Casting 是第一版 primary reference strategy；它不是 prompt 指定的 mandatory solver。正式 L1 不预建 portal frame，Agent 通过当前 observation、允许动作和 live Minecraft Wiki knowledge 自主选择策略。
 
+当前和后续顺序：
+
+```text
+Minecraft Wiki Tool ✅
+Tool-enabled ReactiveAgent ✅
+        ↓
+Formal L1 Controlled Environment
+        ↓
+L1 Evaluator
+        ↓
+Scripted / Oracle Mechanical Validation
+        ↓
+Tool-enabled ReactiveAgent L1 Pilot
+        ↓
+Failure Analysis
+        ↓
+Planner–Executor
+        ↓
+Planner–Reflection
+        ↓
+L2 → L3 → L4
+```
+
+每个 Level 遵循：
+
+```text
 Implement → Pilot Experiment → Analyze Failure → Next Level
+```
 
-#### L1 Controlled Construction
+### L1 — Controlled Construction
 
-关键资源和施工环境受控。 Agent 仍必须完成：
+关键资源和施工区域受控。Agent 仍必须通过合法 Minecraft mechanics 完成 portal construction/completion、activation 和 Nether entry。
 
-Casting → Frame → Ignition → Nether Entry
+环境可以使 bucket casting 成为自然路线，例如提供容易发现的 lava resource/lava pool、容易获得的 water、适度简化 bucket 或 ignition 前置负担和简单施工区；但：
 
-L1 跑通后加入：
+- 不预建 portal frame；
+- 不在 prompt 中提供 construction recipe；
+- 不因 Agent 使用其他合法策略而否定真实 Success；
+- 不将 preloaded lava buckets、scripted actions 或 Oracle logic 写成正式 task semantics。
 
-1.  Planner–Executor；
+`obsidianlink/experiments/spike_l1_feasibility.py` 仅是 scripted/oracle mechanical feasibility experiment。它用于验证 lava placement、water interaction、obsidian generation、portal mechanics、ignition 和 Nether transition 的可行性，不是 Formal L1 Benchmark。
 
-2.  Planner–Reflection。
+L1 的 env/action/evaluator 扩展必须依据真实 MineRL evidence。当前已知 `EquipAction` 不可靠，正式 L1 需要使用已验证的 hotbar/use 路径；`ObservationFromGrid` 不能作为 evaluator truth。
 
-此时开始比较：
+### L2 — Resource Interaction
 
-Reactive vs Planner vs Reflection
+增加 water/lava 等环境资源的 search、approach、acquisition 与 transport。lava 是环境中的 resource/source/pool，不默认等价于预装大量 lava buckets。
 
-D4 Planning、D5 State Tracking、D6 Recovery 根据 L1 中真实出现的失败再开发。
+### L3 — Resource Acquisition
 
-#### L2 Resource Interaction
+增加 iron acquisition、smelting/crafting、bucket dependency 与更完整资源链。
 
-增加 water / lava 寻找、接近、获取与运输。
+### L4 — Open-World Construction
 
-#### L3 Resource Acquisition
-
-增加 iron acquisition、smelting / crafting、bucket dependency。
-
-#### L4 Open World
-
-增加随机出生、开放探索、资源距离与地形不确定性。
+增加随机出生、开放探索、资源距离和地形不确定性。Agent 可根据 environment、Minecraft Wiki knowledge 与 available resources 自主选择合法策略。
 
 **Phase 3 验收：**
 
-至少获得一套可重复运行的 Single-Agent End-to-End Benchmark，并能够报告不同 Agent architecture 在 L1–L4 上的结果与主要 failure type。
+> 获得可重复运行的 Single-Agent End-to-End Benchmark，并能报告 L1–L4 的 Success、主要 failure type 和 Agent architecture 对照。
 
 ## Phase 4 — Multi-Agent Benchmark
 
-**目标：**研究多智能体是否缓解 Portal Construction 的长程任务瓶颈。
+**目标：**研究协作能否缓解 Single-Agent 的长程任务瓶颈。
 
 只有进入本阶段时才创建：
 
-    obsidianlink/multi_agent/
+```text
+obsidianlink/multi_agent/
+```
 
-第一版正式设定使用三个 Agent：
+第一版固定角色是 **Casting-Oriented Fixed-Role Baseline**：
 
 - Agent A — Lava Scout；
-
 - Agent B — Miner / Crafter；
-
 - Agent C — Water Scout。
 
-开发顺序：
+它研究并行资源获取、handoff、communication 与 makespan；不是所有 Multi-Agent setting 的唯一分工，也不把 bucket casting 变成强制 solver。
 
-1.  AgentMessage 与独立 mailbox；
+顺序保持：
 
-2.  Fixed-Role 3-Agent；
+```text
+AgentMessage / mailbox
+→ Fixed-Role 3-Agent
+→ Single vs 3-Agent
+→ 2-Agent ablation
+→ Autonomous Role Assignment
+→ Compute-Matched 3-Agent
+```
 
-3.  regroup / handoff；
-
-4.  designated builder 完成 portal；
-
-5.  Single vs 3-Agent 对照；
-
-6.  2-Agent agent-count ablation；
-
-7.  Autonomous Role Assignment；
-
-8.  Compute-Matched 3-Agent。
-
-不同 Agent 的 observation、inventory 与 memory 不允许隐式共享。
-
-**验收：**
-
-能够在相同 Benchmark 任务上比较 Single-Agent、2-Agent、Fixed-Role 3-Agent、Autonomous 3-Agent 与 Compute-Matched 3-Agent。
+Autonomous Role Assignment 允许 Agent 共同检索知识、选择策略、协商分工和调整角色。不同 Agent 的 observation、inventory、memory 与 private tool context 不得隐式共享。
 
 ## Phase 5 — Generalization and Recovery
 
-**目标：**验证 Benchmark 是否能测量泛化与真实恢复。
+按单变量逐步增加：
 
-Generalization 按单变量逐步加入：
-
+```text
 yaw → spawn → resource distance → terrain → obstacles → seed
+```
 
-Recovery 重点覆盖：
+Recovery 关注 action no-effect、resource missing、path blocked、state mismatch、casting error、knowledge retrieval failure 或知识应用错误。真正 recovery 必须体现：
 
-- action no effect；
-
-- placement failure；
-
-- resource missing；
-
-- path blocked；
-
-- state mismatch；
-
-- casting error。
-
-Recovery 必须表现为：
-
+```text
 Observe → Detect → Diagnose → Replan → Act
+```
 
-不能用预写死的 fallback 冒充 recovery。
+不能用预写死 fallback 冒充 recovery。
 
 ## Phase 6 — Benchmark Freeze and Paper
 
-**目标：**把探索性项目冻结成可发表、可复现的 Benchmark。
-
-此时才增加：
-
-- train / dev / test；
-
-- dataset；
+仅在此阶段考虑：
 
 - benchmark version；
-
+- train/dev/test；
+- dataset；
 - replay；
-
 - large-scale runs；
-
 - confidence intervals；
-
 - evaluator audit；
-
 - tables / figures；
+- paper pipeline；
+- 若确有 reproducibility 必要性，再决定是否冻结 Wiki revision。
 
-- paper pipeline。
-
-本阶段之前不为这些功能提前建设大型框架。
+在此之前不为这些内容提前建立大型基础设施。
 
 # 推荐开发顺序
 
-后续开发按以下顺序推进：
+以下顺序描述从最小实现到正式研究的依赖关系，不要求一次性建设：
 
-1.  建立全新 Python package 与最小目录；
-
-2.  Environment reset / close；
-
-3.  RGB observation；
-
-4.  基础 actions；
-
-5.  ModelClient；
-
-6.  ReactiveAgent；
-
-7.  真实 Agent Loop；
-
-8.  Task；
-
-9.  Evaluator；
-
-10. Runner；
-
-11. Result；
-
-12. D1；
-
-13. D2；
-
-14. D3；
-
-15. L1；
-
+1. 最小 Python package 与运行入口；
+2. Environment reset / observe / step / close；
+3. RGB、公开 inventory 与 selected item；
+4. bounded actions；
+5. ModelClient；
+6. ReactiveAgent；
+7. 真实 Agent loop；
+8. Task / Evaluator / Runner / Result；
+9. 代表性 D1；
+10. Live Minecraft Wiki Tool；
+11. Tool-enabled ReactiveAgent；
+12. Formal L1 environment 与 evaluator；
+13. Scripted / Oracle L1 mechanics validation；
+14. Tool-enabled ReactiveAgent L1 pilot；
+15. 根据真实 failure 实现 D4/D5/D6；
 16. Planner–Executor；
-
 17. Planner–Reflection；
-
-18. D4；
-
-19. D5；
-
-20. D6；
-
-21. L2；
-
-22. L3；
-
-23. L4；
-
-24. AgentMessage；
-
-25. Fixed-Role 3-Agent；
-
-26. 2-Agent ablation；
-
-27. Autonomous Role Assignment；
-
-28. Compute-Matched Multi-Agent；
-
-29. Generalization；
-
-30. Recovery；
-
-31. Dataset / Benchmark Freeze / Paper。
+18. L2；
+19. L3；
+20. L4；
+21. AgentMessage / mailbox；
+22. Casting-Oriented Fixed-Role 3-Agent；
+23. 2-Agent ablation；
+24. Autonomous Role Assignment；
+25. Compute-Matched Multi-Agent；
+26. Generalization / Recovery；
+27. Dataset / Benchmark Freeze / Paper。
 
 # 单次开发任务规则
 
-每一次 Codex / Cursor 任务只允许：
+每次任务只应：
 
-1.  一个明确目标；
-
-2.  修改当前目标直接需要的文件；
-
-3.  添加必要测试；
-
-4.  给出运行方式；
-
-5.  更新简短 ROADMAP 状态。
+1. 服务一个明确研究目标；
+2. 修改当前目标直接需要的文件；
+3. 添加必要测试；
+4. 运行与风险相称的验证；
+5. 更新必要的简短状态文档。
 
 默认禁止：
 
 - 顺手实现未来 Phase；
-
 - 提前建立抽象框架；
-
 - 为未来模型建立 provider-specific 代码；
-
 - 大规模重构与当前实验无关的模块；
-
-- 为了“结构完整”创建空目录或空类；
-
-- 一次任务同时处理环境、Benchmark、Agent 与 Multi-Agent 多条主线。
-
-# 阶段状态记录
-
-ROADMAP.md 只保留简单状态：
-
-    Current Phase:
-    Current Task:
-    Completed:
-    Next:
-    Blocked:
-
-不要再维护大段历史流水账。 详细实验数据保存在 experiments / runs 中，而不是不断堆入项目状态文档。
+- 为“结构完整”创建空目录或空类；
+- 同时处理 Environment、Benchmark、Agent 与 Multi-Agent 的多条未来主线。
 
 # 最终原则
 
-ObsidianLink 的工程判断标准不是“代码是否足够完整”，而是：
+工程判断标准不是“代码是否足够完整”，而是：
 
 > **这段代码是否让我们更快、更可靠地回答一个 Benchmark research question？**
 
-如果答案是否定的，则默认不开发。
+Minecraft Wiki 是 Agent 的一个轻量知识工具，不把 ObsidianLink 变成知识检索项目。核心闭环始终是：
+
+```text
+Benchmark defines the problem.
+Agent retrieves knowledge when needed and chooses a strategy.
+Environment executes Minecraft mechanics.
+Evaluator independently judges real world success.
+```
