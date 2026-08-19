@@ -117,11 +117,41 @@ def test_place_action_without_target_falls_back_to_dirt() -> None:
     assert translated["place"] == "dirt"
 
 
-def test_use_action_also_drives_place_in_navigate() -> None:
+def test_use_action_does_not_drive_place_in_navigate() -> None:
+    """L1 / Phase 3 fix: a USE action must NOT place a block.
+
+    Earlier the adapter set ``place = action.target`` for both
+    PLACE and USE, which leaked a ``"dirt"`` default into USE
+    when the agent omitted ``target``. L1 needs USE to drive
+    only the ``use`` key (e.g. right-click with
+    ``flint_and_steel`` to ignite the portal) without also
+    placing an unwanted block. The D1-02 water-bucket use case
+    worked around the old behaviour by ignoring the
+    ``place`` value; the L1 path does not have that
+    workaround.
+    """
     translated = MineRLEnvironment._to_minerl_action(
         Action(type=ActionType.USE, target="dirt"), _NAVIGATE_KEYS
     )
-    assert translated["place"] == "dirt"
+    assert translated["place"] == "none"
+
+
+def test_equip_action_with_known_target_emits_equip() -> None:
+    """L1 hotbar switch via the equip action."""
+    keys = _NAVIGATE_KEYS + ("equip",)
+    translated = MineRLEnvironment._to_minerl_action(
+        Action(type=ActionType.EQUIP, target="flint_and_steel"), keys
+    )
+    assert translated["equip"] == "flint_and_steel"
+
+
+def test_equip_action_with_unknown_target_is_noop() -> None:
+    keys = _NAVIGATE_KEYS + ("equip",)
+    translated = MineRLEnvironment._to_minerl_action(
+        Action(type=ActionType.EQUIP, target="diamond_sword"), keys
+    )
+    # Unknown target is not a known L1 equippable; no equip key.
+    assert "equip" not in translated or translated["equip"] == "none"
 
 
 def test_use_key_drives_use_not_jump() -> None:

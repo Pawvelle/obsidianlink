@@ -46,8 +46,16 @@ def test_action_is_frozen() -> None:
 
 
 def test_all_action_types_present() -> None:
+    # EQUIP is the L1 / Phase 3 hotbar switch.
     names = {member.name for member in ActionType}
-    assert names == {"MOVE", "CAMERA", "ATTACK", "USE", "PLACE", "WAIT"}
+    assert names == {
+        "MOVE", "CAMERA", "ATTACK", "USE", "PLACE", "EQUIP", "WAIT",
+    }
+
+
+def test_equip_action_carries_target() -> None:
+    action = Action(type=ActionType.EQUIP, target="flint_and_steel")
+    assert action.target == "flint_and_steel"
 
 
 def test_action_values_are_lowercase_strings() -> None:

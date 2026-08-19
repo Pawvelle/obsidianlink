@@ -1,0 +1,73 @@
+{
+  "task_id": "l1_controlled_construction",
+  "design": "l1_controlled_construction",
+  "level": "L1",
+  "motor_execution": true,
+  "allowed_actions": [
+    "move",
+    "camera",
+    "place",
+    "use",
+    "equip",
+    "wait"
+  ],
+  "max_steps": 200,
+  "env_id": "MineRLL1Controlled-v0",
+  "warmup_steps": 20,
+  "num_episodes": 1,
+  "total_wall_time": 102.39436458400087,
+  "frames_dir": "obsidianlink/experiments/runs/l1_oracle_1ep_20260819_094353Z_frames",
+  "agent": "L1ScriptedOracle",
+  "evaluator": "L1Evaluator",
+  "aggregate": {
+    "n_episodes": 1,
+    "success_rate": 0.0,
+    "portal_frame_incomplete_rate": 1.0,
+    "portal_not_ignited_rate": 0.0,
+    "max_steps_reached_rate": 0.0,
+    "missing_world_truth_rate": 0.0,
+    "reasons": {
+      "portal_frame_incomplete": 1
+    }
+  },
+  "episodes": [
+    {
+      "episode": 1,
+      "success": false,
+      "reason": "portal_frame_incomplete",
+      "frame_complete": false,
+      "frame_obsidian_count": 0,
+      "frame_total": 14,
+      "portal_ignited": false,
+      "portal_cell_count": 0,
+      "interior_total": 6,
+      "entered_nether": false,
+      "final_xpos": 0.5,
+      "final_ypos": 101.0,
+      "final_zpos": 3.4989882574409616,
+      "last_action": "wait",
+      "steps": 200,
+      "model_calls": 200,
+      "invalid_actions": 0,
+      "elapsed_time": 101.74561449999965,
+      "wall_time": 101.74573425000199,
+      "evidence": {
+        "frame_complete": false,
+        "frame_obsidian_count": 0,
+        "frame_total": 14,
+        "portal_ignited": false,
+        "portal_cell_count": 0,
+        "interior_total": 6,
+        "entered_nether": false,
+        "final_xpos": 0.5,
+        "final_ypos": 101.0,
+        "final_zpos": 3.4989882574409616,
+        "nether_ypos_threshold": 80.0,
+        "last_action": "wait",
+        "raw_response": "{\"action\": \"wait\"}",
+        "reason": "portal_frame_incomplete"
+      }
+    }
+  ],
+  "pilot": true
+}

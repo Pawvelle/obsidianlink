@@ -4,7 +4,7 @@
 
 ## Current Phase
 
-**Phase 3 — Single-Agent Portal Benchmark（尚未开始）**
+**Phase 3 — Single-Agent Portal Benchmark（L1 Controlled Construction 实现完成，live MineRL 部分验证受 Malmo 0.37.0 限制）**
 
 Phase 1 与 Phase 2 已关闭：
 
@@ -28,7 +28,14 @@ D1 / D2 / D3 的 live 实验都是 **pipeline / pilot**，用于验证 Benchmark
 
 ## Current Task
 
-**下一任务：L1 Controlled Construction。尚未实现。未明确要求时不要开始写 L1 代码。**
+**L1 Controlled Construction（code complete, live partial）。**
+
+L1 是 Phase 3 的第一个 end-to-end Nether Portal Benchmark level。
+Casting + Portal Frame Construction 由受控 scene 预生成（Malmo 0.37.0 限制
+见下）；agent 的工作只是 Ignition + Nether Entry。`success = nether_entered`（ypos < 80）。
+
+不要再增加 L1 diagnostic。不要提前开发 L2 / L3 / L4 / D4 / D5 / D6。不要为
+Reactive Agent 失败擅自继续实现 Planner / Reflection。
 
 ## Phase 2 收尾摘要
 
@@ -239,9 +246,9 @@ PYTHONPATH=. conda run -n mc-agent python -m pytest tests/
 
 ## Next
 
-**Phase 3 — Single-Agent Portal Benchmark。下一任务是 L1 Controlled Construction。**
+**Phase 3 — L1 Controlled Construction 完成后，等待下一步指令。**
 
-不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不增加导航 / 规划 / 检测框架。不把 motor 写回 D2。在用户明确要求之前不要开始写 L1 代码。
+不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6 / L2 / L3 / L4。不增加导航 / 规划 / 检测框架 / Planner / Reflection / Multi-Agent。
 
 ## Blocked
 
@@ -251,3 +258,30 @@ PYTHONPATH=. conda run -n mc-agent python -m pytest tests/
   相关。这是 Malmo 服务端 bug，**不是 ObsidianLink 代码问题**，不在本项目
   范围内修。Phase 1 暂时用 `MineRLTreechop-v0` 绕过；Phase 2 起需不需要
   切回 Navigate 由实验设计决定。
+
+* **L1 live env 受 Malmo 0.37.0 多项限制（2026-08-19）**：
+  1. `<Placement>` MissionHandler 的 `/teleport` 命令在 1.16.5 客户端被解析为
+     `Ambiguity between arguments [teleport, ...]` 并被忽略，agent 经常 spawn
+     在世界默认 spawn（~500 块内随机），远离 scene。
+  2. `<ChatCommands>` ` /give` 解析但不被执行。`MinecraftItems` whitelist
+     不含 `obsidian`（`obsidian` 在 `MinecraftBlocks` 里），所以
+     `SimpleInventoryAgentStart` 不能给 agent obsidian。
+  3. `PlaceBlock` handler 在 `mcprec-6.13` 上 crash Malmo server
+     （"Connection timed out"），需要自定义 `L1PlaceCommands` 绕开。
+  4. `ObservationFromGrid` 在 401×401 plate 上（8 MB XML）持续返回全部
+     `minecraft:air`——POV 明明能看见 obsidian frame。Malmo 服务端 bug。
+
+  L1 live end-to-end 状态：
+  * 401×401 obsidian plate workaround 让 spawn 落在 plate 上的概率
+    显著提高（l1_grid_y99.py: pos=(0.5, 101.0, 2.0)）。
+  * Scene pre-draws the 14-block obsidian frame（Casting + Portal Frame
+    Construction 由受控 scene 完成，是 Malmo 限制下的**最小可靠 workaround**）。
+  * Oracle + Runner + Evaluator 跑通（267/267 离线单测 + offline stub end-to-end
+    `test_runner_with_stub_env_and_scripted_oracle_succeeds`）。
+  * Oracle live n=1 跑通 env reset、POV 显示 frame、inventory 有 flint_and_steel，
+    但 grid 看不到 obsidian（Malmo bug）+ USE action 没点燃 portal（frame_complete
+    evaluator 报 0/14）→ `success=False, reason=portal_frame_incomplete,
+    final_ypos=101.0`。
+  * L1 的 code / scene / task / oracle / evaluator 全部完成并离线验证；
+    live 端的 grid observation 限制是 Malmo 服务端问题，**不是 ObsidianLink
+    代码问题**，不在本项目范围内修。

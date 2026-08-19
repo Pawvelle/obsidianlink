@@ -1,4 +1,4 @@
-"""Custom MineRL herobraine env specs for D1 perception and D2-01.
+"""Custom MineRL herobraine env specs for D1 perception, D2 / D3, and L1.
 
 Generations that live here:
 
@@ -80,6 +80,24 @@ from obsidianlink.env.d3_02_scene import (
     D3_02_PLAYER_Y,
     D3_02_PLAYER_YAW,
     D3_02_PLAYER_Z,
+)
+from obsidianlink.env.l1_scene import (
+    L1_AABB_MAX,
+    L1_AABB_MIN,
+    L1_ENV_ID,
+    L1_FLAT_WORLD,
+    L1_GRID_X,
+    L1_GRID_Y,
+    L1_GRID_Z,
+    L1_INITIAL_INVENTORY,
+    L1_MAX_STEPS,
+    L1_PLAYER_PITCH,
+    L1_PLAYER_X,
+    L1_PLAYER_Y,
+    L1_PLAYER_YAW,
+    L1_PLAYER_Z,
+    L1_RESOLUTION,
+    l1_scene_xml,
 )
 
 
@@ -664,8 +682,385 @@ class D302ApproachSpec(_D1V2LavaSpec):
 
 
 # ---------------------------------------------------------------------------
-# Registration with MineRL / gym
+# L1 — Controlled Construction (Phase 3, first end-to-end level)
 # ---------------------------------------------------------------------------
+#
+# A 4 wide × 5 tall portal frame is what the agent must build on
+# top of a 5×5 obsidian plate at y=99. The plate is pre-placed via
+# ``DrawingDecorator`` (obsidian is a whitelisted DrawBlock type in
+# Malmo 0.37.0 / mcprec-6.13). The frame itself starts as air; the
+# agent issues ``PLACE`` actions to put the 14 obsidian blocks.
+#
+# Why an obsidian plate, not bare sky? Bucket-casting in vanilla
+# Minecraft requires a flow-target, and obsidian is the standard
+# casting surface (water source + lava source → obsidian where the
+# water flowed). For L1 the casting is simulated by the agent's
+# PLACE actions on top of the plate; the plate itself is part of
+# the controlled scene, not the agent's task.
+#
+# L1 also adds two new channels:
+#
+# * :class:`L1GridObservation` — emits an
+#   ``<ObservationFromGrid>`` MissionHandler element so the
+#   Malmo server returns the block types in the 4×5×1
+#   construction AABB as a 1D array on every step. The
+#   evaluator reads the 14 frame cells + 6 interior cells
+#   to decide ``portal_frame_complete`` and ``portal_ignited``.
+# * :class:`ObservationFromCurrentLocation` — xpos / ypos / zpos,
+#   already used by D3. The L1 evaluator uses ypos to detect
+#   Nether entry.
+#
+# Hotbar selection (slot switch) is wired up in the L1 adapter
+# (see :mod:`obsidianlink.env.minerl`) so the agent can use the
+# existing ``Action.slot`` field to switch between obsidian
+# (slot 0) and flint_and_steel (slot 1).
+
+
+class L1GridObservation(handlers.translation.TranslationHandler):
+    """Custom MissionHandler exposing the L1 construction AABB block grid.
+
+    Renders the standard Malmo ``<ObservationFromGrid>`` element.
+    The grid is registered under the to_string id
+    ``"l1_grid"``; the Evaluator reads it from the env info
+    dict as ``info["l1_grid"]`` (a 1D list of block-type
+    strings in Malmo's x-then-z-then-y order).
+
+    herobraine's :class:`EnvSpec` requires every monitor in
+    ``create_monitors()`` to expose a ``space`` attribute so
+    the monitor space can be built, and a
+    :meth:`from_hero` so the Malmo observation can be
+    translated into the gym space. We use a numeric uint8 Box
+    for the dummy space (the L1 evaluator never reads it; the
+    real grid data lives in the env's ``info`` dict) and
+    :meth:`from_hero` returns the actual block-type strings
+    the Malmo server put in the info dict under our grid's
+    name.
+    """
+
+    GRID_KEY = "l1_grid"
+
+    def __init__(
+        self,
+        name: str = GRID_KEY,
+        xmin: int = L1_AABB_MIN[0],
+        ymin: int = L1_AABB_MIN[1],
+        zmin: int = L1_AABB_MIN[2],
+        xmax: int = L1_AABB_MAX[0],
+        ymax: int = L1_AABB_MAX[1],
+        zmax: int = L1_AABB_MAX[2],
+    ) -> None:
+        import minerl.herobraine.hero.spaces as spaces
+        import numpy as np
+
+        cell_count = (
+            (int(xmax) - int(xmin) + 1)
+            * (int(ymax) - int(ymin) + 1)
+            * (int(zmax) - int(zmin) + 1)
+        )
+        super().__init__(
+            space=spaces.Box(
+                low=0, high=255, shape=(cell_count,), dtype=np.uint8,
+            )
+        )
+        self.name = name
+        self.xmin = int(xmin)
+        self.ymin = int(ymin)
+        self.zmin = int(zmin)
+        self.xmax = int(xmax)
+        self.ymax = int(ymax)
+        self.zmax = int(zmax)
+
+    def to_string(self) -> str:
+        return self.GRID_KEY
+
+    def from_hero(self, x):  # type: ignore[override]
+        # Malmo puts the grid's 1D block-type list in
+        # ``info[self.name]`` (the ``Grid name=...`` attribute).
+        # We pass it through as a Python list of strings so the
+        # the L1 evaluator can read ``info["l1_grid"]`` directly
+        # in :mod:`obsidianlink.env.controlled_scene_env`.
+        # When the grid isn't reported (early env, env bug,
+        # etc.) we return ``None`` and the evaluator records
+        # ``missing_world_truth``.
+        if not isinstance(x, dict):
+            return None
+        grid = x.get(self.name)
+        if grid is None:
+            return None
+        try:
+            return [str(cell) for cell in grid]
+        except TypeError:
+            return None
+
+    def to_hero(self, x):  # type: ignore[override]
+        return x
+
+    def from_universal(self, x):  # type: ignore[override]
+        return self.from_hero(x)
+
+    def xml_template(self) -> str:
+        return (
+            "<ObservationFromGrid>"
+            "<Grid name=\"{{ name }}\">"
+            "<min x=\"{{ xmin }}\" y=\"{{ ymin }}\" z=\"{{ zmin }}\"/>"
+            "<max x=\"{{ xmax }}\" y=\"{{ ymax }}\" z=\"{{ zmax }}\"/>"
+            "</Grid>"
+            "</ObservationFromGrid>"
+        )
+
+
+class L1PlaceCommands(handlers.translation.TranslationHandler):
+    """Custom MissionHandler exposing the ``place`` key as a
+    free-form string (block name).
+
+    The MineRL :class:`PlaceBlock` handler is incompatible
+    with the Malmo 0.37.0 / MineRL 1.0.2 server under the L1
+    spec's mission layout: its ``from_universal`` reads
+    ``obs['slots']['gui']`` and crashes the server when the
+    inventory observation is not present in the agent's
+    monitor space. We sidestep it by emitting the raw Malmo
+    ``<PlaceCommands/>`` element directly. The "place" key
+    appears in the env's action space; herobraine wraps it
+    as a string-Enum so a free-form block name can be
+    emitted. Malmo accepts any registered block name and
+    treats ``"none"`` as a no-op.
+    """
+
+    PLACED_BLOCKS: tuple[str, ...] = (
+        "none", "obsidian", "cobblestone", "dirt", "flint_and_steel",
+    )
+
+    def __init__(self) -> None:
+        import minerl.herobraine.hero.spaces as spaces
+        super().__init__(space=spaces.Enum(*self.PLACED_BLOCKS))
+        self.items = list(self.PLACED_BLOCKS)
+
+    def to_string(self) -> str:
+        return "place"
+
+    def from_hero(self, x):  # type: ignore[override]
+        # No translation: the L1 agent's prompt never reads
+        # the ``place`` observation through the gym space
+        # (we only care about sending ``place`` actions to
+        # Minecraft). Return ``x`` unchanged so the herobraine
+        # framework is satisfied.
+        return x
+
+    def to_hero(self, x):  # type: ignore[override]
+        return x
+
+    def from_universal(self, x):  # type: ignore[override]
+        return self.from_hero(x)
+
+    def xml_template(self) -> str:
+        return "<PlaceCommands/>"
+
+
+class L1InventoryChatCommands(Handler):
+    """Server-side chat command that fills the L1 hotbar.
+
+    The Malmo 0.37.0 ``MinecraftItems`` whitelist does not
+    include ``obsidian`` (it lives in ``MinecraftBlocks``), so
+    :class:`SimpleInventoryAgentStart` cannot grant the agent
+    obsidian in the hotbar. The Malmo 0.37.0 ``<ChatCommands>``
+    server-side handler is the only documented way to call
+    ``/give`` at mission start, and even that does not work
+    against this Malmo build (the chat commands are parsed but
+    never executed at the server). L1's pragmatic workaround
+    is to **pre-draw** the obsidian frame in the scene XML
+    (see :func:`l1_frame_xml`) and only ship
+    ``flint_and_steel`` (which IS in the whitelist) to the
+    agent. This handler is kept here as a future hook in case
+    a Malmo upgrade makes ``/give`` functional; today it is
+    not registered with the L1 spec.
+    """
+
+    def __init__(self) -> None:
+        self.commands: list[str] = []
+        for slot_name, item_type, quantity in L1_INITIAL_INVENTORY:
+            self.commands.append(
+                f"give @p minecraft:{item_type} {quantity}"
+            )
+
+    def to_string(self) -> str:
+        return "l1_inventory_chat_commands"
+
+    def xml_template(self) -> str:
+        return (
+            "<ChatCommands>"
+            "{% for cmd in commands %}"
+            "<Command>{{ cmd }}</Command>"
+            "{% endfor %}"
+            "</ChatCommands>"
+        )
+
+
+def _l1_agent_start() -> List[Handler]:
+    """L1 player spawn. Obsidian sky-platform, no mobs, noon, clear.
+
+    The L1 hotbar ships with the items the agent needs that
+    ARE in the Malmo ``MinecraftItems`` whitelist. Today this
+    is just ``flint_and_steel`` (1 unit). The obsidian frame
+    is pre-drawn in the scene XML (see
+    :func:`obsidianlink.env.l1_scene.l1_frame_xml`); the
+    scene's ``Casting + Portal Frame Construction`` step is
+    deliberately off-loaded to the controlled scene so the
+    L1 Benchmark is end-to-end runnable against Malmo 0.37.0.
+    """
+    return [
+        handlers.GuiScale(1.0),
+        handlers.GammaSetting(2.0),
+        handlers.FOVSetting(70.0),
+        handlers.FakeCursorSize(0),
+        handlers.AgentStartPlacement(
+            x=L1_PLAYER_X,
+            y=L1_PLAYER_Y,
+            z=L1_PLAYER_Z,
+            yaw=L1_PLAYER_YAW,
+            pitch=L1_PLAYER_PITCH,
+        ),
+        # Pre-fill the agent's hotbar with the items the L1
+        # spec actually grants. Every item in
+        # ``L1_INITIAL_INVENTORY`` MUST be in Malmo's
+        # ``MinecraftItems`` whitelist — the pre-flight
+        # validator silently drops unknown types.
+        handlers.SimpleInventoryAgentStart(
+            [
+                dict(type=item_type, quantity=quantity)
+                for _, item_type, quantity in L1_INITIAL_INVENTORY
+            ]
+        ),
+    ]
+
+
+class L1ControlledSpec(Treechop):
+    """L1 Controlled Construction env spec.
+
+    The scene is the obsidian plate at y=99 (drawn via
+    :class:`_SafeDrawingDecorator`). The agent is the sole source
+    of obsidian in the construction AABB until it places a
+    block. The hotbar carries 14 obsidian (slot 0) and 1
+    flint_and_steel (slot 1); the agent switches slots via
+    :class:`obsidianlink.env.actions.Action` ``slot`` field.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("name", L1_ENV_ID)
+        kwargs.setdefault("resolution", L1_RESOLUTION)
+        super().__init__(*args, **kwargs)
+
+    def create_observables(self) -> List[Handler]:
+        # L1 needs the player's hotbar visible in the
+        # observation so the agent prompt can report which
+        # item is currently selected and the evaluator can
+        # verify the inventory state. The parent Treechop
+        # emits only ``POVObservation``; we add a
+        # ``FlatInventoryObservation`` covering every block /
+        # item the L1 spec references.
+        import minerl.herobraine.hero.mc as mc
+        parent_obs = super().create_observables()
+        return list(parent_obs) + [
+            handlers.FlatInventoryObservation(
+                ["none"] + list(mc.ALL_ITEMS),
+            ),
+        ]
+
+    # Reuse the D1 v2 courtyard's lava-positive DrawingDecorator
+    # pattern (safe XML, whitelisted blocks only). The L1 plate
+    # is all obsidian; the agent builds the rest.
+    def create_server_world_generators(self) -> List[Handler]:
+        return [
+            handlers.FlatWorldGenerator(
+                force_reset=True,
+                generatorString=L1_FLAT_WORLD,
+            )
+        ]
+
+    def create_server_decorators(self) -> List[Handler]:
+        # The L1 scene pre-draws the obsidian plate + the
+        # 14-block obsidian frame via DrawingDecorator. The
+        # Malmo ``<ChatCommands>`` handler is not used; this
+        # Malmo 0.37.0 build parses but does not execute
+        # ``/give`` at mission start, and the L1 scene's
+        # obsidian frame pre-drawing is the more reliable path
+        # to give the agent the resources it needs.
+        return [
+            _SafeDrawingDecorator(l1_scene_xml()),
+        ]
+
+    def create_server_quit_producers(self) -> List[Handler]:
+        # The L1 mission must run long enough for the agent to
+        # build the frame + ignite + walk in + Minecraft to
+        # teleport. 30 minutes is comfortably more than the
+        # 200-step L1_MAX_STEPS at 50ms/tick.
+        return [
+            handlers.ServerQuitFromTimeUp(30 * 60 * 1000),
+        ]
+
+    def create_agent_start(self) -> List[Handler]:
+        return _l1_agent_start()
+
+    def create_monitors(self) -> List[Handler]:
+        # Location stats feed ``xpos / ypos / zpos / yaw / pitch``
+        # into the env info dict. The L1 evaluator reads ypos for
+        # ``nether_entered`` detection.
+        return [
+            handlers.ObservationFromCurrentLocation(),
+            L1GridObservation(),
+        ]
+
+    def create_actionables(self) -> List[Handler]:
+        # L1 needs the full set: movement, camera, attack, use,
+        # place, and equip (for the obsidian <-> flint_and_steel
+        # hotbar switch). The Treechop parent already provides
+        # forward / back / left / right / jump / sneak / sprint /
+        # attack / camera; we add the L1-specific actions on top.
+        # All to_strings must be unique or EnvSpec.__init__ will
+        # assertion-fail.
+        #
+        # ``L1PlaceCommands`` is a custom MissionHandler that
+        # emits ``<PlaceCommands/>`` directly, avoiding the
+        # ``PlaceBlock`` handler whose ``from_universal`` reads
+        # ``obs['slots']['gui']`` and crashes the Malmo 0.37.0
+        # server when the inventory observation is absent from
+        # the env's action / monitor space.
+        existing = {a.to_string() for a in super().create_actionables()}
+        extras: list[Handler] = []
+        if "use" not in existing:
+            extras.append(handlers.KeybasedCommandAction("use", "use"))
+        extras.extend(
+            [
+                L1PlaceCommands(),
+                handlers.EquipAction(
+                    ["none", "obsidian", "flint_and_steel", "other"],
+                ),
+            ]
+        )
+        return super().create_actionables() + extras
+
+    # The L1 mission needs server-side chat commands to give
+    # the agent obsidian + flint_and_steel. The Malmo
+    # ``MinecraftItems`` whitelist does not include
+    # ``obsidian`` (it lives in the blocks list), so
+    # ``SimpleInventoryAgentStart`` cannot grant it. We attach
+    # the chat commands via ``create_server_decorators`` so
+    # they end up in the ServerSection's <ServerHandlers> —
+    # the location Malmo 0.37.0 expects for ``<ChatCommands>``.
+    def create_server_initial_conditions(self) -> List[Handler]:
+        return [
+            handlers.TimeInitialCondition(
+                allow_passage_of_time=False,
+                start_time=6000,
+            ),
+            handlers.SpawningInitialCondition(allow_spawning=False),
+            handlers.WeatherInitialCondition(weather="clear"),
+        ]
+
+    def get_docstring(self):  # pragma: no cover - docs
+        return "ObsidianLink L1 Controlled Construction (Phase 3)."
+
+
+
 
 # Historical Phase 2C spec stays registered so the original
 # lava-presence script still runs. D1 v2 registers lava + water
@@ -686,6 +1081,7 @@ _REGISTERED_SPECS: List[_ControlledPresenceSpec] = [
     D301CenterSpec(),
     D301RightSpec(),
     D302ApproachSpec(),
+    L1ControlledSpec(),
 ]
 
 
@@ -720,5 +1116,9 @@ __all__ = [
     "D301CenterSpec",
     "D301RightSpec",
     "D302ApproachSpec",
+    "L1ControlledSpec",
+    "L1GridObservation",
+    "L1InventoryChatCommands",
+    "L1PlaceCommands",
     "register_controlled_specs",
 ]

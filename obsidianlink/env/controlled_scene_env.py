@@ -124,12 +124,21 @@ class ControlledSceneEnv(Environment):
 
     @property
     def hidden_state(self) -> dict[str, Any]:
-        """Evaluator-only pose snapshot from MineRL monitors.
+        """Evaluator-only pose + L1 grid snapshot from MineRL monitors.
 
         Empty until at least one env-side step (warmup counts).
         Never copied onto :class:`Observation`.
+
+        L1 / Phase 3 also surfaces the construction-area block
+        grid under the ``"l1_grid"`` key. Other tasks ignore the
+        key entirely.
         """
-        return _hidden_pose_from_info(getattr(self._env, "last_info", {}))
+        info = getattr(self._env, "last_info", {})
+        hidden = _hidden_pose_from_info(info)
+        grid = _hidden_grid_from_info(info)
+        if grid is not None:
+            hidden["l1_grid"] = grid
+        return hidden
 
     # ------------------------------------------------------------------
     # Environment protocol
@@ -186,6 +195,26 @@ def _hidden_pose_from_info(info: Any) -> dict[str, Any]:
         "zpos": _scalar(loc.get("zpos")),
     }
     return {k: v for k, v in pose.items() if v is not None}
+
+
+def _hidden_grid_from_info(info: Any) -> list[str] | None:
+    """Pull the L1 block grid out of a gym info dict.
+
+    Returns a list of block-type strings in Malmo's
+    x-then-z-then-y order, or ``None`` if the L1 grid is not
+    exposed (e.g. the env is not L1, or the monitor hasn't
+    fired yet). The returned list is a copy so callers cannot
+    mutate the env's internal state.
+    """
+    if not isinstance(info, Mapping):
+        return None
+    grid = info.get("l1_grid")
+    if grid is None:
+        return None
+    try:
+        return [str(x) for x in grid]
+    except TypeError:
+        return None
 
 
 __all__ = ["ControlledSceneEnv"]

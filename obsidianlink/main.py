@@ -1,4 +1,4 @@
-"""Phase 1 / Phase 2A / Phase 2B entry points.
+"""Phase 1 / Phase 2A / Phase 2B / Phase 3 entry points.
 
 Modes are dispatched via environment variables:
 
@@ -19,6 +19,12 @@ Modes are dispatched via environment variables:
   ``<project_root>/models/Qwen3-VL-2B-Instruct``. This is the
   first end-to-end D1 run where the Agent is actually doing
   *perception* rather than transcribing a pre-built report.
+* ``OBSIDIANLINK_PHASE=3``        — Phase 3 L1 Scripted Oracle.
+  Builds the obsidian frame, ignites the portal, and walks
+  into it via a deterministic plan. Verifies the full
+  Benchmark chain is end-to-end runnable. ``L1_REACTIVE=1``
+  swaps the Oracle for a vision-capable Reactive Agent
+  (requires ``OBSIDIANLINK_MODEL_PATH``).
 
 This module owns no planner / multi-agent / recovery logic; those
 land in later phases.
@@ -324,6 +330,96 @@ def _run_phase2b_d1_qwen_smoke() -> int:
     return 0 if result.success else 1
 
 
+def _run_phase3_l1_oracle() -> int:
+    """Phase 3 — L1 Controlled Construction Scripted Oracle.
+
+    The Oracle's job is to verify the **Benchmark itself** is
+    end-to-end runnable on a real MineRL env. It hard-codes a
+    known-good action sequence and executes it through the
+    same ``MineRLEnvironment`` + ``BenchmarkRunner`` path a real
+    agent uses. If the Oracle cannot reach ``nether_entered``
+    within the step budget, the Benchmark is broken — not the
+    agent.
+
+    If ``OBSIDIANLINK_L1_REACTIVE=1`` is set, the Oracle is
+    swapped for the vision-capable L1 Reactive Agent
+    (``QwenVLModelClient``). The Reactive pilot is
+    observational: a failure is the expected outcome at this
+    stage and is recorded, not optimised away.
+    """
+    from obsidianlink.benchmark.runner import BenchmarkRunner
+    from obsidianlink.env.controlled_scene_env import ControlledSceneEnv
+    from obsidianlink.env.l1_scene import (
+        L1_ENV_ID,
+        L1_MAX_STEPS,
+        L1_WARMUP_STEPS,
+    )
+    from obsidianlink.tasks.portal import (
+        L1Evaluator,
+        L1ReactiveAgent,
+        L1ScriptedOracle,
+        L1_TASK,
+        default_l1_plan,
+    )
+
+    reactive = os.environ.get("OBSIDIANLINK_L1_REACTIVE", "").strip() == "1"
+
+    print("ObsidianLink")
+    print(
+        "Mode: LIVE Phase 3 L1 Controlled Construction "
+        f"({'Reactive' if reactive else 'Oracle'})"
+    )
+    print("Phase 0 / Clean Restart: COMPLETE")
+    print("Phase 1 / Minimal Minecraft Agent Loop: COMPLETE")
+    print("Phase 2 / Benchmark MVP: COMPLETE")
+    print("Phase 3 / L1 Controlled Construction: RUNNING")
+    print(f"task_id: {L1_TASK.task_id}")
+    print(f"env_id: {L1_ENV_ID}")
+    print(f"max_steps: {L1_MAX_STEPS}")
+    print(f"warmup: {L1_WARMUP_STEPS}")
+    if reactive:
+        print("agent: L1ReactiveAgent(QwenVLModelClient)")
+    else:
+        plan = default_l1_plan()
+        print(f"agent: L1ScriptedOracle (plan length: {len(plan)} steps)")
+    print(
+        f"calling env.reset() ... (cold start ~30-60s)"
+    )
+    sys.stdout.flush()
+
+    env = ControlledSceneEnv(env_id=L1_ENV_ID, warmup_steps=L1_WARMUP_STEPS)
+    if reactive:
+        from obsidianlink.agents.qwen_vl_client import QwenVLModelClient
+
+        model = QwenVLModelClient(
+            model_path=_resolve_model_path(), device="auto",
+        )
+        agent: Any = L1ReactiveAgent(model=model)
+    else:
+        agent = L1ScriptedOracle()
+    evaluator = L1Evaluator()
+
+    result = BenchmarkRunner().run(
+        task=L1_TASK,
+        env=env,
+        agent=agent,
+        evaluator=evaluator,
+    )
+
+    print("\n--- Phase 3 / L1 Result ---")
+    print(f"task_id:        {result.task_id}")
+    print(f"success:        {result.success}")
+    print(f"steps:          {result.steps}")
+    print(f"model_calls:    {result.model_calls}")
+    print(f"invalid_actions:{result.invalid_actions}")
+    print(f"elapsed_time:   {result.elapsed_time:.2f}s")
+    print("evidence:")
+    for key, value in result.evidence.items():
+        print(f"  {key}: {value!r}")
+    print("Phase 3 / L1 Controlled Construction: COMPLETE")
+    return 0 if result.success else 1
+
+
 def _frames_equal(a: Any, b: Any) -> bool:
     """Best-effort frame equality check.
 
@@ -414,9 +510,11 @@ def main() -> int:
         return _run_phase2a_d1_smoke()
     if phase in ("2b", "phase2b", "phase_2b"):
         return _run_phase2b_d1_qwen_smoke()
+    if phase in ("3", "phase3", "phase_3"):
+        return _run_phase3_l1_oracle()
     if phase in ("1", "phase1", "phase_1", ""):
         return _run_phase1_full_smoke()
-    print(f"Unknown OBSIDIANLINK_PHASE={phase!r}; expected 1, 2a, or 2b.")
+    print(f"Unknown OBSIDIANLINK_PHASE={phase!r}; expected 1, 2a, 2b, or 3.")
     return 2
 
 

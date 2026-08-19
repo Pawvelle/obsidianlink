@@ -22,6 +22,32 @@ Out of scope (deferred):
 Importing this module must NOT start MineRL. The actual ``gym.make`` call
 happens inside ``reset()`` so the rest of the package stays cheap to
 import and unit-testable without Java.
+
+L1 / Phase 3 additions
+----------------------
+
+L1 Controlled Construction is the first End-to-End Portal level.
+The agent must switch between obsidian (slot 0) and
+flint_and_steel (slot 1) without leaving the existing
+``ActionType`` enum, and it must ``USE`` flint_and_steel
+without also placing a block.
+
+* When :attr:`Action.slot` is in ``1..9`` we emit a press-release
+  pair ``hotbar.{slot} 1`` / ``hotbar.{slot} 0`` as part of the
+  same step. The action then runs on the newly selected hotbar
+  slot. This is the smallest possible extension: the
+  ``ModelClient`` contract is unchanged, the existing
+  ``ReactiveAgent`` does not need to learn a new action verb,
+  and D / L tasks that ignore ``slot`` are unaffected because
+  they never set it.
+* The ``"place"`` key is only set when the action's
+  :class:`ActionType` is :attr:`ActionType.PLACE`. Earlier the
+  adapter set ``place = action.target`` for both PLACE and USE
+  (which leaked a ``"dirt"`` default into USE when the agent
+  omitted ``target``); D1-02 worked around this by giving the
+  bucket via inventory and ignoring the place value, but for L1
+  a ``USE`` action must not place any block. The fix is a
+  one-line scoping change.
 """
 
 from __future__ import annotations
@@ -169,12 +195,34 @@ class MineRLEnvironment(Environment):
         if "attack" in keyset:
             out["attack"] = 1 if action.type is ActionType.ATTACK else 0
         if "place" in keyset:
-            # PLACE / USE: place the named block if given, else "none".
-            if action.type in (ActionType.PLACE, ActionType.USE):
+            # PLACE: place the named block if given, else "none".
+            # USE / WAIT / MOVE / CAMERA: must NOT place a block.
+            if action.type is ActionType.PLACE:
                 out["place"] = action.target or "dirt"
             else:
                 out["place"] = "none"
+
+        # EQUIP (L1 / Phase 3). The agent can switch the held
+        # item by emitting ``{"action": "equip", "target":
+        # "flint_and_steel"}`` (or "obsidian"). The Malmo
+        # ``<EquipCommands/>`` mission handler is what the
+        # action key ``"equip"`` maps to. We only emit when the
+        # target is one of the items we know is in the hotbar
+        # (``obsidian`` / ``flint_and_steel``); any other target
+        # (including ``""``) is treated as a no-op so a model
+        # that mistakenly emits equip every step does not
+        # bounce the slot.
+        if action.type is ActionType.EQUIP and "equip" in keyset:
+            if action.target in _L1_EQUIPPABLE_ITEMS:
+                out["equip"] = action.target
         return out
+
+
+# Items the L1 agent can equip via the ``equip`` action. The
+# L1 spec pre-fills these in the hotbar at the corresponding
+# slots, so an equip command always has a matching item in
+# the inventory.
+_L1_EQUIPPABLE_ITEMS: frozenset[str] = frozenset({"obsidian", "flint_and_steel"})
 
 
 def _summarize_inventory(inventory: Any) -> dict[str, int]:
