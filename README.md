@@ -18,9 +18,9 @@ ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版�
 
 ## 当前状态
 
-**D3 Manipulation MVP 已完成：D3-01 Camera Alignment + D3-02 Target Approach。**
+**Phase 1 — Minimal Minecraft Agent Loop ✅**
 
-Diagnostic 固定拆分：
+**Phase 2 — Benchmark MVP ✅**
 
 ```text
 D1 Perception   = What is there?
@@ -28,20 +28,28 @@ D2 Grounding    = Where is the specified target?
 D3 Manipulation = Given the grounded target, can the agent act?
 ```
 
-D2（均无 motor，已关闭）：
+Phase 2 正式范围（已关闭，不再扩 diagnostic）：
 
-* **D2-01 Direction Grounding**：left / center / right，hidden GT，`max_steps=1`，WAIT only。
-* **D2-02 Spatial Region Grounding**：3×3 区域，仍不做任何 Minecraft 动作。
+- **D1 Perception ✅**
+  - Lava Presence
+  - Water Presence
+- **D2 Grounding ✅**（视觉空间 only，无 motor）
+  - Direction Grounding
+  - Spatial Region Grounding
+- **D3 Manipulation ✅**
+  - Camera Alignment
+  - Target Approach
 
-D3：
+D1 / D2 / D3 的 live 实验目前都是 **pilot**：用来验证 benchmark pipeline 与 failure attribution，**不作为正式 capability conclusion**。
 
-* **D3-01 Camera Alignment**（已实现）：目标已可见。Agent 只发 camera / wait，用视觉反馈把岩浆转到画面中央。成功由执行后的 hidden yaw 判定（±12°），不是模型文字声明。
-* **D3-02 Target Approach**（已实现）：目标已可见且基本居中。Agent 只发 move / wait，向前走到交互距离后停止。成功由执行后到岩浆 AABB 的 hidden 距离判定（0.6–2.0 格），不是模型文字声明。
+历史 exploratory D2（把 camera 居中 / walk-and-stop 写进 Grounding）的实验数据继续保留，但不是正式 D2 result。正式对应物是 D3-01 / D3-02。
 
-正式 D1 v2：640×360 受控场景、hidden ground truth、positive/negative。
-D1-01 Lava Presence 与 D1-02 Water Presence 均已 live 验证。
+不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不要把 motor 写回 D2。
 
-早期把 camera yaw 居中 / 走向目标写进 D2 的实现是错误设计，属于 **historical / exploratory pilot**，不是正式 D2 capability result。Camera 居中已作为正式 **D3-01** 重做；walk-and-stop 已作为正式 **D3-02** 重做。本轮不实现 attack / placement / item use，也不开始 L1。
+## 下一阶段
 
-旧 inventory D1 与旧 64×64 lava 抓帧仅作 historical pilot，不作为 capability 结论。
-不再增加 Obsidian / Iron / Log 等 D1 task。
+**Phase 3 — Single-Agent Portal Benchmark**
+
+下一任务：**L1 Controlled Construction**（尚未开始）。
+
+完整研究与开发计划见 `docs/plans/`。当前进度见 `ROADMAP.md`。

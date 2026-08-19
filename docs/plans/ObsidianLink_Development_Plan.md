@@ -19,6 +19,17 @@
 
 4.  **Benchmark 是主线，Agent 与环境都是为 Benchmark 服务。**
 
+# 实现进度（2026-08-19）
+
+以下只记录仓库实现进度，**不改变**上文工程原则或下文 Phase 定义。
+
+- Phase 1 Minimal Minecraft Agent Loop ✅
+- Phase 2 Benchmark MVP ✅（D1 / D2 / D3 代表性 diagnostic 已落地；live 为 pipeline / pilot）
+- 下一阶段：Phase 3 Single-Agent Portal Benchmark
+- 下一任务：L1 Controlled Construction（尚未开始）
+
+不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。未明确要求时不要开始写 L1 代码。当前进度的短状态以仓库根目录 `ROADMAP.md` 为准。
+
 # 初始项目结构
 
 项目从最小结构开始：

@@ -1,60 +1,63 @@
 # ObsidianLink Roadmap
 
-> 完整研究与开发计划见 `docs/plans/`。
+> 完整研究与开发计划见 `docs/plans/`。本文只记录**实现进度**，不改研究方向。
 
 ## Current Phase
 
-**D3 Manipulation MVP 已完成：D3-01 Camera Alignment + D3-02 Target Approach。**
+**Phase 3 — Single-Agent Portal Benchmark（尚未开始）**
 
-Diagnostic 固定拆分：
+Phase 1 与 Phase 2 已关闭：
 
 ```text
-D1 Perception   = What is there?
-D2 Grounding    = Where is the specified target?
-D3 Manipulation = Given the grounded target, can the agent act?
+Phase 1  Minimal Minecraft Agent Loop     ✅
+Phase 2  Benchmark MVP                    ✅
+           D1 Perception   = What is there?          ✅
+           D2 Grounding    = Where is the specified target?  ✅
+           D3 Manipulation = Given the grounded target, can the agent act?  ✅
 ```
 
-D2 只做视觉空间 Grounding。禁止 camera / move / attack / use / place。Evaluator 不依赖这些动作是否成功。
+Phase 2 正式 diagnostic 范围：
 
-* **D2-01 Direction Grounding**（已实现）：受控 lava 场景，left / center / right，`{"target","direction"}`，hidden GT，`max_steps=1`，WAIT only。
-* **D2-02 Spatial Region Grounding**（已实现）：同一院落，yaw×pitch 把岩浆放到 3×3 区域（`upper_left` … `lower_right`），`{"target","region"}`，仍无 motor。
+- D1 Perception：Lava Presence、Water Presence
+- D2 Grounding：Direction Grounding、Spatial Region Grounding（均无 motor）
+- D3 Manipulation：Camera Alignment、Target Approach
 
-D3 只做已 grounding 目标上的动作。当前固定两部分：
+D1 / D2 / D3 的 live 实验都是 **pipeline / pilot**，用于验证 BenchmarkRunner、hidden world truth 与 failure attribution。**不是正式 capability conclusion。** 不要用这些 n=1 数字写能力结论。
 
-* **D3-01 Camera Alignment**（已实现）：同一岩浆院落与 D2-01 spawn yaw。Agent 发 `{"action":"camera"|"wait","yaw":...}`，`max_steps=8`。MOVE 不执行。成功 = 最终 hidden yaw 距 0 在 ±12° 内。
-* **D3-02 Target Approach**（已实现）：同一院落，yaw=0 已居中，出生点稍后。Agent 发 `{"action":"move"|"wait","dx":...}`，`max_steps=20`。只允许前进 / 等待。成功 = 最终到岩浆 AABB 的 hidden 距离在 0.6–2.0 格。
-
-D1 v2 原则：单帧、单目标、二分类、受控场景、可靠 hidden ground truth、肉眼清晰、POV 640×360。
-
-**D1-01 Lava Presence**：正负场景 + 2B/4B 各 1 episode，评测链路通。
-
-**D1-02 Water Presence**：正负场景 + 2B/4B 各 1 episode，评测链路通。EnvServer 不能 DrawBlock water，正例在 env-side 把水桶倒在与 lava-negative 相同的黑曜石院落地板上。
-
-不再增加 Obsidian / Iron / Log 等 D1 task。不调 prompt。不在 D1 上做大规模统计。
-
-**Pilot 旧数据（保留，不作为 capability 结论）**:
-
-- Phase 2A/2B inventory D1
-- Phase 2C lava presence
-- 旧 64×64 D1 v2 抓帧
-- 早期错误 D2：camera yaw 居中（旧 D2-01）与 walk-and-stop（旧 D2-02）。historical / exploratory pilot，不是正式 D2 result。已分别作为正式 D3-01 / D3-02 重做。
+不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不要把 motor 写回 D2。
 
 ## Current Task
 
-**D3-02 Target Approach 已关闭。D3 Manipulation MVP（D3-01 + D3-02）完成。不要开始其他 D3 task，也不要开始 L1。**
+**下一任务：L1 Controlled Construction。尚未实现。未明确要求时不要开始写 L1 代码。**
 
-D1 Pilot 已关闭，不再扩 D1 物体类、不调 prompt、不做 D1 大规模统计。
-D2 Grounding 已关闭，不把 motor 写回 D2。
+## Phase 2 收尾摘要
 
-D1 / D2-01 帧：`obsidianlink/experiments/runs/d2_01_scene_validity/`
-D2-02 帧：`obsidianlink/experiments/runs/d2_02_region_validity/`
-D3-01 帧：`obsidianlink/experiments/runs/d3_01_scene_validity/`
-D3-02 帧：`obsidianlink/experiments/runs/d3_02_scene_validity/`
+统一 Runner 已能对真实 Qwen3-VL Agent 跑 D1 / D2 / D3，并写出结构化 Result。Evaluator 使用 hidden GT 或执行后的 Minecraft 状态，而不是模型文字声明。
 
-历史 exploratory 帧（保留，非正式 D2）：
+| 正式 task | 测什么 | live n=1（pilot） |
+| --- | --- | --- |
+| D1-01 Lava Presence | 画面里有没有岩浆 | 2B / 4B 正负均对 |
+| D1-02 Water Presence | 画面里有没有水 | 2B 正例漏检；4B 正负均对 |
+| D2-01 Direction Grounding | 岩浆在左 / 中 / 右 | 2B 3/3；4B 3/3 |
+| D2-02 Spatial Region Grounding | 岩浆在 3×3 哪一格 | 2B 3/9；4B 6/9 |
+| D3-01 Camera Alignment | camera 把岩浆转到画面中央 | 2B 0/3 orientation_error；4B 3/3 |
+| D3-02 Target Approach | 前进到交互距离并停止 | 2B 1/1；4B overshoot |
 
-- 旧 D2-01 camera alignment：`obsidianlink/experiments/runs/d2_01_direction_Qwen3-VL-*`
+历史 exploratory D2（camera-yaw 居中、walk-and-stop 写进 Grounding）继续保留在 `obsidianlink/experiments/runs/`，不要与上表正式 D2 / D3 混淆。
+
+Scene-validity 帧：
+
+- D1 / D2-01：`obsidianlink/experiments/runs/d2_01_scene_validity/`
+- D2-02：`obsidianlink/experiments/runs/d2_02_region_validity/`
+- D3-01：`obsidianlink/experiments/runs/d3_01_scene_validity/`
+- D3-02：`obsidianlink/experiments/runs/d3_02_scene_validity/`
+
+历史 exploratory 帧：
+
+- 旧 D2-01 camera alignment：`obsidianlink/experiments/runs/d2_01_direction_Qwen3-VL-*`（早期 8-step motor 版本）
 - 旧 D2-02 target approach：`obsidianlink/experiments/runs/d2_02_scene_validity/` 与 `d2_02_approach_Qwen3-VL-*`
+
+**Pilot 旧数据（保留，不作为 capability 结论）**：Phase 2A/2B inventory D1；Phase 2C 单块 lava；旧 64×64 D1 v2 抓帧；上述 exploratory motor-D2。
 
 ## Phase 2C lava presence — PILOT ONLY
 
@@ -193,7 +196,7 @@ PYTHONPATH=. conda run -n mc-agent python -m pytest tests/
 * **D1 Perception Pilot — complete (2026-08-19)**
   * D1-01 Lava Presence：640×360 受控正负场景，hidden GT，2B/4B 各 1 episode，链路通；两模型正负均判对。
   * D1-02 Water Presence：同一院落；DrawBlock 不能画水，正例 env-side 倒水桶。2B 正例漏检、负例对；4B 正负均对。n=1，不作 capability 结论。
-  * 不再增加 Obsidian / Iron / Log 等 D1 task。下一步是 D2 Grounding。
+  * 不再增加 Obsidian / Iron / Log 等 D1 task。D1 Perception Pilot 关闭。
 
 * **D2-01 Direction Grounding — complete (2026-08-19, redesigned)**
   * 定义：给定语义目标与第一人称 RGB，判断目标相对画面的水平方向（left / center / right）。无 camera / movement。
@@ -236,7 +239,9 @@ PYTHONPATH=. conda run -n mc-agent python -m pytest tests/
 
 ## Next
 
-**D3 Manipulation MVP 已关闭。不要扩展 attack / placement / item use，也不要开始 L1。** 不增加导航 / 规划 / 检测框架。不把 motor 写回 D2。
+**Phase 3 — Single-Agent Portal Benchmark。下一任务是 L1 Controlled Construction。**
+
+不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不增加导航 / 规划 / 检测框架。不把 motor 写回 D2。在用户明确要求之前不要开始写 L1 代码。
 
 ## Blocked
 

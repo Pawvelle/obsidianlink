@@ -27,6 +27,18 @@
 
 7.  项目采用 **Research-First** 开发方式：优先形成真实实验闭环，不再把大规模基础设施建设作为进入研究的前置条件。
 
+# 实现进度（2026-08-19）
+
+以下只记录仓库实现进度，**不改变**上文一级原则、Diagnostic / L-level 定义、或 Phase 0–6 研究顺序。
+
+- Phase 0 Clean Restart ✅
+- Phase 1 Minimal Minecraft Agent Loop ✅
+- Phase 2 Benchmark MVP ✅（正式 diagnostic：D1 Perception、D2 Grounding、D3 Manipulation；live 实验均为 pipeline / pilot，不是 capability conclusion）
+- 下一阶段：Phase 3 Single-Agent Portal Benchmark
+- 下一任务：L1 Controlled Construction（尚未开始）
+
+不要再增加 D1 / D2 / D3 diagnostic task。D4 / D5 / D6 按 Phase 3：在 L1 真实失败之后再补，不要提前开发。下文施工顺序表是从空仓库起步的规划，不是“当前下一步”。
+
 # 项目研究定位
 
 ## 一句话定义
