@@ -4,7 +4,7 @@
 
 ## 研究
 
-ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版机制构造、激活并进入 Nether Portal（默认：bucket casting / water-lava）。
+ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版机制构造、激活并进入 Nether Portal。
 
 研究方向：
 
@@ -34,18 +34,16 @@ Runner 将 env / agent / evaluator 异常归因到结构化 Result。D1 以 envi
 Current Task:
 
 ```text
-L1 Controlled Construction — pending redesign after architecture reset
+Tool-enabled L1 architecture / L1 Controlled Construction
 ```
 
-正式 L1 仍严格遵守研究计划：
+端到端目标：
 
 ```text
-Controlled resources / environment
-
-Agent must perform:
-
-Casting → Frame → Ignition → Nether Entry
+Construct / complete → activate → enter Nether
 ```
+
+Bucket Casting 是第一版受控评测的主要 reference strategy，不是 Agent 必须采用的 solver。Agent 可以查询 Minecraft Wiki，获取与任务相关的 Minecraft 规则、配方和机制知识；Benchmark prompt 不提供 portal construction recipe。
 
 不要把 pre-built portal frame 当作正式 L1。旧 L1 实现已从 active path 删除。历史实验 JSON 保留在 `obsidianlink/experiments/runs/`，并标记为 **historical / invalid for L1 capability conclusion**。
 

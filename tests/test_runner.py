@@ -12,6 +12,7 @@ from obsidianlink.benchmark.task import Task
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
 from obsidianlink.tasks.diagnostic import D1_LAVA_POSITIVE, D1LavaEvaluator, d1_prompt
+from obsidianlink.tools.minecraft_wiki import MinecraftWikiTool
 
 
 class _StubEnv(Environment):
@@ -174,3 +175,32 @@ def test_clamp_empty_allowed_is_unrestricted() -> None:
     out, disallowed = clamp_to_allowed(action, ())
     assert disallowed is None
     assert out.type is ActionType.MOVE
+
+
+def test_runner_records_agent_wiki_metrics_and_actual_model_calls() -> None:
+    class _ToolThenAction:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def complete(self, _prompt: str) -> str:
+            self.calls += 1
+            if self.calls == 1:
+                return '{"type":"tool","tool":"minecraft_wiki","query":"lava"}'
+            return '{"action":"wait","visible":true}'
+
+    env = _StubEnv()
+    tool = MinecraftWikiTool(
+        transport=lambda _url: {
+            "query": {"search": [{"title": "Lava", "snippet": "A fluid."}]}
+        }
+    )
+    agent = ReactiveAgent(model=_ToolThenAction(), prompt_builder=d1_prompt, tools=tool)
+    result = BenchmarkRunner().run(
+        task=D1_LAVA_POSITIVE,
+        env=env,
+        agent=agent,
+        evaluator=D1LavaEvaluator(),
+    )
+    assert result.model_calls == 2
+    assert result.evidence["wiki_calls"] == 1
+    assert result.evidence["wiki_queries"] == ["lava"]

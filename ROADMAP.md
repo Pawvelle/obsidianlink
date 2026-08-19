@@ -18,13 +18,15 @@ Phase 2  Benchmark MVP                    ✅
 
 ## Current Task
 
-**L1 Controlled Construction — pending official implementation**
+**Tool-enabled L1 architecture / L1 Controlled Construction**
 
-正式 L1 必须由 Agent 完成：
+端到端目标保持 method-agnostic：
 
 ```text
-Casting → Frame → Ignition → Nether Entry
+Construct / complete → activate → enter Nether
 ```
+
+Bucket Casting 是第一版受控评测的主要 reference strategy，而非强制 solver。Agent 可使用 live Minecraft Wiki tool 查询任务相关的原版知识；Evaluator 仍只从 evaluator-only world truth 判断 portal activation 与 Nether transition。
 
 不要把 scene 预建 portal frame 当作正式 L1。旧 L1 已移出 active path。
 
@@ -37,7 +39,7 @@ Casting → Frame → Ignition → Nether Entry
 * 未完成：10-block frame / flint ignition / Nether entry（extra cast 期间 connection timeout）
 * Evaluator 不要用 `ObservationFromGrid`。可用：inventory delta、`location_stats`（gym info）、POV 帧、可选 `RewardForTouchingBlockType(nether_portal)`
 
-建议继续正式实现 L1，但不要用预建 frame 或 EquipAction 走捷径。
+该 spike 是 scripted/oracle mechanics feasibility，不是正式 L1 Agent 或 live L1 benchmark evidence。正式 L1 不用预建 frame，也不使用已知不可靠的 EquipAction。
 
 ## Completed
 
@@ -62,7 +64,7 @@ Casting → Frame → Ignition → Nether Entry
 
 ## Next
 
-实现正确的 L1 Controlled Construction（需单独任务）。在此之前不要开始 L2 / Planner / Reflection。
+为正式 L1 单独验证受控环境与 evaluator 后，运行首个 tool-enabled ReactiveAgent L1 pilot；在此之前不要开始 L2 / Planner / Reflection。
 
 ## Blocked
 

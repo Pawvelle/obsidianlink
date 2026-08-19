@@ -61,11 +61,42 @@ def _save_frame_png(frame: Any, path: str) -> bool:
 
 
 def _attach_disallowed(result: Result, disallowed: str | None) -> Result:
-    if not disallowed:
+    evidence = dict(result.evidence)
+    if disallowed:
+        evidence["disallowed_action"] = disallowed
+        evidence.setdefault("reason", "disallowed_action")
+    return Result(
+        task_id=result.task_id,
+        success=result.success,
+        steps=result.steps,
+        model_calls=result.model_calls,
+        invalid_actions=result.invalid_actions,
+        elapsed_time=result.elapsed_time,
+        evidence=evidence,
+    )
+
+
+def _agent_tool_evidence(agent: Agent) -> dict[str, Any]:
+    """Expose optional agent-local tool metrics without changing Agent API."""
+    evidence: dict[str, Any] = {}
+    wiki_calls = getattr(agent, "wiki_calls", None)
+    if wiki_calls is not None:
+        evidence["wiki_calls"] = wiki_calls
+    wiki_queries = getattr(agent, "wiki_queries", None)
+    if wiki_queries is not None:
+        evidence["wiki_queries"] = list(wiki_queries)
+    tool_trace = getattr(agent, "last_tool_trace", None)
+    if tool_trace:
+        evidence["tool_trace_summary"] = list(tool_trace)
+    return evidence
+
+
+def _attach_agent_evidence(result: Result, agent: Agent) -> Result:
+    agent_evidence = _agent_tool_evidence(agent)
+    if not agent_evidence:
         return result
     evidence = dict(result.evidence)
-    evidence["disallowed_action"] = disallowed
-    evidence.setdefault("reason", "disallowed_action")
+    evidence.update(agent_evidence)
     return Result(
         task_id=result.task_id,
         success=result.success,
@@ -107,6 +138,7 @@ class BenchmarkRunner:
                 "used_vision": getattr(agent, "last_used_vision", None),
                 "fallback_reason": getattr(agent, "last_fallback_reason", None),
                 "vision_calls": getattr(agent, "vision_calls", 0),
+                **_agent_tool_evidence(agent),
             }
             if last_disallowed:
                 evidence["disallowed_action"] = last_disallowed
@@ -185,4 +217,4 @@ class BenchmarkRunner:
             )
         except Exception as exc:
             return _abort(EVALUATOR_FAILURE, "evaluator_exception", exc)
-        return _attach_disallowed(result, last_disallowed)
+        return _attach_disallowed(_attach_agent_evidence(result, agent), last_disallowed)

@@ -94,4 +94,4 @@ conda run -n mc-agent python -c "import minerl, gym, numpy; print('minerl/gym/nu
 
 当前阶段：**Phase 2 — Benchmark MVP 已完成。下一阶段是 Phase 3 — Single-Agent Portal Benchmark。**
 
-当前目标：**L1 Controlled Construction — pending redesign after architecture reset。** 正式 L1 必须由 Agent 完成 Casting → Frame → Ignition → Nether Entry。不要把 pre-built portal frame 当作正式 L1。不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不要把 motor 写回 D2。未接到实现 L1 的明确指令时，不要开始写 L1 代码。
+当前目标：**Tool-enabled L1 architecture / L1 Controlled Construction。** 正式 L1 的 method-agnostic 端到端目标是 Construct / complete → activate → enter Nether。Bucket Casting 是第一版的主要 reference strategy，不是 Agent 的强制 solver；Agent 可通过 live Minecraft Wiki tool 查询任务相关原版知识。不要把 pre-built portal frame 当作正式 L1。不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不要把 motor 写回 D2。

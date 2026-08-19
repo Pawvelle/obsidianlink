@@ -1,4 +1,4 @@
-"""Reactive agent: Observation → prompt + frame → model → Action."""
+"""Reactive agent: Observation → optional Wiki lookup loop → Action."""
 
 from __future__ import annotations
 
@@ -9,45 +9,104 @@ from typing import Any
 from obsidianlink.agents.model_client import ModelClient, call_model
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Observation
+from obsidianlink.tools.minecraft_wiki import MinecraftWikiTool, WikiResult
 
 PromptBuilder = Callable[[Observation], str]
 
 
 class ReactiveAgent:
-    """No planner, no memory, no reflection. One observation, one action."""
+    """No planner, no memory, no reflection.
+
+    When configured with a :class:`MinecraftWikiTool`, one ``act`` call may
+    make several model completions while the model requests live Wiki
+    knowledge.  The external contract remains ``Observation -> Action``.
+    """
 
     def __init__(
         self,
         model: ModelClient,
         *,
         prompt_builder: PromptBuilder | None = None,
+        tools: MinecraftWikiTool | None = None,
+        max_tool_calls: int = 3,
     ) -> None:
+        if max_tool_calls < 1:
+            raise ValueError("max_tool_calls must be >= 1")
         self._model = model
         self._prompt_builder = prompt_builder or _default_prompt
+        self._wiki_tool = tools
+        self._max_tool_calls = max_tool_calls
         self.model_calls = 0
         self.vision_calls = 0
         self.text_calls = 0
+        self.wiki_calls = 0
+        self.wiki_queries: list[str] = []
         self.invalid_actions = 0
         self.last_raw_response: str | None = None
         self.last_used_vision: bool = False
         self.last_fallback_reason: str | None = None
         self.last_report: Any = None
+        self.last_tool_trace: list[dict[str, Any]] = []
 
     def act(self, observation: Observation) -> Action:
-        self.model_calls += 1
         prompt = self._prompt_builder(observation)
+        if self._wiki_tool is not None:
+            prompt += (
+                "\nYou may query live Minecraft knowledge when needed. "
+                'To do so, return {"type":"tool","tool":"minecraft_wiki",'
+                '"query":"your question"} instead of an action. '
+                "Do not assume the tool has already been used."
+            )
+        self.last_tool_trace = []
+        tool_context = ""
+        tool_calls_this_act = 0
+        while True:
+            call = self._call_model(prompt + tool_context, observation)
+            self.last_raw_response = call.text
+            data = extract_json_object(call.text)
+            if self._wiki_tool is not None and _is_tool_request(data):
+                tool_name = data.get("tool")
+                if tool_name != "minecraft_wiki":
+                    self.invalid_actions += 1
+                    self.last_tool_trace.append(
+                        {"type": "tool_error", "tool": tool_name, "error": "unknown tool"}
+                    )
+                    return Action(type=ActionType.WAIT)
+                if tool_calls_this_act >= self._max_tool_calls:
+                    self.invalid_actions += 1
+                    self.last_tool_trace.append(
+                        {
+                            "type": "tool_error",
+                            "tool": "minecraft_wiki",
+                            "error": "tool_loop_limit",
+                        }
+                    )
+                    return Action(type=ActionType.WAIT)
+                query = data.get("query")
+                result = self._wiki_tool.search(query if isinstance(query, str) else "")
+                tool_calls_this_act += 1
+                self.wiki_calls += 1
+                if isinstance(query, str) and query.strip():
+                    self.wiki_queries.append(query.strip())
+                self.last_tool_trace.append(_tool_trace(result))
+                tool_context += _tool_result_prompt(result)
+                continue
+
+            action, parsed = parse_model_response(call.text)
+            if not parsed:
+                self.invalid_actions += 1
+            return action
+
+    def _call_model(self, prompt: str, observation: Observation) -> Any:
+        self.model_calls += 1
         call = call_model(self._model, prompt, observation=observation)
-        self.last_raw_response = call.text
         self.last_used_vision = call.used_vision
         self.last_fallback_reason = call.fallback_reason
         if call.used_vision:
             self.vision_calls += 1
         else:
             self.text_calls += 1
-        action, parsed = parse_model_response(call.text)
-        if not parsed:
-            self.invalid_actions += 1
-        return action
+        return call
 
 
 def _default_prompt(observation: Observation) -> str:
@@ -68,8 +127,39 @@ def _default_prompt(observation: Observation) -> str:
         "You are an agent in a Minecraft environment. "
         f"{frame_summary}; {inv_summary}; "
         f"selected_item={observation.selected_item!r}. "
+        "Your objective is to construct, activate, and enter a Nether Portal. "
         "Respond with a single JSON object describing the next action, "
         'e.g. {"action": "move", "dx": 1, "dz": 0} or {"action": "wait"}.'
+    )
+
+
+def _is_tool_request(data: dict[str, Any] | None) -> bool:
+    return isinstance(data, dict) and data.get("type") == "tool"
+
+
+def _tool_trace(result: WikiResult) -> dict[str, Any]:
+    return {
+        "type": "minecraft_wiki",
+        "query": result.query,
+        "title": result.title,
+        "url": result.url,
+        "error": result.error,
+    }
+
+
+def _tool_result_prompt(result: WikiResult) -> str:
+    if result.error:
+        rendered = f"error={result.error}"
+    else:
+        rendered = (
+            f"title={result.title!r}; url={result.url!r}; "
+            f"content={result.content!r}"
+        )
+    return (
+        "\n\nMinecraft Wiki tool result (live external information):\n"
+        f"{rendered}\n"
+        "Choose the next Minecraft action as one JSON object. "
+        'If you need another lookup, return {"type":"tool","tool":"minecraft_wiki","query":"..."}.'
     )
 
 
