@@ -41,11 +41,30 @@ def test_bad_json_is_agent_protocol_failure() -> None:
     assert result.evidence["reason"] == "output_protocol_error"
 
 
-def test_missing_ground_truth_is_evaluation_error() -> None:
-    result = _evaluate(ground_truth=None)
+def test_missing_env_truth_is_evaluation_error() -> None:
+    result = _evaluate(hidden_state={"ypos": 101.0})
     assert result.success is False
     assert result.evidence["failure_class"] == EVALUATOR_FAILURE
     assert result.evidence["reason"] == "evaluation_error"
+
+
+def test_task_gt_none_uses_env_truth() -> None:
+    result = _evaluate(ground_truth=None)
+    assert result.success is True
+    assert result.evidence["env_truth_visible"] is True
+    assert result.evidence["task_ground_truth"] is None
+
+
+def test_conflicting_task_and_env_truth_is_evaluation_error() -> None:
+    result = _evaluate(
+        ground_truth=True,
+        hidden_state={"target_truths": {"lava": False}, "ypos": 101.0},
+    )
+    assert result.success is False
+    assert result.evidence["failure_class"] == EVALUATOR_FAILURE
+    assert result.evidence["reason"] == "evaluation_error"
+    assert result.evidence["truth_conflict"] is True
+    assert result.evidence["env_truth_visible"] is False
 
 
 def test_vision_fallback_is_evaluation_error() -> None:

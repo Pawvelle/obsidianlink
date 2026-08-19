@@ -77,13 +77,14 @@ def parse_model_response(response: str) -> tuple[Action, bool]:
     """Parse JSON into an Action.
 
     Returns ``(action, parsed)``. ``parsed`` is False on empty / invalid
-    JSON / unknown action verb. Those cases become WAIT.
+    JSON, a missing ``action`` key, or an unknown action verb.
+    Those cases become WAIT; they are not a legal WAIT emission.
     """
     data = extract_json_object(response)
-    if data is None:
+    if data is None or "action" not in data:
         return Action(type=ActionType.WAIT), False
-    type_raw = data.get("action", "wait")
-    if not isinstance(type_raw, str):
+    type_raw = data["action"]
+    if not isinstance(type_raw, str) or not type_raw.strip():
         return Action(type=ActionType.WAIT), False
     try:
         action_type = ActionType(type_raw.strip().lower())

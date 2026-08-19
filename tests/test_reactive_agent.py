@@ -24,9 +24,15 @@ def test_parse_unknown_verb_is_wait() -> None:
     assert action.type is ActionType.WAIT
 
 
-def test_parse_presence_json_defaults_to_wait() -> None:
+def test_parse_presence_json_without_action_is_invalid_wait() -> None:
     action, parsed = parse_model_response('{"visible": true}')
-    assert parsed is True
+    assert parsed is False
+    assert action.type is ActionType.WAIT
+
+
+def test_parse_missing_action_key_is_invalid() -> None:
+    action, parsed = parse_model_response('{"dx": 1}')
+    assert parsed is False
     assert action.type is ActionType.WAIT
 
 

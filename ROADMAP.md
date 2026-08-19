@@ -42,6 +42,9 @@ Casting → Frame → Ignition → Nether Entry
 * **Phase 2 — Benchmark MVP**
   * Task / Evaluator / BenchmarkRunner / Result
   * Agent-visible Observation 与 evaluator-only hidden_state 隔离
+  * D1 以 env `target_truths` 为 ground truth；与 Task 标签冲突则为 evaluation_error
+  * Runner 将 env / agent / evaluator 异常写成结构化 Result，不中断实验
+  * `Task.allowed_actions` 外的动作被夹成 WAIT 并计入 invalid_actions
   * 代表性 diagnostic：D1 Lava Presence
   * Vision dispatch 必须把 `Observation.frame` 交给 vision model；fallback 写入 Result.evidence
   * Live 2026-08-19：Qwen3-VL-2B，`vision_completions=1`，`success=True`，GT 只在 hidden_state

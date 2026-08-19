@@ -14,5 +14,6 @@ class Task:
     initial_condition: str = ""
     allowed_actions: tuple[str, ...] = ()
     evaluation_condition: str = ""
-    #: Evaluator-only. Must never enter Observation or the prompt.
+    #: Optional declared label. Evaluators must prefer environment-side
+    #: hidden truth and must never copy this onto Observation.
     ground_truth: Any = None

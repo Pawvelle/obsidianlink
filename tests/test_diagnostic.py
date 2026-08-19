@@ -6,11 +6,17 @@ from obsidianlink.tasks.diagnostic import (
 )
 
 
-def test_d1_ground_truth_is_not_in_goal() -> None:
-    assert "True" not in D1_LAVA_POSITIVE.goal
+def test_d1_ground_truth_is_not_in_goal_or_prompt() -> None:
+    from obsidianlink.env.environment import Observation
+    from obsidianlink.tasks.diagnostic import d1_prompt
+
     assert "ground_truth" not in D1_LAVA_POSITIVE.goal
     assert D1_LAVA_POSITIVE.ground_truth is True
     assert D1_LAVA_NEGATIVE.ground_truth is False
+    prompt = d1_prompt(Observation())
+    assert "ground_truth" not in prompt
+    assert "target_truths" not in prompt
+    assert "hidden_state" not in prompt
 
 
 def test_courtyard_xml_positive_contains_lava() -> None:

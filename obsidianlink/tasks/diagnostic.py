@@ -3,8 +3,10 @@
 D1 asks: is lava visible in the current RGB frame?
 
 * Task does not contain a solver.
-* Hidden ground truth is scene-defined (we drew lava or we did not).
-  It is not read from ObservationFromGrid.
+* Hidden ground truth is environment-side ``hidden_state["target_truths"]``.
+  ``Task.ground_truth`` is only a declared label; a mismatch with the
+  env truth is ``evaluation_error``. It is not read from ObservationFromGrid
+  and is never copied onto Observation.
 * The Agent is a ReactiveAgent with a D1 prompt. The RGB frame is
   passed through call_model; text-only fallback is evaluation_error.
 """
@@ -115,9 +117,13 @@ class D1LavaEvaluator(Evaluator):
     ) -> Result:
         report = parse_presence_report(raw_response) if raw_response else None
         leaked = _leaked_evaluator_fields(observation)
+        env_label = _env_lava_truth(hidden_state)
+        env_truth, truth_error = _resolve_lava_truth(hidden_state, ground_truth)
         evidence: dict[str, Any] = {
             "report_visible": None if report is None else report.visible,
-            "ground_truth_visible": ground_truth,
+            "env_truth_visible": env_label,
+            "task_ground_truth": ground_truth,
+            "ground_truth_visible": env_truth,
             "raw_response": raw_response,
             "used_vision": used_vision,
             "fallback_reason": fallback_reason,
@@ -150,15 +156,38 @@ class D1LavaEvaluator(Evaluator):
             evidence["vision_fallback"] = True
             return _result(False, EVALUATOR_FAILURE, "evaluation_error")
 
-        if ground_truth is None:
+        if truth_error is not None:
+            if truth_error == "conflict":
+                evidence["truth_conflict"] = True
             return _result(False, EVALUATOR_FAILURE, "evaluation_error")
 
         if report is None or not report.is_well_formed():
             return _result(False, AGENT_FAILURE, "output_protocol_error")
 
-        if report.visible == bool(ground_truth):
+        if report.visible == bool(env_truth):
             return _result(True, None, "ok")
         return _result(False, AGENT_FAILURE, "perception_error")
+
+
+def _env_lava_truth(hidden_state: Any) -> bool | None:
+    if not isinstance(hidden_state, dict):
+        return None
+    truths = hidden_state.get("target_truths")
+    if not isinstance(truths, dict) or "lava" not in truths:
+        return None
+    return bool(truths["lava"])
+
+
+def _resolve_lava_truth(
+    hidden_state: Any, task_ground_truth: Any
+) -> tuple[bool | None, str | None]:
+    """Prefer environment-side lava presence. Conflict is evaluator_failure."""
+    env_visible = _env_lava_truth(hidden_state)
+    if env_visible is None:
+        return None, "missing"
+    if task_ground_truth is not None and bool(task_ground_truth) != env_visible:
+        return None, "conflict"
+    return env_visible, None
 
 
 def _leaked_evaluator_fields(observation: Any) -> list[str]:

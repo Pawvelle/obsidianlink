@@ -27,6 +27,8 @@ ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版�
 
 **Phase 2 — Benchmark MVP ✅**（代表性 diagnostic：D1 Lava Presence）
 
+Runner 将 env / agent / evaluator 异常归因到结构化 Result。D1 以 environment-side hidden truth 为准。`Task.allowed_actions` 外的动作不会被执行。
+
 **Phase 3 — Single-Agent Portal Benchmark**
 
 Current Task:
