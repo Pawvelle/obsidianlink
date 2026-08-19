@@ -6,6 +6,18 @@
 
 ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版机制构造、激活并进入 Nether Portal。
 
+Formal End-to-End objective：
+
+```text
+Construct / complete a Nether Portal
+→ Activate it
+→ Enter the Nether
+```
+
+Success 与具体 solver 无关，由独立 evaluator 依据当前 episode 的真实 Minecraft world truth 判断。Bucket Casting 是第一版受控评测的 **primary reference strategy**，不是 mandatory solver。
+
+Agent 可通过 live Minecraft Wiki 查询任务相关的原版规则、配方和机制；Benchmark prompt 不提供 portal construction recipe。
+
 研究方向：
 
 - Diagnostic
@@ -14,38 +26,14 @@ ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版�
 - Multi-Agent
 - Generalization & Recovery
 
-该 Benchmark 与具体 solver 无关。它不是 Minecraft 自动化脚本，也不绑定任何特定模型厂商。
+该 Benchmark 不是 Minecraft 自动化脚本，也不绑定任何特定模型厂商。
 
-研究方向以这两份计划为准：
+冻结研究与工程规范：
 
 - `docs/plans/ObsidianLink_Research_First_Master_Plan.md`
 - `docs/plans/ObsidianLink_Development_Plan.md`
 
-## 当前状态
-
-**Phase 1 — Minimal Minecraft Agent Loop ✅**
-
-**Phase 2 — Benchmark MVP ✅**（代表性 diagnostic：D1 Lava Presence）
-
-Runner 将 env / agent / evaluator 异常归因到结构化 Result。D1 以 environment-side hidden truth 为准。`Task.allowed_actions` 外的动作不会被执行。
-
-**Phase 3 — Single-Agent Portal Benchmark**
-
-Current Task:
-
-```text
-Tool-enabled L1 architecture / L1 Controlled Construction
-```
-
-端到端目标：
-
-```text
-Construct / complete → activate → enter Nether
-```
-
-Bucket Casting 是第一版受控评测的主要 reference strategy，不是 Agent 必须采用的 solver。Agent 可以查询 Minecraft Wiki，获取与任务相关的 Minecraft 规则、配方和机制知识；Benchmark prompt 不提供 portal construction recipe。
-
-不要把 pre-built portal frame 当作正式 L1。旧 L1 实现已从 active path 删除。历史实验 JSON 保留在 `obsidianlink/experiments/runs/`，并标记为 **historical / invalid for L1 capability conclusion**。
+> Current implementation status is maintained in `ROADMAP.md`.
 
 ## 运行
 
@@ -73,5 +61,3 @@ OBSIDIANLINK_OFFLINE=1 /opt/anaconda3/bin/conda run -n mc-agent python main.py
 ```bash
 PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest tests/
 ```
-
-详细进度见 `ROADMAP.md`。

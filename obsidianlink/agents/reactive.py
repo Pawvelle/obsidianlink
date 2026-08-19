@@ -127,7 +127,6 @@ def _default_prompt(observation: Observation) -> str:
         "You are an agent in a Minecraft environment. "
         f"{frame_summary}; {inv_summary}; "
         f"selected_item={observation.selected_item!r}. "
-        "Your objective is to construct, activate, and enter a Nether Portal. "
         "Respond with a single JSON object describing the next action, "
         'e.g. {"action": "move", "dx": 1, "dz": 0} or {"action": "wait"}.'
     )

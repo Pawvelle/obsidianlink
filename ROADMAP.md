@@ -1,6 +1,6 @@
 # ObsidianLink Roadmap
 
-> 完整研究与开发计划见 `docs/plans/`。本文只记录**实现进度**，不改研究方向。
+> 完整研究与开发计划见 `docs/plans/`。本文是**唯一动态状态源**：Current Phase、Current Task、Completed、Next、Blocked 只在这里维护。不要把进度写回冻结计划、README 或 AGENTS.md。
 
 ## Current Phase
 
@@ -18,7 +18,7 @@ Phase 2  Benchmark MVP                    ✅
 
 ## Current Task
 
-**Tool-enabled L1 architecture / L1 Controlled Construction**
+**Formal L1 Controlled Construction**
 
 端到端目标保持 method-agnostic：
 
@@ -61,6 +61,8 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
   * 代表性 diagnostic：D1 Lava Presence
   * Vision dispatch 必须把 `Observation.frame` 交给 vision model；fallback 写入 Result.evidence
   * Live 2026-08-19：Qwen3-VL-2B，`vision_completions=1`，`success=True`，GT 只在 hidden_state
+* Live Minecraft Wiki Tool
+* Tool-enabled ReactiveAgent
 
 ## Next
 

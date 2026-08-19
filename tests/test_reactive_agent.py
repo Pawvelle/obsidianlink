@@ -68,7 +68,7 @@ def test_reactive_agent_records_text_fallback() -> None:
     assert agent.text_calls == 1
 
 
-def test_tool_enabled_default_prompt_has_no_portal_solver_recipe() -> None:
+def test_default_prompt_is_task_agnostic() -> None:
     seen: list[str] = []
 
     class _Model:
@@ -79,9 +79,33 @@ def test_tool_enabled_default_prompt_has_no_portal_solver_recipe() -> None:
     ReactiveAgent(model=_Model(), tools=MinecraftWikiTool()).act(Observation())
     prompt = seen[0].lower()
     assert "minecraft_wiki" in prompt
-    assert "nether portal" in prompt
-    for forbidden in ("water", "lava", "bucket", "obsidian", "flint"):
+    for forbidden in (
+        "nether portal",
+        "bucket casting",
+        "water",
+        "lava",
+        "bucket",
+        "obsidian",
+        "flint",
+    ):
         assert forbidden not in prompt
+
+
+def test_custom_prompt_builder_is_used() -> None:
+    seen: list[str] = []
+
+    class _Model:
+        def complete(self, prompt: str) -> str:
+            seen.append(prompt)
+            return '{"action":"wait"}'
+
+    agent = ReactiveAgent(
+        model=_Model(),
+        prompt_builder=lambda _obs: "custom diagnostic prompt",
+    )
+    action = agent.act(Observation())
+    assert action.type is ActionType.WAIT
+    assert seen == ["custom diagnostic prompt"]
 
 
 def test_reactive_agent_wiki_tool_loop_preserves_vision_and_counts_calls() -> None:

@@ -92,6 +92,6 @@ conda run -n mc-agent python -c "import minerl, gym, numpy; print('minerl/gym/nu
 - 避免无关的大规模重构。
 - 优先选择最短路径完成当前实验目标。
 
-当前阶段：**Phase 2 — Benchmark MVP 已完成。下一阶段是 Phase 3 — Single-Agent Portal Benchmark。**
+冻结研究规范见 `docs/plans/ObsidianLink_Research_First_Master_Plan.md`。冻结工程规范见 `docs/plans/ObsidianLink_Development_Plan.md`。
 
-当前目标：**Tool-enabled L1 architecture / L1 Controlled Construction。** 正式 L1 的 method-agnostic 端到端目标是 Construct / complete → activate → enter Nether。Bucket Casting 是第一版的主要 reference strategy，不是 Agent 的强制 solver；Agent 可通过 live Minecraft Wiki tool 查询任务相关原版知识。不要把 pre-built portal frame 当作正式 L1。不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不要把 motor 写回 D2。
+> Current implementation status and active development target are maintained in `ROADMAP.md`. Always read `ROADMAP.md` before starting implementation work.

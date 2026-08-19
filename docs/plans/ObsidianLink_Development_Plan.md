@@ -7,7 +7,9 @@
 
 # 文档目的
 
-本文档规定 ObsidianLink 的代码结构、开发顺序和阶段验收条件。研究目标、正式 Success 定义、Bucket Casting 的定位与 Single-Agent / Multi-Agent 研究问题以 *ObsidianLink Research-First Benchmark Master Plan* 为最高依据。
+本文档是冻结的工程规范。它只规定代码结构、开发顺序和阶段验收条件。研究目标、正式 Success 定义、Bucket Casting 的定位与 Single-Agent / Multi-Agent 研究问题以 *ObsidianLink Research-First Benchmark Master Plan* 为最高依据。
+
+只有架构边界、Phase 结构、长期开发顺序或验收原则发生实质变化时，才修改本文档。普通开发进度、Current Phase、Current Task、模块是否已实现、实验是否已跑一律写入 `ROADMAP.md`，不得写入本文档。
 
 工程开发遵循：
 
@@ -16,21 +18,7 @@
 3. **每个 Phase 只解决一个主要问题。**
 4. **Benchmark 是主线；Agent、工具与环境均为 Benchmark 服务。**
 
-# 当前实现进度（2026-08-19）
-
-- Phase 1 Minimal Minecraft Agent Loop ✅
-- Phase 2 Benchmark MVP ✅（代表性 diagnostic：D1 Lava Presence）
-- Phase 3 Single-Agent Portal Benchmark — 进行中
-- `MinecraftWikiTool` ✅：使用 live Minecraft Wiki 公开搜索接口；不 snapshot、抓取、嵌入或镜像 Wiki
-- Tool-enabled `ReactiveAgent` ✅：可在一次 `act()` 内执行有限的 Wiki tool loop
-- 真实 `model_calls` accounting ✅：按实际 model completion 计数
-- `wiki_calls` / `wiki_queries` / tool trace evidence ✅
-- tool loop 后仍传递当前 Observation/RGB frame ✅
-- Formal L1 Controlled Construction — 待实现；尚未 live 验证
-
-当前简短进度以根目录 `ROADMAP.md` 为准。不要新增 D1/D2/D3 task；不要提前开发 D4/D5/D6、Planner、Reflection 或 Multi-Agent。
-
-# 当前项目结构
+# 项目结构
 
 ```text
 obsidianlink/
@@ -62,9 +50,9 @@ ROADMAP.md
 pyproject.toml
 ```
 
-`tasks/portal.py` 是 Formal L1 实现时的候选新增文件，不是当前已存在模块。
+`tasks/portal.py` 仅在 Formal L1 开始实现时再创建。
 
-当前禁止为“未来完整性”预建：
+禁止为“未来完整性”预建：
 
 ```text
 knowledge_base/
@@ -105,7 +93,7 @@ act(observation) -> Action
 
 这是 Benchmark 与 Agent 的稳定边界。Runner 不关心 Agent 内部是否使用模型、Minecraft Wiki、planner、reflection 或其他 reasoning；它最终只接收一个 Minecraft `Action`。
 
-当前 tool-enabled ReactiveAgent 的内部流程是：
+tool-enabled ReactiveAgent 的内部流程是：
 
 ```text
 Observation
@@ -157,7 +145,7 @@ model_calls = 2
 wiki_calls = 1
 ```
 
-这些 evidence 写入现有 `Result.evidence`；当前不建立复杂 telemetry framework，也不重写 Result schema。
+这些 evidence 写入 `Result.evidence`；不建立复杂 telemetry framework，也不重写 Result schema。
 
 # 开发阶段
 
@@ -179,7 +167,7 @@ wiki_calls = 1
 
 > 模型读取真实 Minecraft observation，输出合法结构化动作，动作产生可观察 world effect，并获得下一轮 observation。
 
-本阶段已完成，不继续扩展 Environment framework。
+达到该条件立即进入 Phase 2，不继续扩展 Environment framework。
 
 ## Phase 2 — Benchmark MVP
 
@@ -199,7 +187,7 @@ wiki_calls = 1
 
 > 同一 Runner 能够运行真实 Agent 与 Diagnostic task，并产出结构化 Result。
 
-本阶段已完成。D1/D2/D3 不再作为当前开发队列；D4/D5/D6 仅在 L1 实验出现对应 failure 后按需实现。
+完成后进入 Phase 3。D1/D2/D3 不作为进入 L1 的硬前置流水线；D4/D5/D6 仅在 L1 实验出现对应 failure 后按需实现。
 
 ## Phase 3 — Single-Agent Portal Benchmark
 
@@ -215,11 +203,11 @@ Construct / complete a Nether Portal
 
 Bucket Casting 是第一版 primary reference strategy；它不是 prompt 指定的 mandatory solver。正式 L1 不预建 portal frame，Agent 通过当前 observation、允许动作和 live Minecraft Wiki knowledge 自主选择策略。
 
-当前和后续顺序：
+开发顺序：
 
 ```text
-Minecraft Wiki Tool ✅
-Tool-enabled ReactiveAgent ✅
+Live Knowledge Tool
+Tool-enabled Reactive Agent
         ↓
 Formal L1 Controlled Environment
         ↓
@@ -257,7 +245,7 @@ Implement → Pilot Experiment → Analyze Failure → Next Level
 
 `obsidianlink/experiments/spike_l1_feasibility.py` 仅是 scripted/oracle mechanical feasibility experiment。它用于验证 lava placement、water interaction、obsidian generation、portal mechanics、ignition 和 Nether transition 的可行性，不是 Formal L1 Benchmark。
 
-L1 的 env/action/evaluator 扩展必须依据真实 MineRL evidence。当前已知 `EquipAction` 不可靠，正式 L1 需要使用已验证的 hotbar/use 路径；`ObservationFromGrid` 不能作为 evaluator truth。
+L1 的 env/action/evaluator 扩展必须依据真实 MineRL evidence。MineRL 1.0.2 / MCP-Reborn 上 `EquipAction` 不可靠，正式 L1 需要使用已验证的 hotbar/use 路径；`ObservationFromGrid` 不能作为 evaluator truth。
 
 ### L2 — Resource Interaction
 

@@ -7,7 +7,9 @@
 
 # 文档地位与一级原则
 
-本文档规定 ObsidianLink 的研究定义、评测原则与 Phase 0–6 主线。代码、实验与后续开发计划必须服从这些原则；研究方向发生实质变化时，先更新本文档。
+本文档是冻结的研究基准。它只规定研究定义、Benchmark 语义、评测原则、架构边界与 Phase 0–6 主线。代码、实验与后续开发计划必须服从这些原则。
+
+只有研究定义、Benchmark 语义、架构边界、Phase 结构、长期开发顺序或评测原则发生实质变化时，才修改本文档。普通开发进度、Current Phase、Current Task、实验是否已跑、临时 runtime limitation 一律写入 `ROADMAP.md`，不得写入本文档。
 
 1. ObsidianLink 的研究主体是 **Benchmark**，不是特定 Agent、模型或硬编码 solver。
 2. 统一核心任务是 **Nether Portal Construction**：使用 Minecraft 原版机制构造或完成、激活并实际进入 Nether Portal。
@@ -16,20 +18,6 @@
 5. Agent-visible information 与 evaluator-only world truth 必须严格隔离。
 6. 正式 End-to-End Success 必须由独立 evaluator 依据当前 episode 的真实 world truth 判断。
 7. 项目采用 **Research-First**：先形成真实实验闭环，再按实验需要扩展。
-
-# 当前实现进度（2026-08-19）
-
-以下为仓库当前事实，不改变本计划的长期 Phase 定义：
-
-- Phase 0 Clean Restart ✅
-- Phase 1 Minimal Minecraft Agent Loop ✅
-- Phase 2 Benchmark MVP ✅（代表性 diagnostic：D1 Lava Presence）
-- Phase 3 Single-Agent Portal Benchmark — 进行中
-- Live Minecraft Wiki Tool ✅
-- Tool-enabled ReactiveAgent architecture ✅
-- Formal L1 Controlled Construction — 待实现与 live 验证
-
-当前不增加新的 D1/D2/D3 task；D4/D5/D6 只在真实 L1 failure 后按需补充。下文的完整路线是研究蓝图，不代表当前应同时实现未来阶段。
 
 # 项目研究定位
 
@@ -151,11 +139,11 @@ Benchmark 不在 Agent prompt 中直接提供 Nether Portal construction recipe 
 
 因此，模型不知晓规则、成功检索规则但规划错误、规划正确但执行失败，应当能在后续 failure attribution 中被区分。
 
-## 当前实现原则
+## Live Wiki 实现原则
 
-当前阶段使用 **Live Minecraft Wiki**：直接访问在线 Minecraft Wiki 的公开检索接口，返回有限且相关的文本结果。
+默认使用 **Live Minecraft Wiki**：直接访问在线 Minecraft Wiki 的公开检索接口，返回有限且相关的文本结果。
 
-当前不构建：
+不提前建设：
 
 ```text
 Wiki freeze / snapshot
@@ -222,7 +210,7 @@ Task × Difficulty × Execution Mode × Agent Architecture × Model
 
 ## Diagnostic Suite
 
-D1–D6 是长期能力分类，而不是要求在进入 End-to-End 前完成的硬前置：
+D1–D6 是长期能力分类，不是进入 End-to-End 的硬前置流水线。D4/D5/D6 只在真实 L1 failure 后按需补充：
 
 | ID | 能力 | 作用 |
 |:--|:--|:--|
@@ -445,7 +433,7 @@ model_calls = 2
 wiki_calls = 1
 ```
 
-不为当前阶段建立复杂 telemetry 或人工 weighted score。
+不为早期实验建立复杂 telemetry 或人工 weighted score。
 
 ## Failure Taxonomy
 
@@ -467,7 +455,7 @@ wiki_calls = 1
 
 # 代码结构与开发哲学
 
-当前最小主线：
+最小代码主线：
 
 ```text
 obsidianlink/
@@ -532,8 +520,8 @@ Minecraft → Observation → Agent → Action → Minecraft Change
 顺序：
 
 ```text
-Minecraft Wiki Tool ✅
-Tool-enabled ReactiveAgent ✅
+Live Knowledge Tool
+Tool-enabled Reactive Agent
         ↓
 Formal L1 Controlled Environment
         ↓
