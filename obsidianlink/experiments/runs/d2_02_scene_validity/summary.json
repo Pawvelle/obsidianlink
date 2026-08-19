@@ -1,0 +1,266 @@
+{
+  "start": {
+    "label": "start",
+    "shape": [
+      360,
+      640,
+      3
+    ],
+    "native_png": "obsidianlink/experiments/runs/d2_02_scene_validity/start_native_640x360.png",
+    "orange_fraction": 0.01810763888888889,
+    "orange_centroid_nx": 0.482755198346117,
+    "hidden_state": {
+      "yaw": 0.0,
+      "pitch": 25.0,
+      "xpos": 0.30000000000000004,
+      "ypos": 101.0,
+      "zpos": -0.5855714516075984
+    },
+    "distance_to_lava": 4.585571451607598,
+    "reset_seconds": 22.12138104099995
+  },
+  "after_walk": {
+    "label": "after_walk",
+    "shape": [
+      360,
+      640,
+      3
+    ],
+    "native_png": "obsidianlink/experiments/runs/d2_02_scene_validity/after_walk_native_640x360.png",
+    "orange_fraction": 0.2073003472222222,
+    "orange_centroid_nx": 0.4360150001570286,
+    "hidden_state": {
+      "yaw": 0.0,
+      "pitch": 25.0,
+      "xpos": 0.30000000000000004,
+      "ypos": 101.0,
+      "zpos": 3.4720098547770983
+    },
+    "distance_to_lava": 0.5279901452229017
+  },
+  "walk_log": [
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": -0.4875714482399359
+      },
+      "distance_to_lava": 4.487571448239936,
+      "step": 1
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": -0.336063436818434
+      },
+      "distance_to_lava": 4.336063436818434,
+      "step": 2
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": -0.15534004960609313
+      },
+      "distance_to_lava": 4.155340049606093,
+      "step": 3
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.04133493464086577
+      },
+      "distance_to_lava": 3.9586650653591344,
+      "step": 4
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.24671949188036585
+      },
+      "distance_to_lava": 3.753280508119634,
+      "step": 5
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.45685947652614883
+      },
+      "distance_to_lava": 3.543140523473851,
+      "step": 6
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.6695959248373484
+      },
+      "distance_to_lava": 3.330404075162652,
+      "step": 7
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 0.8837500424745314
+      },
+      "distance_to_lava": 3.1162499575254685,
+      "step": 8
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.098678207653609
+      },
+      "distance_to_lava": 2.901321792346391,
+      "step": 9
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.3140290028396504
+      },
+      "distance_to_lava": 2.6859709971603496,
+      "step": 10
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.5296105540362976
+      },
+      "distance_to_lava": 2.4703894459637024,
+      "step": 11
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.7453180980293694
+      },
+      "distance_to_lava": 2.2546819019706303,
+      "step": 12
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 1.9610944340972796
+      },
+      "distance_to_lava": 2.0389055659027204,
+      "step": 13
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 2.1769083306424144
+      },
+      "distance_to_lava": 1.8230916693575856,
+      "step": 14
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 2.3927427352104957
+      },
+      "distance_to_lava": 1.6072572647895043,
+      "step": 15
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 2.6085883371604064
+      },
+      "distance_to_lava": 1.3914116628395936,
+      "step": 16
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 2.8244400528815063
+      },
+      "distance_to_lava": 1.1755599471184937,
+      "step": 17
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 3.040295106722063
+      },
+      "distance_to_lava": 0.9597048932779368,
+      "step": 18
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 3.2561519831760553
+      },
+      "distance_to_lava": 0.7438480168239447,
+      "step": 19
+    },
+    {
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.30000000000000004,
+        "ypos": 101.0,
+        "zpos": 3.4720098547770983
+      },
+      "distance_to_lava": 0.5279901452229017,
+      "step": 20
+    }
+  ],
+  "goal_distance": 2.0,
+  "min_distance": 0.5,
+  "vlm_ran": false
+}

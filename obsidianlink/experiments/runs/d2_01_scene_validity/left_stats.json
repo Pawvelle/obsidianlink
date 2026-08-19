@@ -1,0 +1,28 @@
+{
+  "label": "left",
+  "shape": [
+    360,
+    640,
+    3
+  ],
+  "mean_rgb": [
+    24.938784722222223,
+    14.504769965277777,
+    18.33641059027778
+  ],
+  "native_png": "obsidianlink/experiments/runs/d2_01_scene_validity/left_native_640x360.png",
+  "orange_fraction": 0.054375,
+  "orange_centroid_x": 133.4750159642401,
+  "orange_centroid_nx": 0.20855471244412516,
+  "env_id": "MineRLD201Left-v0",
+  "spawn_yaw": 35.0,
+  "hidden_state": {
+    "yaw": 35.0,
+    "pitch": 25.0,
+    "xpos": 0.5,
+    "ypos": 101.0,
+    "zpos": 0.5
+  },
+  "reset_seconds": 22.83753191599999,
+  "warmup_steps": 20
+}

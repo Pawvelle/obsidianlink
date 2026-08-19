@@ -1,0 +1,261 @@
+{
+  "scenes": [
+    {
+      "label": "upper_left",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        27.905868055555555,
+        17.5876171875,
+        22.174934895833335
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/upper_left_native_640x360.png",
+      "orange_fraction": 0.06467881944444444,
+      "orange_centroid_x": 125.89122265467722,
+      "orange_centroid_y": 92.36880955576433,
+      "orange_centroid_nx": 0.19670503539793316,
+      "orange_centroid_ny": 0.2565800265437898,
+      "env_id": "MineRLD202UpperLeft-v0",
+      "spawn_yaw": 35.0,
+      "spawn_pitch": 45.0,
+      "ground_truth_region": "upper_left",
+      "observed_region_bin": "upper_left",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 23.633587583000008,
+      "warmup_steps": 20
+    },
+    {
+      "label": "upper_center",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        24.7951171875,
+        16.421006944444443,
+        22.575577256944445
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/upper_center_native_640x360.png",
+      "orange_fraction": 0.04145833333333333,
+      "orange_centroid_x": 318.2217336683417,
+      "orange_centroid_y": 71.48680904522612,
+      "orange_centroid_nx": 0.4972214588567839,
+      "orange_centroid_ny": 0.19857446957007258,
+      "env_id": "MineRLD202UpperCenter-v0",
+      "spawn_yaw": 0.0,
+      "spawn_pitch": 45.0,
+      "ground_truth_region": "upper_center",
+      "observed_region_bin": "upper_center",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 24.333774040999742,
+      "warmup_steps": 20
+    },
+    {
+      "label": "upper_right",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        27.840455729166667,
+        17.47631076388889,
+        22.19138454861111
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/upper_right_native_640x360.png",
+      "orange_fraction": 0.06453125,
+      "orange_centroid_x": 511.25551520043047,
+      "orange_centroid_y": 92.41337099811676,
+      "orange_centroid_nx": 0.7988367425006726,
+      "orange_centroid_ny": 0.25670380832810213,
+      "env_id": "MineRLD202UpperRight-v0",
+      "spawn_yaw": -35.0,
+      "spawn_pitch": 45.0,
+      "ground_truth_region": "upper_right",
+      "observed_region_bin": "upper_right",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 24.550240792000295,
+      "warmup_steps": 20
+    },
+    {
+      "label": "center_left",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        24.938784722222223,
+        14.504769965277777,
+        18.33641059027778
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/center_left_native_640x360.png",
+      "orange_fraction": 0.054375,
+      "orange_centroid_x": 133.4750159642401,
+      "orange_centroid_y": 186.56345785440612,
+      "orange_centroid_nx": 0.20855471244412516,
+      "orange_centroid_ny": 0.5182318273733504,
+      "env_id": "MineRLD202CenterLeft-v0",
+      "spawn_yaw": 35.0,
+      "spawn_pitch": 25.0,
+      "ground_truth_region": "center_left",
+      "observed_region_bin": "center_left",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 25.39624291600012,
+      "warmup_steps": 20
+    },
+    {
+      "label": "center",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        22.85374565972222,
+        15.456827256944445,
+        21.18413628472222
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/center_native_640x360.png",
+      "orange_fraction": 0.031063368055555554,
+      "orange_centroid_x": 317.7941875087327,
+      "orange_centroid_y": 167.32932793069722,
+      "orange_centroid_nx": 0.49655341798239483,
+      "orange_centroid_ny": 0.46480368869638117,
+      "env_id": "MineRLD202Center-v0",
+      "spawn_yaw": 0.0,
+      "spawn_pitch": 25.0,
+      "ground_truth_region": "center",
+      "observed_region_bin": "center",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 24.368865209000433,
+      "warmup_steps": 20
+    },
+    {
+      "label": "center_right",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        24.9355859375,
+        14.474487847222223,
+        18.28714409722222
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/center_right_native_640x360.png",
+      "orange_fraction": 0.054375,
+      "orange_centroid_x": 503.5757503192848,
+      "orange_centroid_y": 186.56345785440612,
+      "orange_centroid_nx": 0.7868371098738824,
+      "orange_centroid_ny": 0.5182318273733504,
+      "env_id": "MineRLD202CenterRight-v0",
+      "spawn_yaw": -35.0,
+      "spawn_pitch": 25.0,
+      "ground_truth_region": "center_right",
+      "observed_region_bin": "center_right",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 25.410621583000648,
+      "warmup_steps": 20
+    },
+    {
+      "label": "lower_left",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        41.68116753472222,
+        35.90716579861111,
+        45.79543836805556
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/lower_left_native_640x360.png",
+      "orange_fraction": 0.05521701388888889,
+      "orange_centroid_x": 133.78776921867632,
+      "orange_centroid_y": 259.66703348530103,
+      "orange_centroid_nx": 0.20904338940418174,
+      "orange_centroid_ny": 0.7212973152369473,
+      "env_id": "MineRLD202LowerLeft-v0",
+      "spawn_yaw": 35.0,
+      "spawn_pitch": 8.0,
+      "ground_truth_region": "lower_left",
+      "observed_region_bin": "lower_left",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 26.24244437499965,
+      "warmup_steps": 20
+    },
+    {
+      "label": "lower_center",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        42.166827256944444,
+        38.033828125,
+        48.00149739583333
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/lower_center_native_640x360.png",
+      "orange_fraction": 0.033532986111111114,
+      "orange_centroid_x": 317.9196220553974,
+      "orange_centroid_y": 240.82604193631892,
+      "orange_centroid_nx": 0.49674940946155843,
+      "orange_centroid_ny": 0.6689612276008858,
+      "env_id": "MineRLD202LowerCenter-v0",
+      "spawn_yaw": 0.0,
+      "spawn_pitch": 8.0,
+      "ground_truth_region": "lower_center",
+      "observed_region_bin": "lower_center",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 23.458237040999848,
+      "warmup_steps": 20
+    },
+    {
+      "label": "lower_right",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        42.3748828125,
+        36.08545572916667,
+        42.614171006944446
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/lower_right_native_640x360.png",
+      "orange_fraction": 0.051948784722222224,
+      "orange_centroid_x": 503.9055894393851,
+      "orange_centroid_y": 258.64800735232683,
+      "orange_centroid_nx": 0.7873524834990392,
+      "orange_centroid_ny": 0.7184666870897968,
+      "env_id": "MineRLD202LowerRight-v0",
+      "spawn_yaw": -35.0,
+      "spawn_pitch": 8.0,
+      "ground_truth_region": "lower_right",
+      "observed_region_bin": "lower_right",
+      "centroid_matches_gt": true,
+      "hidden_state": {},
+      "reset_seconds": 29.245403959000214,
+      "warmup_steps": 20
+    }
+  ],
+  "n_match": 9,
+  "n_scenes": 9,
+  "vlm_ran": false,
+  "motor_execution": false,
+  "design": "spatial_region_grounding"
+}

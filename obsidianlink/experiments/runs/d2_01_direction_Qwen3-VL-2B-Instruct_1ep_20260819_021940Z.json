@@ -1,0 +1,160 @@
+{
+  "task_id": "d2_01_target_direction",
+  "resolution": [
+    640,
+    360
+  ],
+  "max_steps": 8,
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "conditions": [
+    "left",
+    "center",
+    "right"
+  ],
+  "env_ids": {
+    "left": "MineRLD201Left-v0",
+    "center": "MineRLD201Center-v0",
+    "right": "MineRLD201Right-v0"
+  },
+  "spawn_yaws": {
+    "left": 35.0,
+    "center": 0.0,
+    "right": -35.0
+  },
+  "warmup_steps": 20,
+  "num_episodes_per_condition": 1,
+  "num_episodes": 3,
+  "total_wall_time": 162.1973137079999,
+  "frames_dir": "obsidianlink/experiments/runs/d2_01_direction_Qwen3-VL-2B-Instruct_1ep_20260819_021940Z_frames",
+  "aggregate": {
+    "n_episodes": 3,
+    "success_rate": 1.0,
+    "orientation_error_rate": 0.0,
+    "output_protocol_error_rate": 0.0,
+    "reasons": {
+      "ok": 3
+    },
+    "by_condition": {
+      "left": {
+        "n": 1,
+        "n_success": 1,
+        "n_orientation_error": 0,
+        "n_protocol_error": 0
+      },
+      "center": {
+        "n": 1,
+        "n_success": 1,
+        "n_orientation_error": 0,
+        "n_protocol_error": 0
+      },
+      "right": {
+        "n": 1,
+        "n_success": 1,
+        "n_orientation_error": 0,
+        "n_protocol_error": 0
+      }
+    }
+  },
+  "episodes": [
+    {
+      "condition": "left",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_direction": "center",
+      "initial_direction": "left",
+      "final_yaw": 4.9999967,
+      "yaw_error": 4.999996699999997,
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 60.422388333999606,
+      "wall_time": 60.422907957999996,
+      "evidence": {
+        "report_direction": "center",
+        "initial_direction": "left",
+        "final_yaw": 4.9999967,
+        "target_yaw": 0.0,
+        "yaw_error": 4.999996699999997,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"direction\": \"center\",\n  \"action\": \"wait\",\n  \"yaw\": 0\n}",
+        "hidden_state": {
+          "yaw": 4.9999967,
+          "pitch": 25.0,
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5
+        },
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "center",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_direction": "center",
+      "initial_direction": "center",
+      "final_yaw": 0.0,
+      "yaw_error": 0.0,
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 49.271735958000136,
+      "wall_time": 49.27186358400013,
+      "evidence": {
+        "report_direction": "center",
+        "initial_direction": "center",
+        "final_yaw": 0.0,
+        "target_yaw": 0.0,
+        "yaw_error": 0.0,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"direction\": \"center\",\n  \"action\": \"wait\",\n  \"yaw\": 0\n}",
+        "hidden_state": {
+          "yaw": 0.0,
+          "pitch": 25.0,
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5
+        },
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "right",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_direction": "center",
+      "initial_direction": "right",
+      "final_yaw": -4.9999967,
+      "yaw_error": -4.999996699999997,
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 52.05486225000004,
+      "wall_time": 52.054941708000115,
+      "evidence": {
+        "report_direction": "center",
+        "initial_direction": "right",
+        "final_yaw": -4.9999967,
+        "target_yaw": 0.0,
+        "yaw_error": -4.999996699999997,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"direction\": \"center\",\n  \"action\": \"wait\",\n  \"yaw\": 0\n}",
+        "hidden_state": {
+          "yaw": -4.9999967,
+          "pitch": 25.0,
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5
+        },
+        "reason": "ok"
+      }
+    }
+  ],
+  "d2_02": false,
+  "pilot": false
+}

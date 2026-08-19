@@ -1,0 +1,28 @@
+{
+  "label": "lower_left",
+  "shape": [
+    360,
+    640,
+    3
+  ],
+  "mean_rgb": [
+    41.68116753472222,
+    35.90716579861111,
+    45.79543836805556
+  ],
+  "native_png": "obsidianlink/experiments/runs/d2_02_region_validity/lower_left_native_640x360.png",
+  "orange_fraction": 0.05521701388888889,
+  "orange_centroid_x": 133.78776921867632,
+  "orange_centroid_y": 259.66703348530103,
+  "orange_centroid_nx": 0.20904338940418174,
+  "orange_centroid_ny": 0.7212973152369473,
+  "env_id": "MineRLD202LowerLeft-v0",
+  "spawn_yaw": 35.0,
+  "spawn_pitch": 8.0,
+  "ground_truth_region": "lower_left",
+  "observed_region_bin": "lower_left",
+  "centroid_matches_gt": true,
+  "hidden_state": {},
+  "reset_seconds": 26.24244437499965,
+  "warmup_steps": 20
+}

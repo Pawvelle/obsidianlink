@@ -16,6 +16,10 @@ forwards a fixed minimum of evidence to the :class:`Evaluator`:
 implements action validation. Action validation lands when the bounded
 action set has tasks that care about action legality (D3 / L1+).
 
+D2-01 additionally receives ``hidden_state`` (evaluator-only pose
+from MineRL monitors) and ``final_observation`` (post-last-step).
+D1 evaluators ignore both.
+
 Debug mode
 ----------
 
@@ -90,6 +94,7 @@ class BenchmarkRunner:
         last_input_observation: Observation = observation
         last_report: Any = None
         last_raw_response: Any = None
+        last_hidden_state: Any = getattr(env, "hidden_state", None)
         debug_dir: str | None = None
         if debug_save_dir is not None:
             os.makedirs(debug_save_dir, exist_ok=True)
@@ -101,6 +106,7 @@ class BenchmarkRunner:
                 observation = env.step(action)
                 last_report = getattr(agent, "last_report", None)
                 last_raw_response = getattr(agent, "last_raw_response", None)
+                last_hidden_state = getattr(env, "hidden_state", None)
                 steps += 1
                 # Debug-only: persist the exact frame the model saw
                 # this step. We save *after* agent.act() so the saved
@@ -112,6 +118,11 @@ class BenchmarkRunner:
                         frame,
                         os.path.join(debug_dir, f"step_{step_idx + 1}_frame.png"),
                     )
+            if debug_dir is not None:
+                _save_frame_png(
+                    getattr(observation, "frame", None),
+                    os.path.join(debug_dir, "final_frame.png"),
+                )
         finally:
             env.close()
 
@@ -126,4 +137,6 @@ class BenchmarkRunner:
             observation=last_input_observation,
             raw_response=last_raw_response,
             ground_truth=task.ground_truth,
+            final_observation=observation,
+            hidden_state=last_hidden_state,
         )

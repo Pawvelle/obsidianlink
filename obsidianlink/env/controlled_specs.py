@@ -1,6 +1,6 @@
-"""Custom MineRL herobraine env specs for D1 perception.
+"""Custom MineRL herobraine env specs for D1 perception and D2-01.
 
-Two generations live here:
+Generations that live here:
 
 * **Historical pilot (Phase 2C).** A single lava *block* five
   tiles ahead of the player. Kept so the original lava-presence
@@ -13,6 +13,14 @@ Two generations live here:
   obsidian patch) and D1-02 Water Presence (same courtyard;
   water cannot be DrawBlock'd, so the positive env dumps a
   bucket onto the floor before the Agent's first frame).
+* **D2-01 Direction Grounding.** Same lava-positive courtyard
+  as D1-01; the only controlled variable is spawn yaw
+  (left / center / right). The Agent classifies direction from
+  one RGB frame and does not act.
+* **D2-02 Spatial Region Grounding.** Same courtyard; spawn yaw
+  and pitch place the lava in one cell of a 3×3 screen grid.
+  Still classification only. Hidden GT is the scene's
+  (yaw, pitch) → region mapping.
 
 Ground truth is a class attribute on the spec. It is read by the
 evaluator through ``Task.ground_truth`` and must never enter the
@@ -40,6 +48,17 @@ from obsidianlink.env.d1_v2_lava_scene import (
     D1_V2_WATER_NEGATIVE_ENV_ID,
     D1_V2_WATER_POSITIVE_ENV_ID,
     d1_v2_lava_scene_xml,
+)
+from obsidianlink.env.d2_01_scene import (
+    D2_01_CENTER_ENV_ID,
+    D2_01_LEFT_ENV_ID,
+    D2_01_RIGHT_ENV_ID,
+    D2_01_SPAWN_YAWS,
+)
+from obsidianlink.env.d2_02_scene import (
+    D2_02_ENV_IDS,
+    D2_02_REGIONS,
+    D2_02_SPAWN_POSES,
 )
 
 
@@ -413,23 +432,154 @@ class D1WaterNegativeSpec(_D1V2WaterSpec):
 
 
 # ---------------------------------------------------------------------------
+# D2-01 — Direction Grounding (Where?)
+# ---------------------------------------------------------------------------
+#
+# Same lava-positive courtyard as D1-01. Hidden GT is the *initial*
+# screen-space direction of the lava (left / center / right), set by
+# spawn yaw at scene construction. The Agent does not turn or walk.
+
+
+def _d2_01_agent_start(yaw: float) -> List[Handler]:
+    """D1-01 viewpoint with a controlled yaw offset."""
+    return [
+        handlers.GuiScale(1.0),
+        handlers.GammaSetting(2.0),
+        handlers.FOVSetting(70.0),
+        handlers.FakeCursorSize(0),
+        handlers.AgentStartPlacement(
+            x=D1_V2_PLAYER_X,
+            y=D1_V2_PLAYER_Y,
+            z=D1_V2_PLAYER_Z,
+            yaw=yaw,
+            pitch=D1_V2_PLAYER_PITCH,
+        ),
+    ]
+
+
+class _D201Spec(_D1V2LavaSpec):
+    """Lava-positive courtyard; subclasses set ``spawn_yaw``."""
+
+    block_type = "lava"
+    target_present = True
+    target_name = "lava"
+    _lava_present = True
+    spawn_yaw: float = 0.0
+
+    def create_agent_start(self) -> List[Handler]:
+        return _d2_01_agent_start(self.spawn_yaw)
+
+
+class D201LeftSpec(_D201Spec):
+    """Player looks right; lava starts on the left of the frame."""
+
+    spawn_yaw = D2_01_SPAWN_YAWS["left"]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("name", D2_01_LEFT_ENV_ID)
+        super().__init__(*args, **kwargs)
+
+
+class D201CenterSpec(_D201Spec):
+    """Player faces the lava patch; already centered."""
+
+    spawn_yaw = D2_01_SPAWN_YAWS["center"]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("name", D2_01_CENTER_ENV_ID)
+        super().__init__(*args, **kwargs)
+
+
+class D201RightSpec(_D201Spec):
+    """Player looks left; lava starts on the right of the frame."""
+
+    spawn_yaw = D2_01_SPAWN_YAWS["right"]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("name", D2_01_RIGHT_ENV_ID)
+        super().__init__(*args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# D2-02 — Spatial Region Grounding (Where, 3×3)
+# ---------------------------------------------------------------------------
+#
+# Same lava-positive courtyard. Hidden GT is the intended 3×3
+# screen-space region, set by (spawn yaw, spawn pitch). The Agent
+# does not turn or walk.
+
+
+def _d2_02_agent_start(yaw: float, pitch: float) -> List[Handler]:
+    """D1-01 viewpoint with a controlled yaw and pitch offset."""
+    return [
+        handlers.GuiScale(1.0),
+        handlers.GammaSetting(2.0),
+        handlers.FOVSetting(70.0),
+        handlers.FakeCursorSize(0),
+        handlers.AgentStartPlacement(
+            x=D1_V2_PLAYER_X,
+            y=D1_V2_PLAYER_Y,
+            z=D1_V2_PLAYER_Z,
+            yaw=yaw,
+            pitch=pitch,
+        ),
+    ]
+
+
+def _make_d202_spec(region: str) -> type:
+    """One lava-positive spec whose spawn pose is the hidden GT."""
+    yaw, pitch = D2_02_SPAWN_POSES[region]
+    env_id = D2_02_ENV_IDS[region]
+
+    class D202RegionSpec(_D1V2LavaSpec):
+        block_type = "lava"
+        target_present = True
+        target_name = "lava"
+        _lava_present = True
+        spawn_yaw = yaw
+        spawn_pitch = pitch
+        _env_id = env_id
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            kwargs.setdefault("name", self._env_id)
+            super().__init__(*args, **kwargs)
+
+        def create_agent_start(self) -> List[Handler]:
+            return _d2_02_agent_start(self.spawn_yaw, self.spawn_pitch)
+
+    D202RegionSpec.__name__ = (
+        "D202" + "".join(part.title() for part in region.split("_")) + "Spec"
+    )
+    D202RegionSpec.__qualname__ = D202RegionSpec.__name__
+    return D202RegionSpec
+
+
+_D202_SPEC_CLASSES = [_make_d202_spec(region) for region in D2_02_REGIONS]
+
+
+# ---------------------------------------------------------------------------
 # Registration with MineRL / gym
 # ---------------------------------------------------------------------------
 
 # Historical Phase 2C spec stays registered so the original
 # lava-presence script still runs. D1 v2 registers lava + water
-# positive/negative.
+# positive/negative. D2-01 registers left / center / right.
+# D2-02 registers the 3×3 region poses.
 _REGISTERED_SPECS: List[_ControlledPresenceSpec] = [
     ControlledLavaSpec(),  # Phase 2C pilot — do not use for D1 v2
     D1LavaPositiveSpec(),
     D1LavaNegativeSpec(),
     D1WaterPositiveSpec(),
     D1WaterNegativeSpec(),
+    D201LeftSpec(),
+    D201CenterSpec(),
+    D201RightSpec(),
+    *[_cls() for _cls in _D202_SPEC_CLASSES],
 ]
 
 
 def register_controlled_specs() -> None:
-    """Register the D1 v2 lava / water specs and the Phase 2C lava pilot.
+    """Register D1 v2, D2-01, D2-02, and the Phase 2C lava pilot.
 
     Idempotent: a spec that is already in :data:`gym.envs.registry`
     is left alone.
@@ -452,5 +602,8 @@ __all__ = [
     "D1LavaNegativeSpec",
     "D1WaterPositiveSpec",
     "D1WaterNegativeSpec",
+    "D201LeftSpec",
+    "D201CenterSpec",
+    "D201RightSpec",
     "register_controlled_specs",
 ]

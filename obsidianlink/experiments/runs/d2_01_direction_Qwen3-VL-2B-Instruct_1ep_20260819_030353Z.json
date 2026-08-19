@@ -1,0 +1,131 @@
+{
+  "task_id": "d2_01_direction_grounding",
+  "design": "direction_grounding",
+  "motor_execution": false,
+  "resolution": [
+    640,
+    360
+  ],
+  "max_steps": 1,
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-2B-Instruct",
+  "model_name": "Qwen3-VL-2B-Instruct",
+  "device": "auto",
+  "conditions": [
+    "left",
+    "center",
+    "right"
+  ],
+  "env_ids": {
+    "left": "MineRLD201Left-v0",
+    "center": "MineRLD201Center-v0",
+    "right": "MineRLD201Right-v0"
+  },
+  "spawn_yaws": {
+    "left": 35.0,
+    "center": 0.0,
+    "right": -35.0
+  },
+  "target": "lava",
+  "warmup_steps": 20,
+  "num_episodes_per_condition": 1,
+  "num_episodes": 3,
+  "total_wall_time": 97.5967942920006,
+  "frames_dir": "obsidianlink/experiments/runs/d2_01_direction_Qwen3-VL-2B-Instruct_1ep_20260819_030353Z_frames",
+  "aggregate": {
+    "n_episodes": 3,
+    "success_rate": 1.0,
+    "grounding_error_rate": 0.0,
+    "output_protocol_error_rate": 0.0,
+    "reasons": {
+      "ok": 3
+    },
+    "by_condition": {
+      "left": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      },
+      "center": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      },
+      "right": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      }
+    }
+  },
+  "episodes": [
+    {
+      "condition": "left",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_direction": "left",
+      "ground_truth_direction": "left",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 35.989372,
+      "wall_time": 35.989660707999974,
+      "evidence": {
+        "report_target": "lava",
+        "report_direction": "left",
+        "ground_truth_direction": "left",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"direction\": \"left\"\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "center",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_direction": "center",
+      "ground_truth_direction": "center",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 30.593520125000396,
+      "wall_time": 30.593744499999957,
+      "evidence": {
+        "report_target": "lava",
+        "report_direction": "center",
+        "ground_truth_direction": "center",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"direction\": \"center\"\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "right",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_direction": "right",
+      "ground_truth_direction": "right",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 30.48781716600024,
+      "wall_time": 30.487880291999318,
+      "evidence": {
+        "report_target": "lava",
+        "report_direction": "right",
+        "ground_truth_direction": "right",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"direction\": \"right\"\n}",
+        "reason": "ok"
+      }
+    }
+  ],
+  "d2_02": false,
+  "pilot": true,
+  "historical_exploratory": false
+}

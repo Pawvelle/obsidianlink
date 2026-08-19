@@ -1,0 +1,339 @@
+{
+  "task_id": "d2_02_spatial_region_grounding",
+  "design": "spatial_region_grounding",
+  "motor_execution": false,
+  "resolution": [
+    640,
+    360
+  ],
+  "max_steps": 1,
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-4B-Instruct",
+  "model_name": "Qwen3-VL-4B-Instruct",
+  "device": "auto",
+  "conditions": [
+    "upper_left",
+    "upper_center",
+    "upper_right",
+    "center_left",
+    "center",
+    "center_right",
+    "lower_left",
+    "lower_center",
+    "lower_right"
+  ],
+  "env_ids": {
+    "upper_left": "MineRLD202UpperLeft-v0",
+    "upper_center": "MineRLD202UpperCenter-v0",
+    "upper_right": "MineRLD202UpperRight-v0",
+    "center_left": "MineRLD202CenterLeft-v0",
+    "center": "MineRLD202Center-v0",
+    "center_right": "MineRLD202CenterRight-v0",
+    "lower_left": "MineRLD202LowerLeft-v0",
+    "lower_center": "MineRLD202LowerCenter-v0",
+    "lower_right": "MineRLD202LowerRight-v0"
+  },
+  "spawn_poses": {
+    "upper_left": {
+      "yaw": 35.0,
+      "pitch": 45.0
+    },
+    "upper_center": {
+      "yaw": 0.0,
+      "pitch": 45.0
+    },
+    "upper_right": {
+      "yaw": -35.0,
+      "pitch": 45.0
+    },
+    "center_left": {
+      "yaw": 35.0,
+      "pitch": 25.0
+    },
+    "center": {
+      "yaw": 0.0,
+      "pitch": 25.0
+    },
+    "center_right": {
+      "yaw": -35.0,
+      "pitch": 25.0
+    },
+    "lower_left": {
+      "yaw": 35.0,
+      "pitch": 8.0
+    },
+    "lower_center": {
+      "yaw": 0.0,
+      "pitch": 8.0
+    },
+    "lower_right": {
+      "yaw": -35.0,
+      "pitch": 8.0
+    }
+  },
+  "target": "lava",
+  "warmup_steps": 20,
+  "num_episodes_per_condition": 1,
+  "num_episodes": 9,
+  "total_wall_time": 581.2094387919997,
+  "frames_dir": "obsidianlink/experiments/runs/d2_02_region_Qwen3-VL-4B-Instruct_1ep_20260819_032709Z_frames",
+  "aggregate": {
+    "n_episodes": 9,
+    "success_rate": 0.6666666666666666,
+    "grounding_error_rate": 0.2222222222222222,
+    "output_protocol_error_rate": 0.1111111111111111,
+    "reasons": {
+      "ok": 6,
+      "output_protocol_error": 1,
+      "grounding_error": 2
+    },
+    "by_condition": {
+      "upper_left": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      },
+      "upper_center": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      },
+      "upper_right": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      },
+      "center_left": {
+        "n": 1,
+        "n_success": 0,
+        "n_grounding_error": 0,
+        "n_protocol_error": 1
+      },
+      "center": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      },
+      "center_right": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      },
+      "lower_left": {
+        "n": 1,
+        "n_success": 0,
+        "n_grounding_error": 1,
+        "n_protocol_error": 0
+      },
+      "lower_center": {
+        "n": 1,
+        "n_success": 0,
+        "n_grounding_error": 1,
+        "n_protocol_error": 0
+      },
+      "lower_right": {
+        "n": 1,
+        "n_success": 1,
+        "n_grounding_error": 0,
+        "n_protocol_error": 0
+      }
+    }
+  },
+  "episodes": [
+    {
+      "condition": "upper_left",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_region": "upper_left",
+      "ground_truth_region": "upper_left",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 56.6846967499996,
+      "wall_time": 56.687314708000486,
+      "evidence": {
+        "report_target": "lava",
+        "report_region": "upper_left",
+        "ground_truth_region": "upper_left",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"region\": \"upper_left\"\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "upper_center",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_region": "upper_center",
+      "ground_truth_region": "upper_center",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 59.02573124999981,
+      "wall_time": 59.02649725000083,
+      "evidence": {
+        "report_target": "lava",
+        "report_region": "upper_center",
+        "ground_truth_region": "upper_center",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"region\": \"upper_center\"\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "upper_right",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_region": "upper_right",
+      "ground_truth_region": "upper_right",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 62.907737958000325,
+      "wall_time": 62.90812345900031,
+      "evidence": {
+        "report_target": "lava",
+        "report_region": "upper_right",
+        "ground_truth_region": "upper_right",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"region\": \"upper_right\"\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "center_left",
+      "episode": 1,
+      "success": false,
+      "reason": "output_protocol_error",
+      "report_target": null,
+      "report_region": null,
+      "ground_truth_region": "center_left",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 59.40313187500033,
+      "wall_time": 59.403679750000265,
+      "evidence": {
+        "report_target": null,
+        "report_region": null,
+        "ground_truth_region": "center_left",
+        "raw_response": "{\n  \"target\":/components,\n  \"region\": \"center_left\"\n}",
+        "reason": "output_protocol_error"
+      }
+    },
+    {
+      "condition": "center",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_region": "center",
+      "ground_truth_region": "center",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 66.51762758299992,
+      "wall_time": 66.51868716699937,
+      "evidence": {
+        "report_target": "lava",
+        "report_region": "center",
+        "ground_truth_region": "center",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"region\": \"center\"\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "center_right",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_region": "center_right",
+      "ground_truth_region": "center_right",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 66.75640141700023,
+      "wall_time": 66.75664275000054,
+      "evidence": {
+        "report_target": "lava",
+        "report_region": "center_right",
+        "ground_truth_region": "center_right",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"region\": \"center_right\"\n}",
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "lower_left",
+      "episode": 1,
+      "success": false,
+      "reason": "grounding_error",
+      "report_target": "lava",
+      "report_region": "center_left",
+      "ground_truth_region": "lower_left",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 73.17791129200032,
+      "wall_time": 73.1786701660003,
+      "evidence": {
+        "report_target": "lava",
+        "report_region": "center_left",
+        "ground_truth_region": "lower_left",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"region\": \"center_left\"\n}",
+        "reason": "grounding_error"
+      }
+    },
+    {
+      "condition": "lower_center",
+      "episode": 1,
+      "success": false,
+      "reason": "grounding_error",
+      "report_target": "lava",
+      "report_region": "center",
+      "ground_truth_region": "lower_center",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 62.00474116700025,
+      "wall_time": 62.005300792000526,
+      "evidence": {
+        "report_target": "lava",
+        "report_region": "center",
+        "ground_truth_region": "lower_center",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"region\": \"center\"\n}",
+        "reason": "grounding_error"
+      }
+    },
+    {
+      "condition": "lower_right",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_target": "lava",
+      "report_region": "lower_right",
+      "ground_truth_region": "lower_right",
+      "steps": 1,
+      "model_calls": 1,
+      "invalid_actions": 0,
+      "elapsed_time": 74.20219075000023,
+      "wall_time": 74.20239399999991,
+      "evidence": {
+        "report_target": "lava",
+        "report_region": "lower_right",
+        "ground_truth_region": "lower_right",
+        "raw_response": "{\n  \"target\": \"lava\",\n  \"region\": \"lower_right\"\n}",
+        "reason": "ok"
+      }
+    }
+  ],
+  "pilot": true,
+  "historical_exploratory": false
+}

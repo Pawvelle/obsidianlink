@@ -317,6 +317,8 @@ class _CapturingPresenceEvaluator(Evaluator):
         observation: Any = None,
         raw_response: Any = None,
         ground_truth: Any = None,
+        final_observation: Any = None,
+        hidden_state: Any = None,
     ) -> Result:
         # Stash the ground truth for the test to inspect.
         self.received_truth: Any = ground_truth
@@ -457,7 +459,8 @@ def test_inventory_pilot_runner_forwards_none_ground_truth() -> None:
     class _PilotCapturingEvaluator(Evaluator):
         def evaluate(self, task, *, steps, model_calls, invalid_actions,
                      elapsed_time, report=None, observation=None,
-                     raw_response=None, ground_truth=None) -> Result:
+                     raw_response=None, ground_truth=None,
+                     final_observation=None, hidden_state=None) -> Result:
             captured["ground_truth"] = ground_truth
             return Result(
                 task_id=task.task_id,

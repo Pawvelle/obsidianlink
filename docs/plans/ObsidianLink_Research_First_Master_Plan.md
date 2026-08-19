@@ -230,8 +230,8 @@ Task × Difficulty × Execution Mode × Agent Architecture × Model.
 | ID  | 能力           | 第一版典型任务                                                                        |
 |:----|:---------------|:--------------------------------------------------------------------------------------|
 | D1  | Perception     | 从 RGB/公开状态识别 water、lava、obsidian、iron、portal、inventory 与 selected item。 |
-| D2  | Grounding      | 将视觉目标落到方向、位置或可执行交互对象，例如转向并接近指定资源。                    |
-| D3  | Manipulation   | camera、movement、attack、placement、item use、bucket interaction 等有限动作。        |
+| D2  | Grounding      | 给定语义目标和第一人称画面，判断目标的空间位置（方向 / 区域）。不做 camera、movement 或其他 motor execution。 |
+| D3  | Manipulation   | 在已 grounding 的目标上正确执行动作：camera alignment、target approach、attack、placement、item use 等。 |
 | D4  | Planning       | 基于当前 observation/inventory 生成合理的 portal-construction subgoal sequence。      |
 | D5  | State Tracking | 跟踪 inventory、selected item、已完成 milestone、当前 subgoal 与缺失依赖。            |
 | D6  | Recovery       | 在 action no-effect、错误放置、资源缺失、路径阻塞或状态不一致后重新观察并改变策略。   |

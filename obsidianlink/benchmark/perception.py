@@ -9,6 +9,11 @@ Two report flavours are defined here:
   boolean). D1-01 Lava and D1-02 Water (and the historical
   Phase 2C presence family) use this. The report only asks
   "is the target visible in the frame".
+* :class:`DirectionGroundingReport` — D2-01 *where* report
+  (``target`` + ``direction``). Visual-spatial only; no motor
+  fields.
+* :class:`SpatialRegionGroundingReport` — D2-02 *where* report
+  (``target`` + ``region``). 3×3 screen cell; still no motor.
 
 The report is what the :class:`Evaluator` compares against the
 ground truth. For Phase 2A the ground truth is the agent-visible
@@ -165,9 +170,185 @@ def parse_presence_report(response: str) -> PresenceReport | None:
     return PresenceReport(visible=raw)
 
 
+# ---------------------------------------------------------------------------
+# Direction grounding report (D2-01 Direction Grounding)
+# ---------------------------------------------------------------------------
+
+
+DIRECTIONS: tuple[str, ...] = ("left", "center", "right")
+
+
+@dataclass(frozen=True)
+class DirectionGroundingReport:
+    """Semantic target + screen-space direction. D2-01 only; no motor fields.
+
+    The Agent emits::
+
+        {"target": "lava", "direction": "left"|"center"|"right"}
+
+    ``direction`` is ``None`` when the label is missing or not one of
+    the three allowed values — that is an ``output_protocol_error``.
+    Unknown directions are never silently accepted as valid.
+    """
+
+    target: str | None = None
+    direction: str | None = None
+
+    def is_well_formed(self) -> bool:
+        return (
+            isinstance(self.target, str)
+            and bool(self.target.strip())
+            and self.direction in DIRECTIONS
+        )
+
+
+def parse_direction_grounding_report(
+    response: str,
+) -> DirectionGroundingReport | None:
+    """Extract a :class:`DirectionGroundingReport` from a model response.
+
+    Accepts::
+
+        {"target": "lava", "direction": "left"}
+        {"report": {"target": "lava", "direction": "right"}}
+
+    Extra keys are ignored. Returns ``None`` when the response is
+    not parseable JSON or not a dict. A dict with a missing or
+    unknown ``direction`` (or missing ``target``) yields a report
+    that is not well-formed — protocol error, not ``None``.
+    """
+    if not isinstance(response, str) or not response.strip():
+        return None
+    try:
+        data = json.loads(response)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    raw = data
+    if "direction" not in data and "target" not in data and isinstance(
+        data.get("report"), dict
+    ):
+        raw = data["report"]
+
+    raw_target = raw.get("target")
+    target: str | None
+    if isinstance(raw_target, str) and raw_target.strip():
+        target = raw_target.strip()
+    else:
+        target = None
+
+    raw_direction = raw.get("direction")
+    direction: str | None
+    if isinstance(raw_direction, str):
+        label = raw_direction.strip().lower()
+        direction = label if label in DIRECTIONS else None
+    else:
+        direction = None
+
+    return DirectionGroundingReport(target=target, direction=direction)
+
+
+# ---------------------------------------------------------------------------
+# Spatial region grounding report (D2-02 Spatial Region Grounding)
+# ---------------------------------------------------------------------------
+
+
+SPATIAL_REGIONS: tuple[str, ...] = (
+    "upper_left",
+    "upper_center",
+    "upper_right",
+    "center_left",
+    "center",
+    "center_right",
+    "lower_left",
+    "lower_center",
+    "lower_right",
+)
+
+
+@dataclass(frozen=True)
+class SpatialRegionGroundingReport:
+    """Semantic target + 3×3 screen-space region. D2-02 only; no motor fields.
+
+    The Agent emits::
+
+        {"target": "lava", "region": "center_right"}
+
+    ``region`` is ``None`` when the label is missing or not one of
+    the nine allowed values — that is an ``output_protocol_error``.
+    Unknown regions are never silently accepted as valid.
+    """
+
+    target: str | None = None
+    region: str | None = None
+
+    def is_well_formed(self) -> bool:
+        return (
+            isinstance(self.target, str)
+            and bool(self.target.strip())
+            and self.region in SPATIAL_REGIONS
+        )
+
+
+def parse_spatial_region_grounding_report(
+    response: str,
+) -> SpatialRegionGroundingReport | None:
+    """Extract a :class:`SpatialRegionGroundingReport` from a model response.
+
+    Accepts::
+
+        {"target": "lava", "region": "upper_left"}
+        {"report": {"target": "lava", "region": "center"}}
+
+    Extra keys are ignored. Returns ``None`` when the response is
+    not parseable JSON or not a dict. A dict with a missing or
+    unknown ``region`` (or missing ``target``) yields a report
+    that is not well-formed — protocol error, not ``None``.
+    """
+    if not isinstance(response, str) or not response.strip():
+        return None
+    try:
+        data = json.loads(response)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    raw = data
+    if "region" not in data and "target" not in data and isinstance(
+        data.get("report"), dict
+    ):
+        raw = data["report"]
+
+    raw_target = raw.get("target")
+    target: str | None
+    if isinstance(raw_target, str) and raw_target.strip():
+        target = raw_target.strip()
+    else:
+        target = None
+
+    raw_region = raw.get("region")
+    region: str | None
+    if isinstance(raw_region, str):
+        label = raw_region.strip().lower()
+        region = label if label in SPATIAL_REGIONS else None
+    else:
+        region = None
+
+    return SpatialRegionGroundingReport(target=target, region=region)
+
+
 __all__ = [
     "PerceptionReport",
     "PresenceReport",
+    "DirectionGroundingReport",
+    "SpatialRegionGroundingReport",
+    "DIRECTIONS",
+    "SPATIAL_REGIONS",
     "parse_perception_report",
     "parse_presence_report",
+    "parse_direction_grounding_report",
+    "parse_spatial_region_grounding_report",
 ]

@@ -95,11 +95,12 @@ def test_attack_action_sets_attack_one() -> None:
     assert translated["back"] == 0
 
 
-def test_camera_action_sets_yaw_pitch_vector() -> None:
+def test_camera_action_sets_pitch_yaw_vector() -> None:
+    """MineRL camera is ``[delta_pitch, delta_yaw]``, not ``[yaw, pitch]``."""
     translated = MineRLEnvironment._to_minerl_action(
         Action(type=ActionType.CAMERA, yaw=12.5, pitch=-3.0), _TREECHOP_KEYS
     )
-    assert translated["camera"] == [12.5, -3.0]
+    assert translated["camera"] == [-3.0, 12.5]
 
 
 def test_place_action_with_target_emits_block_name() -> None:

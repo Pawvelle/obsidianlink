@@ -6,6 +6,20 @@
   controlled scenes, hidden ``Task.ground_truth``,
   positive/negative, live-verified.
 
+Diagnostic split (frozen)::
+
+    D1 Perception   = What is there?
+    D2 Grounding    = Where is the specified target?
+    D3 Manipulation = Given the grounded target, can the agent act?
+
+**D2-01 Direction Grounding** (left / center / right from RGB;
+no motor) and **D2-02 Spatial Region Grounding** (3×3 regions;
+still no motor) are the current D2 implementation.
+
+Historical exploratory D2 that mixed camera alignment / target
+approach into Grounding is not a formal D2 result. Those motor
+loops belong to future D3 and are not implemented this round.
+
 Historical, **not** capability conclusions:
 
 * Phase 2A / 2B inventory D1 (agent-visible observation as GT).
@@ -39,6 +53,21 @@ from obsidianlink.tasks.diagnostic import (
     D1InventoryPerceptionModel,
     D1PresenceAgent,
     D1PresenceEvaluator,
+    D2_01_CENTER,
+    D2_01_ENV_IDS_BY_CONDITION,
+    D2_01_LEFT,
+    D2_01_MAX_STEPS,
+    D2_01_RIGHT,
+    D2_01_TASKS,
+    D2_01_WARMUP_STEPS,
+    D2DirectionGroundingAgent,
+    D2DirectionGroundingEvaluator,
+    D2_02_ENV_IDS_BY_CONDITION,
+    D2_02_MAX_STEPS,
+    D2_02_TASKS,
+    D2_02_WARMUP_STEPS,
+    D2SpatialRegionGroundingAgent,
+    D2SpatialRegionGroundingEvaluator,
 )
 
 __all__ = [
@@ -66,4 +95,21 @@ __all__ = [
     "D1_02_WATER_TASKS",
     "D1_02_WARMUP_STEPS",
     "d1_02_setup_actions",
+    # D2-01 Direction Grounding
+    "D2_01_LEFT",
+    "D2_01_CENTER",
+    "D2_01_RIGHT",
+    "D2_01_TASKS",
+    "D2_01_ENV_IDS_BY_CONDITION",
+    "D2_01_MAX_STEPS",
+    "D2_01_WARMUP_STEPS",
+    "D2DirectionGroundingAgent",
+    "D2DirectionGroundingEvaluator",
+    # D2-02 Spatial Region Grounding
+    "D2_02_TASKS",
+    "D2_02_ENV_IDS_BY_CONDITION",
+    "D2_02_MAX_STEPS",
+    "D2_02_WARMUP_STEPS",
+    "D2SpatialRegionGroundingAgent",
+    "D2SpatialRegionGroundingEvaluator",
 ]

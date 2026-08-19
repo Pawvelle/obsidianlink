@@ -5,8 +5,27 @@ D1-01 Lava Presence and D1-02 Water Presence (640×360 controlled
 scenes, hidden ground truth, positive/negative, ``max_steps=1``).
 Obsidian / Iron / Log D1 tasks are **not** in this pilot.
 
-Historical pilots kept for reproducibility, **not** capability
-conclusions:
+Diagnostic split (frozen)::
+
+    D1 Perception   = What is there?
+    D2 Grounding    = Where is the specified target?
+    D3 Manipulation = Given the grounded target, can the agent act?
+
+**D2 Grounding is visual-spatial only.** The Agent classifies
+location from RGB. It does not emit camera, move, attack, use,
+or place. Motor execution belongs to D3.
+
+**D2-01 Direction Grounding** (left / center / right) and
+**D2-02 Spatial Region Grounding** (3×3 regions) are the current
+D2 implementation. Both are visual-spatial only.
+
+Historical exploratory D2 that mixed camera-yaw centering and
+walk-and-stop into Grounding is **not** a formal D2 result.
+Those motor loops belong to future D3 (Camera Alignment /
+Target Approach) and are not implemented this round.
+
+Historical perception pilots kept for reproducibility, **not**
+capability conclusions:
 
 * Phase 2A / 2B **inventory** D1 — plumbing with agent-visible
   observation as ground truth.
@@ -52,6 +71,15 @@ from obsidianlink.env.d1_v2_lava_scene import (
     D1_V2_POSITIVE_ENV_ID,
     D1_V2_WATER_NEGATIVE_ENV_ID,
     D1_V2_WATER_POSITIVE_ENV_ID,
+)
+from obsidianlink.env.d2_01_scene import (
+    D2_01_ENV_IDS,
+    D2_01_TARGET_NAME,
+)
+from obsidianlink.env.d2_02_scene import (
+    D2_02_ENV_IDS,
+    D2_02_REGIONS,
+    D2_02_TARGET_NAME,
 )
 from obsidianlink.env.environment import Observation
 
@@ -261,7 +289,10 @@ class D1InventoryPerceptionEvaluator(Evaluator):
         observation: Any = None,
         raw_response: Any = None,
         ground_truth: Any = None,
+        final_observation: Any = None,
+        hidden_state: Any = None,
     ) -> Result:
+        del final_observation, hidden_state
         ground_truth_inv, ground_truth_sel = _extract_inventory_ground_truth(observation)
 
         # Build the evidence bag first; success / failure keys overwrite
@@ -631,7 +662,10 @@ class D1PresenceEvaluator(Evaluator):
         observation: Any = None,
         raw_response: Any = None,
         ground_truth: Any = None,
+        final_observation: Any = None,
+        hidden_state: Any = None,
     ) -> Result:
+        del observation, final_observation, hidden_state
         # Build the evidence bag. ``ground_truth_visible`` is the
         # hidden truth; it MUST be pulled from ``Task.ground_truth``
         # so it never enters the agent-visible channel.
@@ -700,6 +734,433 @@ class D1PresenceEvaluator(Evaluator):
         )
 
 
+# ---------------------------------------------------------------------------
+# D2-01 — Direction Grounding (Where?)
+# ---------------------------------------------------------------------------
+#
+# Same 640×360 lava-positive courtyard as D1-01. Three spawn-yaw
+# conditions (left / center / right) place the lava at different
+# screen-space directions. The Agent classifies direction from one
+# RGB frame and emits WAIT. No camera, movement, or other motor
+# action is part of D2.
+#
+# Hidden GT is the intended screen-space direction, derived from
+# spawn yaw at scene construction and attached to Task.ground_truth.
+# It never enters Observation or the prompt.
+#
+# D2-02 Spatial Region Grounding is implemented below.
+#
+# Historical exploratory D2 mixed camera-yaw centering and
+# walk-and-stop into Grounding. Those belong to future D3:
+#   D3 Camera Alignment  (old D2-01 motor)
+#   D3 Target Approach   (old D2-02 motor)
+# D3 is not implemented this round.
+
+_D2_01_GOAL = (
+    "Look at the Minecraft first-person frame and report whether "
+    "the specified target (lava) is on the left, center, or right."
+)
+
+D2_01_MAX_STEPS = 1
+D2_01_WARMUP_STEPS = D1_01_WARMUP_STEPS
+
+D2_01_LEFT = Task(
+    task_id="d2_01_direction_grounding",
+    goal=_D2_01_GOAL,
+    max_steps=D2_01_MAX_STEPS,
+    ground_truth="left",
+)
+
+D2_01_CENTER = Task(
+    task_id="d2_01_direction_grounding",
+    goal=_D2_01_GOAL,
+    max_steps=D2_01_MAX_STEPS,
+    ground_truth="center",
+)
+
+D2_01_RIGHT = Task(
+    task_id="d2_01_direction_grounding",
+    goal=_D2_01_GOAL,
+    max_steps=D2_01_MAX_STEPS,
+    ground_truth="right",
+)
+
+D2_01_TASKS: dict[str, Task] = {
+    "left": D2_01_LEFT,
+    "center": D2_01_CENTER,
+    "right": D2_01_RIGHT,
+}
+
+D2_01_ENV_IDS_BY_CONDITION = D2_01_ENV_IDS
+
+
+def _build_direction_grounding_prompt(target_name: str) -> str:
+    """D2-01 prompt. Schema only; no scene GT, no motor instructions."""
+    target = target_name
+    return (
+        "You are observing a Minecraft player's first-person view. "
+        "Your task is the D2-01 Direction Grounding diagnostic: "
+        f"a {target.upper()} target is visible in the scene. Decide "
+        "whether it is on the LEFT, CENTER, or RIGHT of the current "
+        "frame.\n\n"
+        "Respond with a single JSON object, and ONLY that JSON. "
+        "Do NOT wrap it in markdown code fences, and do NOT add any "
+        "explanatory text before or after.\n\n"
+        "Required schema:\n"
+        "{\n"
+        f'  "target": "{target}",\n'
+        '  "direction": "left" | "center" | "right"\n'
+        "}\n\n"
+        "Rules:\n"
+        f'- "target" is the name of the specified object ({target}).\n'
+        '- "direction" is where that object currently appears in '
+        "THIS frame: left, center, or right.\n"
+        "- Do not move, turn the camera, attack, use, or place. "
+        "This task is classification only.\n"
+        '- Do not include any keys outside "target" and "direction".\n'
+        "- Do not use markdown code fences."
+    )
+
+
+class D2DirectionGroundingAgent:
+    """Diagnostic agent for D2-01 Direction Grounding.
+
+    Parses a :class:`DirectionGroundingReport` and always emits
+    ``WAIT``. Hidden spawn yaw and ground truth never enter the
+    prompt. Extra motor keys in the model JSON are ignored.
+    """
+
+    def __init__(self, model: Any, target_name: str = D2_01_TARGET_NAME) -> None:
+        self._model = model
+        self.target_name = target_name
+        self.prompt = _build_direction_grounding_prompt(target_name)
+        self.model_calls = 0
+        self.last_report = None
+        self.last_raw_response: str | None = None
+
+    def act(self, observation: Observation) -> Any:
+        from obsidianlink.agents.model_client import call_model
+        from obsidianlink.benchmark.perception import (
+            parse_direction_grounding_report,
+        )
+        from obsidianlink.env.actions import Action, ActionType
+
+        self.model_calls += 1
+        response = call_model(self._model, self.prompt, observation=observation)
+        self.last_raw_response = response
+        self.last_report = parse_direction_grounding_report(response)
+        return Action(type=ActionType.WAIT)
+
+
+class D2DirectionGroundingEvaluator(Evaluator):
+    """Grade D2-01: predicted direction vs hidden scene-side direction.
+
+    Failure-mode contract
+    ---------------------
+
+    * ``output_protocol_error`` — response was not a well-formed
+      ``{"target": str, "direction": left|center|right}``.
+    * ``grounding_error`` — schema OK, but predicted direction
+      disagrees with hidden ``Task.ground_truth``.
+    * ``missing_ground_truth`` — wiring bug: no GT on the Task.
+    * ``ok`` — predicted direction equals hidden GT.
+
+    Success is **direction classification**, not camera pose or
+    locomotion. ``orientation_error`` / ``overshoot_error`` /
+    ``movement_error`` are not D2 reasons.
+
+    Evidence bag
+    ------------
+
+    * ``report_target`` / ``report_direction``
+    * ``ground_truth_direction``
+    * ``reason`` / ``raw_response``
+    """
+
+    def evaluate(
+        self,
+        task: Task,
+        *,
+        steps: int,
+        model_calls: int,
+        invalid_actions: int,
+        elapsed_time: float,
+        report: Any = None,
+        observation: Any = None,
+        raw_response: Any = None,
+        ground_truth: Any = None,
+        final_observation: Any = None,
+        hidden_state: Any = None,
+    ) -> Result:
+        from obsidianlink.benchmark.perception import DirectionGroundingReport
+
+        del observation, final_observation, hidden_state
+
+        evidence: dict[str, Any] = {
+            "report_target": (
+                getattr(report, "target", None) if report is not None else None
+            ),
+            "report_direction": (
+                getattr(report, "direction", None) if report is not None else None
+            ),
+            "ground_truth_direction": ground_truth,
+            "raw_response": raw_response,
+        }
+
+        if (
+            not isinstance(report, DirectionGroundingReport)
+            or not report.is_well_formed()
+        ):
+            evidence["reason"] = "output_protocol_error"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if ground_truth is None:
+            evidence["reason"] = "missing_ground_truth"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if report.direction == ground_truth:
+            evidence["reason"] = "ok"
+            return Result(
+                task_id=task.task_id,
+                success=True,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        evidence["reason"] = "grounding_error"
+        return Result(
+            task_id=task.task_id,
+            success=False,
+            steps=steps,
+            model_calls=model_calls,
+            invalid_actions=invalid_actions,
+            elapsed_time=elapsed_time,
+            evidence=evidence,
+        )
+
+
+# ---------------------------------------------------------------------------
+# D2-02 — Spatial Region Grounding (Where, 3×3)
+# ---------------------------------------------------------------------------
+#
+# Same 640×360 lava-positive courtyard as D1-01 / D2-01. Nine
+# (yaw, pitch) spawn poses place the lava in one cell of a 3×3
+# screen grid. The Agent classifies the region from one RGB frame
+# and emits WAIT. No camera, movement, or other motor action.
+#
+# Hidden GT is the intended region, derived from spawn pose at
+# scene construction and attached to Task.ground_truth. It never
+# enters Observation or the prompt.
+
+_D2_02_GOAL = (
+    "Look at the Minecraft first-person frame and report which "
+    "3x3 screen region contains the specified target (lava)."
+)
+
+D2_02_MAX_STEPS = 1
+D2_02_WARMUP_STEPS = D1_01_WARMUP_STEPS
+
+D2_02_TASKS: dict[str, Task] = {
+    region: Task(
+        task_id="d2_02_spatial_region_grounding",
+        goal=_D2_02_GOAL,
+        max_steps=D2_02_MAX_STEPS,
+        ground_truth=region,
+    )
+    for region in D2_02_REGIONS
+}
+
+D2_02_ENV_IDS_BY_CONDITION = D2_02_ENV_IDS
+
+
+def _build_spatial_region_grounding_prompt(target_name: str) -> str:
+    """D2-02 prompt. Schema only; no scene GT, no motor instructions."""
+    target = target_name
+    return (
+        "You are observing a Minecraft player's first-person view. "
+        "Your task is the D2-02 Spatial Region Grounding diagnostic: "
+        f"a {target.upper()} target is visible in the scene. Decide "
+        "which of nine screen regions contains it.\n\n"
+        "The regions are a 3x3 grid over THIS frame:\n"
+        "  upper_left     upper_center     upper_right\n"
+        "  center_left    center           center_right\n"
+        "  lower_left     lower_center     lower_right\n\n"
+        "Respond with a single JSON object, and ONLY that JSON. "
+        "Do NOT wrap it in markdown code fences, and do NOT add any "
+        "explanatory text before or after.\n\n"
+        "Required schema:\n"
+        "{\n"
+        f'  "target": "{target}",\n'
+        '  "region": "upper_left" | "upper_center" | "upper_right" | '
+        '"center_left" | "center" | "center_right" | '
+        '"lower_left" | "lower_center" | "lower_right"\n'
+        "}\n\n"
+        "Rules:\n"
+        f'- "target" is the name of the specified object ({target}).\n'
+        '- "region" is the 3x3 cell where that object currently '
+        "appears in THIS frame.\n"
+        '- Use "center" for the middle cell, not "center_center".\n'
+        "- Do not move, turn the camera, attack, use, or place. "
+        "This task is classification only.\n"
+        '- Do not include any keys outside "target" and "region".\n'
+        "- Do not use markdown code fences."
+    )
+
+
+class D2SpatialRegionGroundingAgent:
+    """Diagnostic agent for D2-02 Spatial Region Grounding.
+
+    Parses a :class:`SpatialRegionGroundingReport` and always emits
+    ``WAIT``. Hidden spawn pose and ground truth never enter the
+    prompt. Extra motor keys in the model JSON are ignored.
+    """
+
+    def __init__(self, model: Any, target_name: str = D2_02_TARGET_NAME) -> None:
+        self._model = model
+        self.target_name = target_name
+        self.prompt = _build_spatial_region_grounding_prompt(target_name)
+        self.model_calls = 0
+        self.last_report = None
+        self.last_raw_response: str | None = None
+
+    def act(self, observation: Observation) -> Any:
+        from obsidianlink.agents.model_client import call_model
+        from obsidianlink.benchmark.perception import (
+            parse_spatial_region_grounding_report,
+        )
+        from obsidianlink.env.actions import Action, ActionType
+
+        self.model_calls += 1
+        response = call_model(self._model, self.prompt, observation=observation)
+        self.last_raw_response = response
+        self.last_report = parse_spatial_region_grounding_report(response)
+        return Action(type=ActionType.WAIT)
+
+
+class D2SpatialRegionGroundingEvaluator(Evaluator):
+    """Grade D2-02: predicted region vs hidden scene-side region.
+
+    Failure-mode contract
+    ---------------------
+
+    * ``output_protocol_error`` — response was not a well-formed
+      ``{"target": str, "region": <one of nine>}``.
+    * ``grounding_error`` — schema OK, but predicted region
+      disagrees with hidden ``Task.ground_truth``.
+    * ``missing_ground_truth`` — wiring bug: no GT on the Task.
+    * ``ok`` — predicted region equals hidden GT.
+
+    Success is **region classification**, not camera pose or
+    locomotion.
+
+    Evidence bag
+    ------------
+
+    * ``report_target`` / ``report_region``
+    * ``ground_truth_region``
+    * ``reason`` / ``raw_response``
+    """
+
+    def evaluate(
+        self,
+        task: Task,
+        *,
+        steps: int,
+        model_calls: int,
+        invalid_actions: int,
+        elapsed_time: float,
+        report: Any = None,
+        observation: Any = None,
+        raw_response: Any = None,
+        ground_truth: Any = None,
+        final_observation: Any = None,
+        hidden_state: Any = None,
+    ) -> Result:
+        from obsidianlink.benchmark.perception import SpatialRegionGroundingReport
+
+        del observation, final_observation, hidden_state
+
+        evidence: dict[str, Any] = {
+            "report_target": (
+                getattr(report, "target", None) if report is not None else None
+            ),
+            "report_region": (
+                getattr(report, "region", None) if report is not None else None
+            ),
+            "ground_truth_region": ground_truth,
+            "raw_response": raw_response,
+        }
+
+        if (
+            not isinstance(report, SpatialRegionGroundingReport)
+            or not report.is_well_formed()
+        ):
+            evidence["reason"] = "output_protocol_error"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if ground_truth is None:
+            evidence["reason"] = "missing_ground_truth"
+            return Result(
+                task_id=task.task_id,
+                success=False,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        if report.region == ground_truth:
+            evidence["reason"] = "ok"
+            return Result(
+                task_id=task.task_id,
+                success=True,
+                steps=steps,
+                model_calls=model_calls,
+                invalid_actions=invalid_actions,
+                elapsed_time=elapsed_time,
+                evidence=evidence,
+            )
+
+        evidence["reason"] = "grounding_error"
+        return Result(
+            task_id=task.task_id,
+            success=False,
+            steps=steps,
+            model_calls=model_calls,
+            invalid_actions=invalid_actions,
+            elapsed_time=elapsed_time,
+            evidence=evidence,
+        )
+
+
 __all__ = [
     # Phase 2A / 2B inventory pilot
     "D1_INVENTORY_PERCEPTION",
@@ -725,4 +1186,22 @@ __all__ = [
     "D1_02_WATER_TASKS",
     "D1_02_WARMUP_STEPS",
     "d1_02_setup_actions",
+    # D2-01 Direction Grounding
+    "D2_01_LEFT",
+    "D2_01_CENTER",
+    "D2_01_RIGHT",
+    "D2_01_TASKS",
+    "D2_01_ENV_IDS_BY_CONDITION",
+    "D2_01_MAX_STEPS",
+    "D2_01_WARMUP_STEPS",
+    "D2DirectionGroundingAgent",
+    "D2DirectionGroundingEvaluator",
+    # D2-02 Spatial Region Grounding
+    "D2_02_TASKS",
+    "D2_02_ENV_IDS_BY_CONDITION",
+    "D2_02_MAX_STEPS",
+    "D2_02_WARMUP_STEPS",
+    "D2SpatialRegionGroundingAgent",
+    "D2SpatialRegionGroundingEvaluator",
 ]
+

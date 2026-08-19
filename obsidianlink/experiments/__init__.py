@@ -7,4 +7,12 @@ See:
 
 * :mod:`obsidianlink.experiments.smoke_qwen_vl_d1` — Phase 2B
   synthetic-frame smoke for Qwen3-VL on D1.
+* :mod:`obsidianlink.experiments.debug_d2_01_scenes` — D2-01
+  spawn-yaw frame capture (no VLM, no motor).
+* :mod:`obsidianlink.experiments.run_d2_01` — D2-01 Direction
+  Grounding live left / center / right evaluation.
+* :mod:`obsidianlink.experiments.debug_d2_02_scenes` — D2-02
+  3×3 spawn-pose frame capture (no VLM, no motor).
+* :mod:`obsidianlink.experiments.run_d2_02` — D2-02 Spatial
+  Region Grounding live 3×3 evaluation.
 """

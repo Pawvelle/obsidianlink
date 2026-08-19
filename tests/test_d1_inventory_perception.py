@@ -503,7 +503,8 @@ def test_runner_forwards_agent_visible_observation_to_evaluator() -> None:
     class _CapturingEvaluator(Evaluator):
         def evaluate(self, task, *, steps, model_calls, invalid_actions,
                      elapsed_time, report=None, observation=None,
-                     raw_response=None, ground_truth=None) -> Result:
+                     raw_response=None, ground_truth=None,
+                     final_observation=None, hidden_state=None) -> Result:
             captured["report"] = report
             captured["observation"] = observation
             captured["raw_response"] = raw_response

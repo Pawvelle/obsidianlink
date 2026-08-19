@@ -4,7 +4,20 @@
 
 ## Current Phase
 
-**D1 Perception Pilot — 完成。下一步：D2 Grounding。**
+**D2 Grounding — D2-01 Direction Grounding 与 D2-02 Spatial Region Grounding 均已实现。**
+
+Diagnostic 固定拆分：
+
+```text
+D1 Perception   = What is there?
+D2 Grounding    = Where is the specified target?
+D3 Manipulation = Given the grounded target, can the agent act?
+```
+
+D2 只做视觉空间 Grounding。禁止 camera / move / attack / use / place。Evaluator 不依赖这些动作是否成功。
+
+* **D2-01 Direction Grounding**（已实现）：受控 lava 场景，left / center / right，`{"target","direction"}`，hidden GT，`max_steps=1`，WAIT only。
+* **D2-02 Spatial Region Grounding**（已实现）：同一院落，yaw×pitch 把岩浆放到 3×3 区域（`upper_left` … `lower_right`），`{"target","region"}`，仍无 motor。
 
 D1 v2 原则：单帧、单目标、二分类、受控场景、可靠 hidden ground truth、肉眼清晰、POV 640×360。
 
@@ -19,14 +32,21 @@ D1 v2 原则：单帧、单目标、二分类、受控场景、可靠 hidden gro
 - Phase 2A/2B inventory D1
 - Phase 2C lava presence
 - 旧 64×64 D1 v2 抓帧
+- 早期错误 D2：camera yaw 居中（旧 D2-01）与 walk-and-stop（旧 D2-02）。historical / exploratory pilot，不是正式 D2 result。属于未来 D3。
 
 ## Current Task
 
-D1 Pilot 已完成。下一步进入 **D2 Grounding**。
+**D2-02 Spatial Region Grounding 已关闭。** Diagnostic Grounding（Where?）最小闭环完成。下一步不要扩导航、检测或正式 D3。
 
-Lava 帧：`obsidianlink/experiments/runs/d1_01_scene_validity/`
-Water 帧：`obsidianlink/experiments/runs/d1_02_scene_validity/`
-Water 结果：`obsidianlink/experiments/runs/d1_02_water_Qwen3-VL-*_1ep_*.json`
+D1 Pilot 已关闭，不再扩 D1 物体类、不调 prompt、不做 D1 大规模统计。
+
+D2-01 帧：`obsidianlink/experiments/runs/d2_01_scene_validity/`
+D2-02 帧：`obsidianlink/experiments/runs/d2_02_region_validity/`
+
+历史 exploratory 帧（保留）：
+
+- 旧 D2-01 camera alignment：`obsidianlink/experiments/runs/d2_01_direction_Qwen3-VL-*`
+- 旧 D2-02 target approach：`obsidianlink/experiments/runs/d2_02_scene_validity/` 与 `d2_02_approach_Qwen3-VL-*`
 
 ## Phase 2C lava presence — PILOT ONLY
 
@@ -95,13 +115,7 @@ OBSIDIANLINK_OFFLINE=1 conda run -n mc-agent python main.py
 PYTHONPATH=. conda run -n mc-agent python -m pytest tests/
 ```
 
-158 个离线单测覆盖：Action payload、bounded action translation（含 Treechop /
-Navigate 两套 action space）、HeuristicModelClient cycle、ReactiveAgent 解析
-（含 JSON 错误兜底 + 新的 `last_report` 提取路径）、inventory 摘要新旧两种
-shape、offline env smoke、**Phase 2A 新增**：PerceptionReport 构造 / 解析
-edge case、D1 evaluator 4 种 failure 模式、ReactiveAgent 暴露 last_report、
-D1 agent 从 observation 派生 report、Runner success/failure/exception 路径、
-Runner 转发 agent-visible observation 而非 post-step 观察。
+191 个离线单测覆盖 D1 / Phase 1 / D2-01 Direction Grounding / D2-02 Spatial Region Grounding（均无 motor）。
 
 ## Completed
 
@@ -173,9 +187,31 @@ Runner 转发 agent-visible observation 而非 post-step 观察。
   * D1-02 Water Presence：同一院落；DrawBlock 不能画水，正例 env-side 倒水桶。2B 正例漏检、负例对；4B 正负均对。n=1，不作 capability 结论。
   * 不再增加 Obsidian / Iron / Log 等 D1 task。下一步是 D2 Grounding。
 
+* **D2-01 Direction Grounding — complete (2026-08-19, redesigned)**
+  * 定义：给定语义目标与第一人称 RGB，判断目标相对画面的水平方向（left / center / right）。无 camera / movement。
+  * 复用 D1-01 岩浆正例院落，三个 spawn yaw（left +35° / center 0° / right −35°），POV 640×360，`max_steps=1`，WAIT only。
+  * Hidden GT 由 scene 的 spawn-yaw 映射产生，挂在 `Task.ground_truth`，不进 Observation / prompt。
+  * 输出 `DirectionGroundingReport`：`{"target","direction"}`。Evaluator：`ok` / `grounding_error` / `output_protocol_error`。
+  * MineRL camera `[pitch, yaw]` 适配器修正保留（D3 需要；D2 不再执行 camera）。
+  * Scene-validity（既有）：left/center/right 岩浆质心 nx ≈ 0.21 / 0.50 / 0.79。
+  * Live n=1（pipeline / pilot，非 capability）：Qwen3-VL-2B 3/3 ok；Qwen3-VL-4B 3/3 ok。未因结果改 prompt。
+
+* **D2-02 Spatial Region Grounding — complete (2026-08-19)**
+  * 定义：给定语义目标与第一人称 RGB，判断目标落在 3×3 画面区域中的哪一格。无 camera / movement。
+  * 同一岩浆院落；9 个 spawn pose（yaw ±35°/0° × pitch 45°/25°/8°），POV 640×360，`max_steps=1`，WAIT only。
+  * Hidden GT 由 scene 的 (yaw, pitch) → region 映射产生，挂在 `Task.ground_truth`，不进 Observation / prompt。
+  * 输出 `SpatialRegionGroundingReport`：`{"target","region"}`。Evaluator：`ok` / `grounding_error` / `output_protocol_error`。
+  * Scene-validity：9/9 岩浆质心落入对应 3×3 bin。
+  * Live n=1（pipeline / pilot，非 capability）：Qwen3-VL-2B 3/9 ok（protocol 4、grounding 2）；Qwen3-VL-4B 6/9 ok（protocol 1、grounding 2）。未因结果改 prompt。
+
+* **Historical / exploratory D2 (not a formal D2 result, 2026-08-19)**
+  * 旧 D2-01 把 direction classification 与 camera yaw 居中绑在一起（`max_steps=8`，`orientation_error`）。Live n=1：2B 3/3 ok；4B 1/3。属于未来 **D3 Camera Alignment**。
+  * 旧 D2-02 把 walk-and-stop 写进 Grounding（`approach_error` / `overshoot_error`）。Live n=1：2B WAIT 原地；4B 走过头。属于未来 **D3 Target Approach**。
+  * 实验 JSON / 帧保留在 `obsidianlink/experiments/runs/`，不作 D2 capability 结论。本轮不实现 D3。
+
 ## Next
 
-**D2 Grounding.** D1 Perception Pilot 已关闭，不再扩 D1 物体类、不调 prompt、不做 D1 大规模统计。
+**D3 Manipulation（Camera Alignment / Target Approach），或根据 D2 真实失败决定下一步。** 不增加导航 / 规划 / 检测框架。不把 motor 写回 D2。
 
 ## Blocked
 

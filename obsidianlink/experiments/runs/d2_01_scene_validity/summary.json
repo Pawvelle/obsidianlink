@@ -1,0 +1,143 @@
+{
+  "scenes": [
+    {
+      "label": "left",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        24.938784722222223,
+        14.504769965277777,
+        18.33641059027778
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_01_scene_validity/left_native_640x360.png",
+      "orange_fraction": 0.054375,
+      "orange_centroid_x": 133.4750159642401,
+      "orange_centroid_nx": 0.20855471244412516,
+      "env_id": "MineRLD201Left-v0",
+      "spawn_yaw": 35.0,
+      "hidden_state": {
+        "yaw": 35.0,
+        "pitch": 25.0,
+        "xpos": 0.5,
+        "ypos": 101.0,
+        "zpos": 0.5
+      },
+      "reset_seconds": 22.83753191599999,
+      "warmup_steps": 20
+    },
+    {
+      "label": "center",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        22.767595486111112,
+        15.402712673611111,
+        21.102269965277777
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_01_scene_validity/center_native_640x360.png",
+      "orange_fraction": 0.031063368055555554,
+      "orange_centroid_x": 317.7941875087327,
+      "orange_centroid_nx": 0.49655341798239483,
+      "env_id": "MineRLD201Center-v0",
+      "spawn_yaw": 0.0,
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.5,
+        "ypos": 101.0,
+        "zpos": 0.5
+      },
+      "reset_seconds": 24.303348082999946,
+      "warmup_steps": 20
+    },
+    {
+      "label": "right",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        26.206050347222224,
+        16.61697482638889,
+        20.622061631944444
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_01_scene_validity/right_native_640x360.png",
+      "orange_fraction": 0.054375,
+      "orange_centroid_x": 503.5757503192848,
+      "orange_centroid_nx": 0.7868371098738824,
+      "env_id": "MineRLD201Right-v0",
+      "spawn_yaw": -35.0,
+      "hidden_state": {
+        "yaw": -35.0,
+        "pitch": 25.0,
+        "xpos": 0.5,
+        "ypos": 101.0,
+        "zpos": 0.5
+      },
+      "reset_seconds": 23.223354916000062,
+      "warmup_steps": 20
+    }
+  ],
+  "camera_sign_check": {
+    "before": {
+      "label": "camera_before",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        21.523307291666665,
+        13.280308159722223,
+        18.806684027777777
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_01_scene_validity/camera_before_native_640x360.png",
+      "orange_fraction": 0.031063368055555554,
+      "orange_centroid_x": 317.7941875087327,
+      "orange_centroid_nx": 0.49655341798239483,
+      "hidden_state": {
+        "yaw": 0.0,
+        "pitch": 25.0,
+        "xpos": 0.5,
+        "ypos": 101.0,
+        "zpos": 0.5
+      }
+    },
+    "after": {
+      "label": "camera_after_plus_yaw20",
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "mean_rgb": [
+        22.584249131944443,
+        13.670685763888889,
+        18.69265625
+      ],
+      "native_png": "obsidianlink/experiments/runs/d2_01_scene_validity/camera_after_plus_yaw20_native_640x360.png",
+      "orange_fraction": 0.036822916666666664,
+      "orange_centroid_x": 223.4229137199434,
+      "orange_centroid_nx": 0.3490983026874116,
+      "hidden_state": {
+        "yaw": 20.000002,
+        "pitch": 25.0,
+        "xpos": 0.5,
+        "ypos": 101.0,
+        "zpos": 0.5
+      }
+    },
+    "centroid_dx": -0.14745511529498323,
+    "expected": "dx < 0 (lava moves left after +yaw)",
+    "hidden_yaw_before": 0.0,
+    "hidden_yaw_after": 20.000002
+  },
+  "vlm_ran": false
+}

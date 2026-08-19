@@ -10,9 +10,15 @@ episode finishes, plus optional channels specific to a task family:
   the task cares about (e.g. a :class:`PerceptionReport` for D1).
 * ``observation`` — the *agent-visible* observation the Agent most
   recently acted on. For Phase 2A this is also the
-  evaluator-only ground truth (D1 has no server-side secret). For
-  D2 / D3 / L-level tasks this must be replaced with a
-  server-side world-state channel; that is a TODO.
+  evaluator-only ground truth (D1 has no server-side secret).
+* ``final_observation`` — the observation *after* the last
+  ``env.step()``. D2 uses this when a visual check of the
+  post-action frame is useful; D1 ignores it.
+* ``hidden_state`` — evaluator-only world snapshot (e.g. D2-01
+  yaw from MineRL monitors). Must never have been shown to the
+  Agent.
+* ``ground_truth`` — task-level hidden truth (D1 presence bool,
+  D2-01 initial direction).
 
 The primary metric set (success / steps / model_calls /
 invalid_actions / elapsed_time) is fixed by the Development Plan; the
@@ -42,5 +48,7 @@ class Evaluator(ABC):
         observation: Any = None,
         raw_response: Any = None,
         ground_truth: Any = None,
+        final_observation: Any = None,
+        hidden_state: Any = None,
     ) -> Result:
         raise NotImplementedError

@@ -44,6 +44,11 @@ class MineRLEnvironment(Environment):
         self._last_pov: Any = None
         self._last_inventory: dict[str, int] = {}
         self._last_compass: Any = None
+        # Gym ``info`` from the most recent ``step()``. Monitors such
+        # as location/yaw live here, **not** on :class:`Observation`.
+        # ``reset()`` has no info (Gym 0.23); empty until the first
+        # step. D2-01 reads this through ControlledSceneEnv.hidden_state.
+        self._last_info: dict[str, Any] = {}
 
     @property
     def env_id(self) -> str:
@@ -56,6 +61,15 @@ class MineRLEnvironment(Environment):
         ``None`` until the env has been reset at least once.
         """
         return self._action_keys
+
+    @property
+    def last_info(self) -> dict[str, Any]:
+        """Copy of the gym ``info`` dict from the last ``step()``.
+
+        Empty after ``reset()`` until at least one step has run.
+        Never copied onto :class:`Observation`.
+        """
+        return dict(self._last_info)
 
     def reset(self) -> Observation:
         # Local imports: keep MineRL / Java / gym out of the module-level
@@ -72,6 +86,7 @@ class MineRLEnvironment(Environment):
             self.close()
         # Invalidate the action-space cache; the new env may differ.
         self._action_keys = None
+        self._last_info = {}
         self._env = gym.make(self._env_id)
         raw = self._env.reset()
         return self._convert(raw)
@@ -85,7 +100,8 @@ class MineRLEnvironment(Environment):
         if self._action_keys is None:
             self._action_keys = tuple(self._env.action_space.spaces.keys())
         minerl_action = self._to_minerl_action(action, self._action_keys)
-        raw, _reward, _done, _info = self._env.step(minerl_action)
+        raw, _reward, _done, info = self._env.step(minerl_action)
+        self._last_info = info if isinstance(info, dict) else {}
         return self._convert(raw)
 
     def close(self) -> None:
@@ -133,7 +149,10 @@ class MineRLEnvironment(Environment):
         if "right" in keyset:
             out["right"] = 1 if action.dz > 0 else 0
         if "camera" in keyset:
-            out["camera"] = [float(action.yaw), float(action.pitch)]
+            # MineRL CameraAction is ``[delta_pitch, delta_yaw]``.
+            # Swapping these axes makes yaw turn into pitch, which
+            # D2-01 cannot survive. See minerl CameraAction docstring.
+            out["camera"] = [float(action.pitch), float(action.yaw)]
         if "use" in keyset:
             out["use"] = 1 if action.type is ActionType.USE else 0
         if "jump" in keyset:

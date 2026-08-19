@@ -47,6 +47,8 @@ class _StubEvaluator(Evaluator):
         observation=None,
         raw_response=None,
         ground_truth=None,
+        final_observation=None,
+        hidden_state=None,
     ) -> Result:
         return Result(
             task_id=task.task_id,

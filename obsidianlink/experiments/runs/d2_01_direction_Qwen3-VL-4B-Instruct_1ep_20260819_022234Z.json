@@ -1,0 +1,161 @@
+{
+  "task_id": "d2_01_target_direction",
+  "resolution": [
+    640,
+    360
+  ],
+  "max_steps": 8,
+  "model": "/Users/joey/Documents/Projects/ObsidianLink/models/Qwen3-VL-4B-Instruct",
+  "model_name": "Qwen3-VL-4B-Instruct",
+  "device": "auto",
+  "conditions": [
+    "left",
+    "center",
+    "right"
+  ],
+  "env_ids": {
+    "left": "MineRLD201Left-v0",
+    "center": "MineRLD201Center-v0",
+    "right": "MineRLD201Right-v0"
+  },
+  "spawn_yaws": {
+    "left": 35.0,
+    "center": 0.0,
+    "right": -35.0
+  },
+  "warmup_steps": 20,
+  "num_episodes_per_condition": 1,
+  "num_episodes": 3,
+  "total_wall_time": 248.12692025000024,
+  "frames_dir": "obsidianlink/experiments/runs/d2_01_direction_Qwen3-VL-4B-Instruct_1ep_20260819_022234Z_frames",
+  "aggregate": {
+    "n_episodes": 3,
+    "success_rate": 0.3333333333333333,
+    "orientation_error_rate": 0.6666666666666666,
+    "output_protocol_error_rate": 0.0,
+    "reasons": {
+      "orientation_error": 2,
+      "ok": 1
+    },
+    "by_condition": {
+      "left": {
+        "n": 1,
+        "n_success": 0,
+        "n_orientation_error": 1,
+        "n_protocol_error": 0
+      },
+      "center": {
+        "n": 1,
+        "n_success": 1,
+        "n_orientation_error": 0,
+        "n_protocol_error": 0
+      },
+      "right": {
+        "n": 1,
+        "n_success": 0,
+        "n_orientation_error": 1,
+        "n_protocol_error": 0
+      }
+    }
+  },
+  "episodes": [
+    {
+      "condition": "left",
+      "episode": 1,
+      "success": false,
+      "reason": "orientation_error",
+      "report_direction": "center",
+      "initial_direction": "left",
+      "final_yaw": 14.999999,
+      "yaw_error": 14.999999000000003,
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 85.92947991699975,
+      "wall_time": 85.92956262500002,
+      "evidence": {
+        "report_direction": "center",
+        "initial_direction": "left",
+        "final_yaw": 14.999999,
+        "target_yaw": 0.0,
+        "yaw_error": 14.999999000000003,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"direction\": \"center\",\n  \"action\": \"wait\",\n  \"yaw\": 0\n}",
+        "hidden_state": {
+          "yaw": 14.999999,
+          "pitch": 25.0,
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5
+        },
+        "reason": "orientation_error"
+      }
+    },
+    {
+      "condition": "center",
+      "episode": 1,
+      "success": true,
+      "reason": "ok",
+      "report_direction": "center",
+      "initial_direction": "center",
+      "final_yaw": 0.0,
+      "yaw_error": 0.0,
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 77.60561125000004,
+      "wall_time": 77.60590000000002,
+      "evidence": {
+        "report_direction": "center",
+        "initial_direction": "center",
+        "final_yaw": 0.0,
+        "target_yaw": 0.0,
+        "yaw_error": 0.0,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"direction\": \"center\",\n  \"action\": \"wait\",\n  \"yaw\": 0\n}",
+        "hidden_state": {
+          "yaw": 0.0,
+          "pitch": 25.0,
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5
+        },
+        "reason": "ok"
+      }
+    },
+    {
+      "condition": "right",
+      "episode": 1,
+      "success": false,
+      "reason": "orientation_error",
+      "report_direction": "center",
+      "initial_direction": "right",
+      "final_yaw": -19.999998,
+      "yaw_error": -19.999998000000005,
+      "steps": 8,
+      "model_calls": 8,
+      "invalid_actions": 0,
+      "elapsed_time": 84.13716345800003,
+      "wall_time": 84.13750016599988,
+      "evidence": {
+        "report_direction": "center",
+        "initial_direction": "right",
+        "final_yaw": -19.999998,
+        "target_yaw": 0.0,
+        "yaw_error": -19.999998000000005,
+        "yaw_tolerance": 12.0,
+        "raw_response": "{\n  \"direction\": \"center\",\n  \"action\": \"wait\",\n  \"yaw\": 0\n}",
+        "hidden_state": {
+          "yaw": -19.999998,
+          "pitch": 25.0,
+          "xpos": 0.5,
+          "ypos": 101.0,
+          "zpos": 0.5
+        },
+        "reason": "orientation_error"
+      }
+    }
+  ],
+  "d2_02": false,
+  "pilot": false
+}

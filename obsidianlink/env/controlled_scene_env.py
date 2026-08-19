@@ -1,4 +1,4 @@
-"""Controlled-scene env for D1 v2 perception (and the Phase 2C lava pilot).
+"""Controlled-scene env for D1 v2 perception and D2-01 grounding.
 
 This is a thin wrapper around :class:`obsidianlink.env.minerl.MineRLEnvironment`
 that points at one of the custom herobraine env specs defined in
@@ -14,10 +14,17 @@ The ground-truth channel is the class attribute
 target name (``"lava"`` / ``"water"``) to a
 bool meaning "is this target present in the current world?".
 
-**Crucially**, ``target_truths`` is NOT part of the agent-visible
-:class:`Observation` and is never written into a prompt. The
-runner reads it via :func:`getattr` and forwards it to the
-evaluator as ``ground_truth=``; the agent has no access.
+D2-01 / D2-02 hidden ground truth is the intended screen-space
+label (direction or 3×3 region), derived from spawn pose at
+scene construction and attached to ``Task.ground_truth``. It
+never enters :class:`Observation`. ``hidden_state`` remains
+evaluator-only plumbing (pose monitors are optional) and is
+**not** part of :class:`Observation`.
+
+**Crucially**, ``target_truths`` and ``hidden_state`` are NOT
+part of the agent-visible :class:`Observation` and are never
+written into a prompt. The runner reads them via :func:`getattr`
+and forwards them to the evaluator; the agent has no access.
 """
 
 from __future__ import annotations
@@ -46,6 +53,18 @@ _ENV_TARGET_TRUTHS: dict[str, dict[str, bool]] = {
     "MineRLD1LavaNegative-v0": {"lava": False},
     "MineRLD1WaterPositive-v0": {"water": True},
     "MineRLD1WaterNegative-v0": {"water": False},
+    "MineRLD201Left-v0": {"lava": True},
+    "MineRLD201Center-v0": {"lava": True},
+    "MineRLD201Right-v0": {"lava": True},
+    "MineRLD202UpperLeft-v0": {"lava": True},
+    "MineRLD202UpperCenter-v0": {"lava": True},
+    "MineRLD202UpperRight-v0": {"lava": True},
+    "MineRLD202CenterLeft-v0": {"lava": True},
+    "MineRLD202Center-v0": {"lava": True},
+    "MineRLD202CenterRight-v0": {"lava": True},
+    "MineRLD202LowerLeft-v0": {"lava": True},
+    "MineRLD202LowerCenter-v0": {"lava": True},
+    "MineRLD202LowerRight-v0": {"lava": True},
 }
 
 
@@ -98,6 +117,15 @@ class ControlledSceneEnv(Environment):
         # Internal MineRL env. We never expose this to the agent.
         self._env: MineRLEnvironment = MineRLEnvironment(env_id=env_id)
 
+    @property
+    def hidden_state(self) -> dict[str, Any]:
+        """Evaluator-only pose snapshot from MineRL monitors.
+
+        Empty until at least one env-side step (warmup counts).
+        Never copied onto :class:`Observation`.
+        """
+        return _hidden_pose_from_info(getattr(self._env, "last_info", {}))
+
     # ------------------------------------------------------------------
     # Environment protocol
     # ------------------------------------------------------------------
@@ -122,6 +150,37 @@ class ControlledSceneEnv(Environment):
 
     def close(self) -> None:
         self._env.close()
+
+
+def _scalar(value: Any) -> float | None:
+    """Coerce a MineRL monitor value (numpy scalar / 0-d array) to float."""
+    if value is None:
+        return None
+    try:
+        size = getattr(value, "size", None)
+        if size == 1:
+            return float(value.reshape(-1)[0])
+        return float(value)
+    except (TypeError, ValueError, AttributeError, IndexError):
+        return None
+
+
+def _hidden_pose_from_info(info: Any) -> dict[str, Any]:
+    """Pull yaw / pitch / xyz out of a gym info dict. All keys optional."""
+    if not isinstance(info, Mapping):
+        return {}
+    loc = info.get("location_stats")
+    if not isinstance(loc, Mapping):
+        # Some MineRL builds flatten monitor keys onto info itself.
+        loc = info
+    pose = {
+        "yaw": _scalar(loc.get("yaw")),
+        "pitch": _scalar(loc.get("pitch")),
+        "xpos": _scalar(loc.get("xpos")),
+        "ypos": _scalar(loc.get("ypos")),
+        "zpos": _scalar(loc.get("zpos")),
+    }
+    return {k: v for k, v in pose.items() if v is not None}
 
 
 __all__ = ["ControlledSceneEnv"]
