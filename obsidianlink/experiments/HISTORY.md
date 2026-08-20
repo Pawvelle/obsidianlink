@@ -1,6 +1,9 @@
 # Experiment records
 
-This directory stores live-run JSON and frames.
+Git tracks this HISTORY, experiment scripts, and small evidence
+summaries under `evidence/`. Live raw JSON / PNG under `runs/` stay
+on the local machine and are gitignored. Deleting Git blobs is not
+deleting the experimental conclusions below.
 
 ## Status of historical results
 
@@ -65,17 +68,19 @@ This is **not** an L1 Agent or Oracle capability result (`oracle_or_agent_run: f
 
 ### L1 mechanical interaction — 2026-08-20
 
-`l1_mechanics_20260820_033330Z.json` and `l1_mechanics_20260820_033330Z_frames/` are a **scripted mechanics** record on the formal env `MineRLL1Controlled-v0`. Not an Oracle, Evaluator, or Agent capability result (`oracle_or_agent_run: false`).
+Canonical live run `l1_mechanics_20260820_033330Z` (local `runs/` only). Git keeps `evidence/l1_mechanics_summary.json`. Not an Oracle, Evaluator, or Agent capability result (`oracle_or_agent_run: false`).
 
 Live evidence:
 
+* env `MineRLL1Controlled-v0`; 266 steps; wall time ≈ 30.3s
 * empty bucket scooped a lava source → `lava_bucket` (Hot Stuff); pool missing one source
 * native `use` placed lava, then water; lava_frac dropped and POV shows a new obsidian block under water
 * cobblestone placed via hotbar + `use` (no PlaceBlock): 64 → 63
 * iron pickaxe `attack` broke it and the drop was picked up: 63 → 64
 * no EquipAction, no ObservationFromGrid, no DrawBlock obsidian, no preloaded lava_bucket
+* **NEW OBSIDIAN = TRUE**
 
-Earlier attempts `032340Z` (scoop miss on grass rim), `032545Z` / `032740Z` / `032915Z` (obsidian yes, cobble break no because crosshair hit water / current pushed the player) are debugging records.
+Earlier attempts `032340Z` (scoop miss on grass rim), `032545Z` / `032740Z` / `032915Z` (obsidian yes, cobble break no because crosshair hit water / current pushed the player) are local debugging records, not git-tracked.
 
 ### Other historical pilots
 

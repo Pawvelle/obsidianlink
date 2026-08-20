@@ -21,3 +21,9 @@ dist/
 /results/
 /vendor/
 obsidianlink/logs/
+
+# Live experiment raw outputs stay on the local machine.
+# Git tracks experiment scripts, HISTORY.md, and small evidence
+# summaries — not JSON traces or PNG frames.
+obsidianlink/experiments/runs/*
+!obsidianlink/experiments/runs/.gitkeep

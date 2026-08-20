@@ -1,0 +1,28 @@
+{
+  "kind": "l1_mechanical_interaction_summary",
+  "run_id": "l1_mechanics_20260820_033330Z",
+  "env_id": "MineRLL1Controlled-v0",
+  "success": true,
+  "scooped_lava": true,
+  "placed_lava": true,
+  "placed_water": true,
+  "new_obsidian": true,
+  "placed_cobblestone": true,
+  "broke_cobblestone": true,
+  "steps": 266,
+  "wall_time": 30.290476958,
+  "used_equip_action": false,
+  "used_observation_from_grid": false,
+  "used_placeblock": false,
+  "drawblock_obsidian": false,
+  "preloaded_lava_bucket": false,
+  "oracle_or_agent_run": false,
+  "inventory_delta": {
+    "scoop": "bucket 1→0, lava_bucket 0→1",
+    "pour_lava": "lava_bucket 1→0, bucket 0→1",
+    "place_water": "water_bucket 1→0, bucket 1→2",
+    "place_cobble": "cobblestone 64→63",
+    "break_cobble": "cobblestone 63→64"
+  },
+  "raw_artifacts": "local obsidianlink/experiments/runs/; not git-tracked"
+}
