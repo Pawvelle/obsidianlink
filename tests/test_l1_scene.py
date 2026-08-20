@@ -62,7 +62,14 @@ def test_floor_is_grass_not_obsidian_platform() -> None:
     assert L1_LAYOUT["prebuilt_portal"] is False
 
 
-def test_starting_inventory_has_required_items_and_no_lava_bucket() -> None:
+def test_l1_equip_items_include_lava_bucket_for_selected_item() -> None:
+    from obsidianlink.env.l1_scene import L1_EQUIP_ITEMS, L1_INV_ITEMS
+
+    assert "lava_bucket" in L1_INV_ITEMS
+    assert "lava_bucket" in L1_EQUIP_ITEMS
+    assert "lava_bucket" not in {
+        item["type"] for item in L1_INVENTORY.values()
+    }
     by_type = {item["type"]: item["quantity"] for item in L1_INVENTORY.values()}
     assert by_type["water_bucket"] == 1
     assert by_type["bucket"] == 1
@@ -110,3 +117,5 @@ def test_l1_spec_has_hotbar_and_no_equip() -> None:
     assert "inventory" in obs_names
     assert "equipped_items" in obs_names
     assert not any("grid" in n.lower() for n in obs_names)
+    equipped = [h for h in spec.observables if h.to_string() == "equipped_items"][0]
+    assert "lava_bucket" in equipped._items

@@ -63,6 +63,20 @@ Current live smoke: `l1_env_smoke_20260819_175245Z.json` and
 
 This is **not** an L1 Agent or Oracle capability result (`oracle_or_agent_run: false`).
 
+### L1 mechanical interaction — 2026-08-20
+
+`l1_mechanics_20260820_033330Z.json` and `l1_mechanics_20260820_033330Z_frames/` are a **scripted mechanics** record on the formal env `MineRLL1Controlled-v0`. Not an Oracle, Evaluator, or Agent capability result (`oracle_or_agent_run: false`).
+
+Live evidence:
+
+* empty bucket scooped a lava source → `lava_bucket` (Hot Stuff); pool missing one source
+* native `use` placed lava, then water; lava_frac dropped and POV shows a new obsidian block under water
+* cobblestone placed via hotbar + `use` (no PlaceBlock): 64 → 63
+* iron pickaxe `attack` broke it and the drop was picked up: 63 → 64
+* no EquipAction, no ObservationFromGrid, no DrawBlock obsidian, no preloaded lava_bucket
+
+Earlier attempts `032340Z` (scoop miss on grass rim), `032545Z` / `032740Z` / `032915Z` (obsidian yes, cobble break no because crosshair hit water / current pushed the player) are debugging records.
+
 ### Other historical pilots
 
 D1 / D2 / D3 live JSON files remain useful as pipeline / scene-validity

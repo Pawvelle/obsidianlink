@@ -73,6 +73,7 @@ L1_EQUIP_ITEMS = (
     "none",
     "water_bucket",
     "bucket",
+    "lava_bucket",
     "cobblestone",
     "iron_pickaxe",
     "flint_and_steel",

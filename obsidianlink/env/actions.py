@@ -43,5 +43,9 @@ class Action:
     # HOTBAR target is slot ``"1"``–``"9"`` (or ``"hotbar.N"``).
     target: str = ""
 
+    # Optional modifier. Needed to place against a block without
+    # falling into fluids. Maps to MineRL ``sneak``, not a new verb.
+    sneak: bool = False
+
 
 __all__ = ["Action", "ActionType"]

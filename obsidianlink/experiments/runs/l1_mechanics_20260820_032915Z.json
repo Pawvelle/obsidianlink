@@ -1,0 +1,6501 @@
+{
+  "kind": "l1_mechanical_interaction",
+  "env_id": "MineRLL1Controlled-v0",
+  "started_utc": "20260820_032915Z",
+  "prebuilt_portal_frame": false,
+  "used_equip_action": false,
+  "used_observation_from_grid": false,
+  "used_placeblock": false,
+  "drawblock_obsidian": false,
+  "preloaded_lava_bucket": false,
+  "oracle_or_agent_run": false,
+  "checks": {
+    "no_equip": {
+      "ok": true,
+      "has_hotbar": true
+    },
+    "start_inventory": {
+      "ok": true,
+      "got": {
+        "bucket": 1,
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1,
+        "water_bucket": 1
+      }
+    },
+    "scoop_lava": {
+      "ok": true,
+      "before": {
+        "bucket": 1,
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1,
+        "water_bucket": 1
+      },
+      "after": {
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1,
+        "lava_bucket": 1,
+        "water_bucket": 1
+      },
+      "selected_item": "lava_bucket",
+      "selected_is_lava_bucket": true
+    },
+    "place_lava": {
+      "ok": true,
+      "before": {
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1,
+        "lava_bucket": 1,
+        "water_bucket": 1
+      },
+      "after": {
+        "bucket": 1,
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1,
+        "water_bucket": 1
+      },
+      "visual": {
+        "present": true,
+        "shape": [
+          360,
+          640,
+          3
+        ],
+        "frame_mean": 73.82553530092592,
+        "lava_frac": 0.5751684712652382,
+        "obsidian_frac": 0.0008518210040130234,
+        "region_mean_r": 141.3368682861328,
+        "region_mean_g": 80.2157211303711,
+        "region_mean_b": 25.08253288269043
+      }
+    },
+    "place_water": {
+      "ok": true,
+      "before": {
+        "bucket": 1,
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1,
+        "water_bucket": 1
+      },
+      "after": {
+        "bucket": 2,
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1
+      }
+    },
+    "new_obsidian": {
+      "ok": true,
+      "scooped": true,
+      "poured": true,
+      "watered": true,
+      "lava_frac_before": 0.5751684712652382,
+      "lava_frac_after": 0.00018929355644733853,
+      "obsidian_frac_before": 0.0008518210040130234,
+      "obsidian_frac_after": 0.03952449458620429,
+      "lava_visual_dropped": true,
+      "obsidian_visual_rose": true,
+      "reliability": "inventory_delta + POV lava/obsidian fractions; no ObservationFromGrid; not a geometric block proof",
+      "drawblock_obsidian": false,
+      "preloaded_lava_bucket": false
+    },
+    "place_cobble": {
+      "ok": true,
+      "before": {
+        "bucket": 2,
+        "cobblestone": 64,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1
+      },
+      "after": {
+        "bucket": 2,
+        "cobblestone": 63,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1
+      }
+    },
+    "break_cobble": {
+      "ok": false,
+      "before": {
+        "bucket": 2,
+        "cobblestone": 63,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1
+      },
+      "after": {
+        "bucket": 2,
+        "cobblestone": 63,
+        "flint_and_steel": 1,
+        "iron_pickaxe": 1
+      },
+      "note": "require cobblestone count to rise after mining (drop pickup)"
+    }
+  },
+  "limitations": [],
+  "error": null,
+  "failed_at": "break_cobble",
+  "new_obsidian": {
+    "ok": true,
+    "scooped": true,
+    "poured": true,
+    "watered": true,
+    "lava_frac_before": 0.5751684712652382,
+    "lava_frac_after": 0.00018929355644733853,
+    "obsidian_frac_before": 0.0008518210040130234,
+    "obsidian_frac_after": 0.03952449458620429,
+    "lava_visual_dropped": true,
+    "obsidian_visual_rose": true,
+    "reliability": "inventory_delta + POV lava/obsidian fractions; no ObservationFromGrid; not a geometric block proof",
+    "drawblock_obsidian": false,
+    "preloaded_lava_bucket": false
+  },
+  "action_space_keys": [
+    "attack",
+    "back",
+    "camera",
+    "forward",
+    "hotbar.1",
+    "hotbar.2",
+    "hotbar.3",
+    "hotbar.4",
+    "hotbar.5",
+    "hotbar.6",
+    "hotbar.7",
+    "hotbar.8",
+    "hotbar.9",
+    "jump",
+    "left",
+    "right",
+    "sneak",
+    "sprint",
+    "use"
+  ],
+  "reset": {
+    "inventory": {
+      "bucket": 1,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "water_bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 70.94347366898148,
+      "lava_frac": 0.5861096388278944,
+      "obsidian_frac": 0.0,
+      "region_mean_r": 133.2795867919922,
+      "region_mean_g": 83.92308807373047,
+      "region_mean_b": 27.59956932067871
+    },
+    "pose": {
+      "xpos": 0.5,
+      "ypos": 4.0,
+      "zpos": 0.5,
+      "yaw": 0.0,
+      "pitch": 25.0
+    }
+  },
+  "before_scoop": {
+    "inventory": {
+      "bucket": 1,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 79.74708912037038,
+      "lava_frac": 0.939691072915878,
+      "obsidian_frac": 0.0008518210040130234,
+      "region_mean_r": 189.41868591308594,
+      "region_mean_g": 91.02867889404297,
+      "region_mean_b": 12.836393356323242
+    },
+    "pose": {
+      "xpos": 0.5,
+      "ypos": 4.0,
+      "zpos": 4.55906703095531,
+      "yaw": 0.0,
+      "pitch": 45.0
+    }
+  },
+  "after_scoop": {
+    "inventory": {
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "lava_bucket": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "lava_bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 76.78023726851852,
+      "lava_frac": 0.8726811539335201,
+      "obsidian_frac": 0.000908609070947225,
+      "region_mean_r": 178.45010375976562,
+      "region_mean_g": 82.7837142944336,
+      "region_mean_b": 16.842317581176758
+    },
+    "pose": {
+      "xpos": 0.5,
+      "ypos": 4.0,
+      "zpos": 4.578250920310547,
+      "yaw": 0.0,
+      "pitch": 45.0
+    }
+  },
+  "before_pour": {
+    "inventory": {
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "lava_bucket": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "lava_bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 73.21812210648149,
+      "lava_frac": 0.2915310062845461,
+      "obsidian_frac": 0.000908609070947225,
+      "region_mean_r": 106.09290313720703,
+      "region_mean_g": 96.50012969970703,
+      "region_mean_b": 45.27835464477539
+    },
+    "pose": {
+      "xpos": -0.5744439892326059,
+      "ypos": 4.0,
+      "zpos": 2.863875978093633,
+      "yaw": 90.0,
+      "pitch": 58.0
+    }
+  },
+  "after_pour": {
+    "inventory": {
+      "bucket": 1,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 73.82553530092592,
+      "lava_frac": 0.5751684712652382,
+      "obsidian_frac": 0.0008518210040130234,
+      "region_mean_r": 141.3368682861328,
+      "region_mean_g": 80.2157211303711,
+      "region_mean_b": 25.08253288269043
+    },
+    "pose": {
+      "xpos": -0.6066775411026661,
+      "ypos": 4.0,
+      "zpos": 2.863875978093634,
+      "yaw": 90.0,
+      "pitch": 58.0
+    }
+  },
+  "before_water": {
+    "inventory": {
+      "bucket": 1,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1,
+      "water_bucket": 1
+    },
+    "selected_item": "water_bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 74.04396556712963,
+      "lava_frac": 0.3336866813053684,
+      "obsidian_frac": 0.0010979026273945636,
+      "region_mean_r": 124.61062622070312,
+      "region_mean_g": 85.92178344726562,
+      "region_mean_b": 37.572330474853516
+    },
+    "pose": {
+      "xpos": -0.6066775411026661,
+      "ypos": 4.0,
+      "zpos": 2.863875978093634,
+      "yaw": 90.0,
+      "pitch": 58.0
+    }
+  },
+  "after_water": {
+    "inventory": {
+      "bucket": 2,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1
+    },
+    "selected_item": "bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 73.51285734953704,
+      "lava_frac": 0.00018929355644733853,
+      "obsidian_frac": 0.016903914590747332,
+      "region_mean_r": 53.563072204589844,
+      "region_mean_g": 84.94991302490234,
+      "region_mean_b": 112.79759216308594
+    },
+    "pose": {
+      "xpos": -0.4449271386513416,
+      "ypos": 4.0,
+      "zpos": 2.863875978093634,
+      "yaw": 90.0,
+      "pitch": 58.0
+    }
+  },
+  "after_cast": {
+    "inventory": {
+      "bucket": 2,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1
+    },
+    "selected_item": "bucket",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 75.1663064236111,
+      "lava_frac": 0.00018929355644733853,
+      "obsidian_frac": 0.03952449458620429,
+      "region_mean_r": 52.802303314208984,
+      "region_mean_g": 85.43548583984375,
+      "region_mean_b": 119.9322509765625
+    },
+    "pose": {
+      "xpos": -0.06658635382864202,
+      "ypos": 4.0,
+      "zpos": 3.1019539885000027,
+      "yaw": 90.0,
+      "pitch": 58.0
+    }
+  },
+  "before_cobble": {
+    "inventory": {
+      "bucket": 2,
+      "cobblestone": 64,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1
+    },
+    "selected_item": "cobblestone",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 69.18945167824074,
+      "lava_frac": 0.00018929355644733853,
+      "obsidian_frac": 0.03530324827742864,
+      "region_mean_r": 51.62035369873047,
+      "region_mean_g": 82.49424743652344,
+      "region_mean_b": 116.69515991210938
+    },
+    "pose": {
+      "xpos": 1.3677059448497955,
+      "ypos": 4.0,
+      "zpos": 4.032220852441038,
+      "yaw": 90.0,
+      "pitch": 58.0
+    }
+  },
+  "after_cobble": {
+    "inventory": {
+      "bucket": 2,
+      "cobblestone": 63,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1
+    },
+    "selected_item": "cobblestone",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 73.2787745949074,
+      "lava_frac": 0.00018929355644733853,
+      "obsidian_frac": 0.053115771939123195,
+      "region_mean_r": 48.28446960449219,
+      "region_mean_g": 74.281005859375,
+      "region_mean_b": 109.55667114257812
+    },
+    "pose": {
+      "xpos": 1.9348948110057966,
+      "ypos": 4.0,
+      "zpos": 4.453808770849995,
+      "yaw": 90.0,
+      "pitch": 58.0
+    }
+  },
+  "before_mine": {
+    "inventory": {
+      "bucket": 2,
+      "cobblestone": 63,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1
+    },
+    "selected_item": "iron_pickaxe",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 71.73307002314814,
+      "lava_frac": 0.00018929355644733853,
+      "obsidian_frac": 0.05796168698417506,
+      "region_mean_r": 45.862552642822266,
+      "region_mean_g": 72.24036407470703,
+      "region_mean_b": 109.07621002197266
+    },
+    "pose": {
+      "xpos": 2.009681003233731,
+      "ypos": 4.0,
+      "zpos": 4.542456991160284,
+      "yaw": 90.0,
+      "pitch": 58.0
+    }
+  },
+  "after_mine": {
+    "inventory": {
+      "bucket": 2,
+      "cobblestone": 63,
+      "flint_and_steel": 1,
+      "iron_pickaxe": 1
+    },
+    "selected_item": "iron_pickaxe",
+    "visual": {
+      "present": true,
+      "shape": [
+        360,
+        640,
+        3
+      ],
+      "frame_mean": 74.75575810185185,
+      "lava_frac": 0.07232906791852806,
+      "obsidian_frac": 0.015238131294010752,
+      "region_mean_r": 50.2271728515625,
+      "region_mean_g": 63.29753112792969,
+      "region_mean_b": 105.3169937133789
+    },
+    "pose": {
+      "xpos": 2.8448279766876343,
+      "ypos": 4.0,
+      "zpos": 5.62977219353593,
+      "yaw": 90.0,
+      "pitch": 45.0
+    }
+  },
+  "action_sequence": [
+    {
+      "step": 1,
+      "type": "hotbar",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "2",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 0.5,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 2,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 0.5,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 3,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 0.5,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 4,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 0.5980000033676625,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 5,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 0.7495080147891644,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 6,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 0.9302314020015052,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 7,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 1.126906386248464,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 8,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 1.3322909434879642,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 9,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 1.5424309281337472,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 10,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 1.7551673764449465,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 11,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 1.9693214940821295,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 12,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 2.184249659261207,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 13,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 2.399600454447249,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 14,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 2.615182005643896,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 15,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 2.830889549636968,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 16,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.0466658857048783,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 17,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.262479782250013,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 18,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.4783141868180945,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 19,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.6941597887680047,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 20,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.9100115044891046,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 21,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.125866558329662,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 22,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.341723434783653,
+          "yaw": 0.0,
+          "pitch": 25.0
+        }
+      }
+    },
+    {
+      "step": 23,
+      "type": "camera",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 20.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.459581303017034,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 24,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.523931706546929,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 25,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.55906703095531,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 26,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.578250920310547,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 27,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.578250920310547,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 28,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.578250920310547,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 29,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.578250920310547,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 30,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.578250920310547,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 31,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.578250920310547,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 32,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.578250920310547,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 33,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.578250920310547,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 34,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.480250916942884,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 35,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.328742905521382,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 36,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 4.148019518309042,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 37,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.9513445340620823,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 38,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.745959976822582,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 39,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.535819992176799,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 40,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.3230835438655992,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 41,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 3.1089294262284164,
+          "yaw": 0.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 42,
+      "type": "camera",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 30.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 2.9920012644170013,
+          "yaw": 30.000002,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 43,
+      "type": "camera",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 30.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 2.9281584806524616,
+          "yaw": 60.000004,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 44,
+      "type": "camera",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 29.99999600000001,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.5,
+          "ypos": 4.0,
+          "zpos": 2.8933003166681557,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 45,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.40199999663233754,
+          "ypos": 4.0,
+          "zpos": 2.874267756922043,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 46,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.2504919852108356,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 47,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.15249198184317317,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 48,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": 0.000983970421671282,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 49,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": -0.1797394167906696,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 50,
+      "type": "move",
+      "dx": 1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": -0.37641440103762847,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 51,
+      "type": "camera",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 13.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": -0.4837989549094661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 52,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": -0.5424309281337473,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 53,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "lava_bucket": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "lava_bucket",
+        "pose": {
+          "xpos": -0.5744439892326059,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 54,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.59192312262283,
+          "ypos": 4.0,
+          "zpos": 2.863875978093633,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 55,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6014667305624075,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 56,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 57,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 58,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 59,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 60,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 61,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 62,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 63,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 64,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 65,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 66,
+      "type": "hotbar",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "1",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "water_bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 67,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "water_bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 68,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 1,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1,
+          "water_bucket": 1
+        },
+        "selected_item": "water_bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 69,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 70,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 71,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 72,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 73,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 74,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 75,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 76,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 77,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 78,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 79,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.6066775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 80,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.5926775411026661,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 81,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.5674775409357731,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 82,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.5333175405018513,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 83,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.4919895397474949,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 84,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.4449271386513416,
+          "ypos": 4.0,
+          "zpos": 2.863875978093634,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 85,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.39737772228018053,
+          "ypos": 4.0,
+          "zpos": 2.8737754730268446,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 86,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.34943869368320746,
+          "ypos": 4.0,
+          "zpos": 2.8915945640246354,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 87,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.3011879753009404,
+          "ypos": 4.0,
+          "zpos": 2.9157493319684993,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 88,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.25268790508672234,
+          "ypos": 4.0,
+          "zpos": 2.9449726415447484,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 89,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.2039883534039711,
+          "ypos": 4.0,
+          "zpos": 2.9782507844873276,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 90,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.15694846878261287,
+          "ypos": 4.0,
+          "zpos": 3.0160840371607187,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 91,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.11123631783015385,
+          "ypos": 4.0,
+          "zpos": 3.05756137767306,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 92,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.06658635382864202,
+          "ypos": 4.0,
+          "zpos": 3.1019539885000027,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 93,
+      "type": "hotbar",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "1",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": -0.022786139400550187,
+          "ypos": 4.0,
+          "zpos": 3.1486788156133794,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 94,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.020334275358675824,
+          "ypos": 4.0,
+          "zpos": 3.197269415783705,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 95,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.06473010230037862,
+          "ypos": 4.0,
+          "zpos": 3.246041392004581,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 96,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.11014625900326691,
+          "ypos": 4.0,
+          "zpos": 3.29495846906806,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 97,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.15637867952726692,
+          "ypos": 4.0,
+          "zpos": 3.34399162680735,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 98,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.20326411096142472,
+          "ypos": 4.0,
+          "zpos": 3.393117649374753,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 99,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.2506719511314932,
+          "ypos": 4.0,
+          "zpos": 3.442317963805753,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 100,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.2998089614684511,
+          "ypos": 4.0,
+          "zpos": 3.48975845890808,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 101,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.35164055066208044,
+          "ypos": 4.0,
+          "zpos": 3.533971846564293,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 102,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.4056278029731689,
+          "ypos": 4.0,
+          "zpos": 3.5756035482251445,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 103,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.4613395858039223,
+          "ypos": 4.0,
+          "zpos": 3.6151699010589304,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 104,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5184309930709653,
+          "ypos": 4.0,
+          "zpos": 3.653083974806443,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 105,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.5766260999034867,
+          "ypos": 4.0,
+          "zpos": 3.6896762252652406,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 106,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.6357041664015479,
+          "ypos": 4.0,
+          "zpos": 3.7252110170773083,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 107,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.6941773581344461,
+          "ypos": 4.0,
+          "zpos": 3.7617190941160104,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 108,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.7717666499913789,
+          "ypos": 4.0,
+          "zpos": 3.799005799347622,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 109,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.8646488221972224,
+          "ypos": 4.0,
+          "zpos": 3.8369154066509354,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 110,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 0.9697652988644999,
+          "ypos": 4.0,
+          "zpos": 3.8753233356190355,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 111,
+      "type": "move",
+      "dx": -1,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "bucket",
+        "pose": {
+          "xpos": 1.0846692192467688,
+          "ypos": 4.0,
+          "zpos": 3.914129921924906,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 112,
+      "type": "hotbar",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "3",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.1878030947743308,
+          "ypos": 4.0,
+          "zpos": 3.9532554341057446,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 113,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.2815209342778173,
+          "ypos": 4.0,
+          "zpos": 3.99263608699036,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 114,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 64,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.3677059448497955,
+          "ypos": 4.0,
+          "zpos": 4.032220852441038,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 115,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.4460454401517755,
+          "ypos": 4.0,
+          "zpos": 4.073280150250796,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 116,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.518108523144231,
+          "ypos": 4.0,
+          "zpos": 4.115519073965395,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 117,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.5851504762142465,
+          "ypos": 4.0,
+          "zpos": 4.158701698417929,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 118,
+      "type": "use",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": true,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.6481755252864534,
+          "ypos": 4.0,
+          "zpos": 4.202639283472061,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 119,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.7079870511125281,
+          "ypos": 4.0,
+          "zpos": 4.247180837016471,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 120,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.7645721365296678,
+          "ypos": 4.0,
+          "zpos": 4.29311519186953,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 121,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.818576069581197,
+          "ypos": 4.0,
+          "zpos": 4.340163787786109,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 122,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.8638599535190308,
+          "ypos": 4.0,
+          "zpos": 4.381964138576614,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 123,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.902167798061957,
+          "ypos": 4.0,
+          "zpos": 4.419565893203699,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 124,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "cobblestone",
+        "pose": {
+          "xpos": 1.9348948110057966,
+          "ypos": 4.0,
+          "zpos": 4.453808770849995,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 125,
+      "type": "hotbar",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "4",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 1.9631571586038383,
+          "ypos": 4.0,
+          "zpos": 4.485364546871619,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 126,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 1.9878477738720186,
+          "ypos": 4.0,
+          "zpos": 4.514770641561473,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 127,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.009681003233731,
+          "ypos": 4.0,
+          "zpos": 4.542456991160284,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 128,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.0292283238362074,
+          "ypos": 4.0,
+          "zpos": 4.568767544665761,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 129,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.0469469174040436,
+          "ypos": 4.0,
+          "zpos": 4.5939774612801685,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 130,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.063202529322368,
+          "ypos": 4.0,
+          "zpos": 4.6183068683686015,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 131,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.0782877559036432,
+          "ypos": 4.0,
+          "zpos": 4.6419318678257575,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 132,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.092436674201327,
+          "ypos": 4.0,
+          "zpos": 4.664993341169494,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 133,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.105836545860975,
+          "ypos": 4.0,
+          "zpos": 4.687603993615778,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 134,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.1186371802012665,
+          "ypos": 4.0,
+          "zpos": 4.709853989338726,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 135,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.1315630230958744,
+          "ypos": 4.0,
+          "zpos": 4.7313796897738785,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 136,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.144589032835429,
+          "ypos": 4.0,
+          "zpos": 4.75232595397016,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 137,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.157695176052134,
+          "ypos": 4.0,
+          "zpos": 4.772808669168437,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 138,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.170865426051516,
+          "ypos": 4.0,
+          "zpos": 4.792920545162785,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 139,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.184086961477802,
+          "ypos": 4.0,
+          "zpos": 4.812735749789569,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 140,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.1973495252462243,
+          "ypos": 4.0,
+          "zpos": 4.832313617318765,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 141,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.210644911688844,
+          "ypos": 4.0,
+          "zpos": 4.8517016151670616,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 142,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.2239665562712125,
+          "ypos": 4.0,
+          "zpos": 4.870937717268375,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 143,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.2373092073656933,
+          "ypos": 4.0,
+          "zpos": 4.890052302770291,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 144,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.250668663670115,
+          "ypos": 4.0,
+          "zpos": 4.909069674991241,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 145,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.2640415641426888,
+          "ypos": 4.0,
+          "zpos": 4.928009276586259,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 146,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.2774252199499454,
+          "ypos": 4.0,
+          "zpos": 4.946886661679605,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 147,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.290817480025076,
+          "ypos": 4.0,
+          "zpos": 4.96571427357087,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 148,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.304216623514608,
+          "ypos": 4.0,
+          "zpos": 4.9845020668998785,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 149,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.3167234685465665,
+          "ypos": 4.0,
+          "zpos": 5.002012367273737,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 150,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.3285164748018286,
+          "ypos": 4.0,
+          "zpos": 5.018500673268248,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 151,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.3397384100272234,
+          "ypos": 4.0,
+          "zpos": 5.034171383747096,
+          "yaw": 90.0,
+          "pitch": 58.0
+        }
+      }
+    },
+    {
+      "step": 152,
+      "type": "camera",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": -8.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.350503488421918,
+          "ypos": 4.0,
+          "zpos": 5.049188017803669,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 153,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.3609030813466045,
+          "ypos": 4.0,
+          "zpos": 5.063681390714623,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 154,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.3710102858909297,
+          "ypos": 4.0,
+          "zpos": 5.077756154702846,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 155,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.3808835797274783,
+          "ypos": 4.0,
+          "zpos": 5.0914960315478925,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 156,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.3905697449950187,
+          "ypos": 4.0,
+          "zpos": 5.1049679986744065,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 157,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4001062074051207,
+          "ypos": 4.0,
+          "zpos": 5.1182256380229,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 158,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4095229075274887,
+          "ypos": 4.0,
+          "zpos": 5.1313118151464225,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 159,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4188437978182407,
+          "ypos": 4.0,
+          "zpos": 5.144260822487924,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 160,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4280880402425575,
+          "ypos": 4.0,
+          "zpos": 5.157100094002174,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 161,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4372709643728134,
+          "ypos": 4.0,
+          "zpos": 5.169851576853314,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 162,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4464048338670894,
+          "ypos": 4.0,
+          "zpos": 5.18253282877292,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 163,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.455499459651996,
+          "ypos": 4.0,
+          "zpos": 5.195157895946461,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 164,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4645626904689397,
+          "ypos": 4.0,
+          "zpos": 5.207738015322481,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 165,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.473600805311139,
+          "ypos": 4.0,
+          "zpos": 5.220282176459948,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 166,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4826188273732432,
+          "ypos": 4.0,
+          "zpos": 5.232797571006144,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 167,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.4916207752110324,
+          "ypos": 4.0,
+          "zpos": 5.245289952278981,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 168,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.500609863669177,
+          "ypos": 4.0,
+          "zpos": 5.257763922932855,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 169,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.509588664623453,
+          "ypos": 4.0,
+          "zpos": 5.27022316509134,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 170,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.5185592355745117,
+          "ypos": 4.0,
+          "zpos": 5.282670624453338,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 171,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.5275232225228983,
+          "ypos": 4.0,
+          "zpos": 5.295108657578006,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 172,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.5364819422690683,
+          "ypos": 4.0,
+          "zpos": 5.307539149712698,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 173,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.544738963053554,
+          "ypos": 4.0,
+          "zpos": 5.318573588449387,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 174,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.552434624660326,
+          "ypos": 4.0,
+          "zpos": 5.328491184451031,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 175,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.559681198918235,
+          "ypos": 4.0,
+          "zpos": 5.337515306251326,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 176,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.566568503291702,
+          "ypos": 4.0,
+          "zpos": 5.345824648679891,
+          "yaw": 90.0,
+          "pitch": 50.0
+        }
+      }
+    },
+    {
+      "step": 177,
+      "type": "camera",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 12.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.57316839175333,
+          "ypos": 4.0,
+          "zpos": 5.35356216760255,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 178,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.579538347482063,
+          "ypos": 4.0,
+          "zpos": 5.360842227713668,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 179,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.5857243570217374,
+          "ypos": 4.0,
+          "zpos": 5.367756320770101,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 180,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.591763209607972,
+          "ypos": 4.0,
+          "zpos": 5.374377640178422,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 181,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.597684336629701,
+          "ypos": 4.0,
+          "zpos": 5.380764740664764,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 182,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.603511283198423,
+          "ypos": 4.0,
+          "zpos": 5.38696446601073,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 183,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6092628854036155,
+          "ypos": 4.0,
+          "zpos": 5.393014291242162,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 184,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6149542121170866,
+          "ypos": 4.0,
+          "zpos": 5.39894419638018,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 185,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6205973184364613,
+          "ypos": 4.0,
+          "zpos": 5.404778165442036,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 186,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.626201848439985,
+          "ypos": 4.0,
+          "zpos": 5.410535385641821,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 187,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.631775517390368,
+          "ypos": 4.0,
+          "zpos": 5.416231206751032,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 188,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.63732449749787,
+          "ypos": 4.0,
+          "zpos": 5.421877908587053,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 189,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.642853726530773,
+          "ypos": 4.0,
+          "zpos": 5.427485315003937,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 190,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.648367154703762,
+          "ypos": 4.0,
+          "zpos": 5.433061285085041,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 191,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.653867942188631,
+          "ypos": 4.0,
+          "zpos": 5.438612106097149,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 192,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6593586171228534,
+          "ypos": 4.0,
+          "zpos": 5.444142807853758,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 193,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6648412020164374,
+          "ypos": 4.0,
+          "zpos": 5.4496574142057295,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 194,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6703173148774146,
+          "ypos": 4.0,
+          "zpos": 5.455159144233798,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 195,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6757882501122294,
+          "ypos": 4.0,
+          "zpos": 5.460650573202591,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 196,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.681255043246053,
+          "ypos": 4.0,
+          "zpos": 5.466133761323841,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 197,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6867185226990333,
+          "ypos": 4.0,
+          "zpos": 5.471610356766959,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 198,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6921793512073,
+          "ypos": 4.0,
+          "zpos": 5.477081678067492,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 199,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.6976380589597637,
+          "ypos": 4.0,
+          "zpos": 5.482548780053894,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 200,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.703095070107561,
+          "ypos": 4.0,
+          "zpos": 5.488012506588941,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 201,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7085507239716033,
+          "ypos": 4.0,
+          "zpos": 5.493473532762864,
+          "yaw": 90.0,
+          "pitch": 62.0
+        }
+      }
+    },
+    {
+      "step": 202,
+      "type": "camera",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": -17.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7140052920086264,
+          "ypos": 4.0,
+          "zpos": 5.498932398647855,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 203,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7194589913840206,
+          "ypos": 4.0,
+          "zpos": 5.504389536301676,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 204,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7249119958301025,
+          "ypos": 4.0,
+          "zpos": 5.509845291370539,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 205,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.730364444332725,
+          "ypos": 4.0,
+          "zpos": 5.51529994037142,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 206,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7358164480805733,
+          "ypos": 4.0,
+          "zpos": 5.520753704517901,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 207,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.741268096024598,
+          "ypos": 4.0,
+          "zpos": 5.526206760780853,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 208,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7467194593255595,
+          "ypos": 4.0,
+          "zpos": 5.531659250736972,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 209,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.752170594912066,
+          "ypos": 4.0,
+          "zpos": 5.537111287647619,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 210,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7576215483270063,
+          "ypos": 4.0,
+          "zpos": 5.542562962121883,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 211,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7630723560046917,
+          "ypos": 4.0,
+          "zpos": 5.548014346647035,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 212,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7685230470925717,
+          "ypos": 4.0,
+          "zpos": 5.553465499212895,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 213,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7739736449086054,
+          "ypos": 4.0,
+          "zpos": 5.558916466211318,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 214,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7794241681071608,
+          "ypos": 4.0,
+          "zpos": 5.56436728475579,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 215,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.784874631611733,
+          "ypos": 4.0,
+          "zpos": 5.569817984537099,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 216,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7903250473611187,
+          "ypos": 4.0,
+          "zpos": 5.575268589307877,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 217,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.7957754249063536,
+          "ypos": 4.0,
+          "zpos": 5.580719118070228,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 218,
+      "type": "attack",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.8012257718882676,
+          "ypos": 4.0,
+          "zpos": 5.586169586025836,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 219,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.806676094419524,
+          "ypos": 4.0,
+          "zpos": 5.59162000533605,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 220,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.812126397390255,
+          "ypos": 4.0,
+          "zpos": 5.597070385729947,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 221,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.8175766847125656,
+          "ypos": 4.0,
+          "zpos": 5.602520734990792,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 222,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.823026959516138,
+          "ypos": 4.0,
+          "zpos": 5.607971059345194,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 223,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.828477224304722,
+          "ypos": 4.0,
+          "zpos": 5.613421363774441,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 224,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.8339274810813135,
+          "ypos": 4.0,
+          "zpos": 5.6188716522635636,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 225,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.8393777314483115,
+          "ypos": 4.0,
+          "zpos": 5.624321928000587,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    },
+    {
+      "step": 226,
+      "type": "wait",
+      "dx": 0,
+      "dz": 0,
+      "yaw": 0.0,
+      "pitch": 0.0,
+      "target": "",
+      "sneak": false,
+      "after": {
+        "inventory": {
+          "bucket": 2,
+          "cobblestone": 63,
+          "flint_and_steel": 1,
+          "iron_pickaxe": 1
+        },
+        "selected_item": "iron_pickaxe",
+        "pose": {
+          "xpos": 2.8448279766876343,
+          "ypos": 4.0,
+          "zpos": 5.62977219353593,
+          "yaw": 90.0,
+          "pitch": 45.0
+        }
+      }
+    }
+  ],
+  "steps": 226,
+  "wall_time": 28.01211208299992,
+  "frames_dir": "/Users/joey/Documents/Projects/ObsidianLink/obsidianlink/experiments/runs/l1_mechanics_20260820_032915Z_frames",
+  "scooped_lava": true,
+  "placed_lava": true,
+  "placed_water": true,
+  "observed_new_obsidian": true,
+  "placed_cobblestone": true,
+  "broke_cobblestone": false,
+  "success": false
+}

@@ -8,6 +8,7 @@ def test_wait_defaults_are_inert() -> None:
     assert action.yaw == 0.0
     assert action.pitch == 0.0
     assert action.target == ""
+    assert action.sneak is False
 
 
 def test_action_type_values_are_stable() -> None:

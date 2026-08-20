@@ -118,7 +118,7 @@ class MineRLEnvironment(Environment):
             else:
                 out["jump"] = 1 if action.type is ActionType.USE else 0
         if "sneak" in keyset:
-            out["sneak"] = 0
+            out["sneak"] = 1 if action.sneak else 0
         if "sprint" in keyset:
             out["sprint"] = 0
         if "attack" in keyset:

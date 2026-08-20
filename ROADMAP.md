@@ -49,6 +49,16 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
 * live `C2_grass_floor` 通过（`grass_frac≈0.76`）；无预建 portal，无 EquipAction
 * 这是 environment smoke，不是 Oracle、Evaluator 或 ReactiveAgent L1 实验
 
+**2026-08-20 L1 Mechanical Interaction Test**（`obsidianlink/experiments/run_l1_mechanics.py`，live `l1_mechanics_20260820_033330Z`）：
+
+* 在正式 `MineRLL1Controlled-v0` 上，用未来 Agent 同款动作（MOVE / CAMERA / USE / ATTACK / HOTBAR / WAIT，外加 `sneak` 修饰）完成浇灌法关键 mechanics
+* empty bucket 从 lava source 舀岩浆 → `lava_bucket`；`use` 放岩浆；`use` 放水；lava+water 生成 **至少 1 块新 obsidian**（非 DrawBlock / 非预建）
+* cobblestone 经 hotbar + 原生 `use` 放置；iron pickaxe `attack` 拆除后 inventory `63 → 64`
+* 未使用 EquipAction、ObservationFromGrid、PlaceBlock
+* **NEW OBSIDIAN = TRUE**。这是机械可行性验证，不是 Oracle、Evaluator 或 Agent 能力结论
+
+下一步才是 L1 Evaluator + Full Scripted Oracle。不要提前开发 Planner / Reflection / L2。
+
 ## Completed
 
 * Research direction frozen
@@ -72,10 +82,11 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
 * Live Minecraft Wiki Tool
 * Tool-enabled ReactiveAgent
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
+* **L1 Mechanical Interaction Test**（正式 L1 上 scripted 浇灌 mechanics；NEW OBSIDIAN = TRUE；无 Oracle / 无 Evaluator / 无 Agent）
 
 ## Next
 
-实现 L1 Evaluator（不依赖 ObservationFromGrid），再做 Scripted / Oracle 机械验证；然后才是 tool-enabled ReactiveAgent L1 pilot。在此之前不要开始 L2 / Planner / Reflection。
+实现 L1 Evaluator（不依赖 ObservationFromGrid），再做完整 Scripted / Oracle（10 块 frame / 点燃 / 入 Nether）。在此之前不要开始 L2 / Planner / Reflection。
 
 ## Blocked
 
@@ -87,6 +98,7 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
   * `ObservationFromGrid` 可能返回全 air，不能作为 evaluator truth
 * DrawingDecorator：仅 `DrawBlock`，仅 `lava` / `obsidian`
 * `EquipAction`：MineRL 1.0.2 MCP-Reborn `constructKeyboardState` 对 `equip none` / `equip <item>` 做 `Integer.parseInt`，episode 直接结束。L1 应使用 hotbar keys
+* 流动水（flowing water）不能用空桶回收，只会推玩家。scripted 放置/挖掘圆石时准星必须打在方块上，不能打在水面。这不是 Benchmark 定义问题，也不要为此启用 PlaceBlock
 
 ## Historical L1
 
