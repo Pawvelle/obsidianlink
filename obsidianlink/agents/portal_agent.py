@@ -97,13 +97,16 @@ class RuleBasedPortalAgent(BaseAgent):
 
 
 class OraclePortalAgent(BaseAgent):
-    """Deterministic legal-action reference controller for Portal L1.
+    """Deterministic, calibrated mechanics reference for Portal L1.
 
-    The sequence repeats the verified primitive ``bucket -> lava -> water``
-    ten times, then attempts ignition and portal entry.  It intentionally
-    reads no pose, reward, biome, grid, or other hidden state.  On this
-    MineRL stack, L1's known fluid-server timeout may still make a live run
-    fail; that is reported by the benchmark rather than hidden by the agent.
+    The program is the shortest *live-verified* bucket-casting trace from the
+    fixed L1 spawn: empty bucket -> lava -> water -> newly generated obsidian
+    (65 actions).  It is deliberately finite: pretending that repeated water
+    clicks build a ten-block frame would create flowing-water load and yield a
+    false Oracle.  Full-frame/ignition capability is only claimed after a
+    similarly verified, low-fluid construction trace exists.
+
+    It reads no pose, reward, biome, grid, or other hidden state.
     """
 
     def __init__(self) -> None:
@@ -115,30 +118,7 @@ class OraclePortalAgent(BaseAgent):
     def reset(self) -> None:
         self._index = 0
         self.finished = False
-        program: list[Action] = []
-        for _ in range(10):
-            program.extend(
-                [
-                    Action(ActionType.HOTBAR, target="2"),
-                    Action(ActionType.CAMERA, pitch=35.0),
-                    Action(ActionType.MOVE, dx=1),
-                    Action(ActionType.MOVE, dx=1),
-                    Action(ActionType.USE),
-                    Action(ActionType.MOVE, dx=-1),
-                    Action(ActionType.MOVE, dx=-1),
-                    Action(ActionType.USE, sneak=True),
-                    Action(ActionType.HOTBAR, target="1"),
-                    Action(ActionType.CAMERA, yaw=12.0, pitch=10.0),
-                    Action(ActionType.USE, sneak=True),
-                    Action(ActionType.WAIT),
-                    Action(ActionType.WAIT),
-                ]
-            )
-        program.extend(
-            [Action(ActionType.HOTBAR, target="5"), Action(ActionType.USE)]
-            + [Action(ActionType.MOVE, dx=1) for _ in range(40)]
-        )
-        self._program = program
+        self._program = _gate_one_program()
 
     def act(self, observation: Observation) -> Action:
         del observation
@@ -148,6 +128,32 @@ class OraclePortalAgent(BaseAgent):
         action = self._program[self._index]
         self._index += 1
         return action
+
+
+def _gate_one_program() -> list[Action]:
+    """Return the 65-action trace recorded by the successful live gate-1 run.
+
+    Keeping the trace as compact runs avoids speculative navigation and avoids
+    all repeated fluid placement.  Each bucket interaction is exactly one
+    ``USE``; additional USE ticks can undo a filled/placed bucket on this
+    MineRL/MCP-Reborn stack.
+    """
+    out = [Action(ActionType.HOTBAR, target="2"), Action(ActionType.WAIT)]
+    out += [Action(ActionType.MOVE, dx=1) for _ in range(19)]
+    out += [Action(ActionType.CAMERA, pitch=20.0), Action(ActionType.USE)]
+    out += [Action(ActionType.MOVE, dx=-1) for _ in range(8)]
+    out += [Action(ActionType.CAMERA, yaw=45.0), Action(ActionType.CAMERA, yaw=45.0)]
+    out += [Action(ActionType.MOVE, dx=1) for _ in range(6)]
+    out += [Action(ActionType.CAMERA, pitch=13.0), Action(ActionType.USE, sneak=True)]
+    out += [Action(ActionType.WAIT) for _ in range(8)]
+    out += [Action(ActionType.HOTBAR, target="1"), Action(ActionType.WAIT)]
+    out += [Action(ActionType.CAMERA, yaw=12.0), Action(ActionType.USE, sneak=True)]
+    out += [Action(ActionType.CAMERA, pitch=-30.0), Action(ActionType.CAMERA, pitch=-10.0)]
+    out += [Action(ActionType.WAIT) for _ in range(2)]
+    out += [Action(ActionType.CAMERA, pitch=30.0), Action(ActionType.CAMERA, pitch=10.0)]
+    out += [Action(ActionType.WAIT) for _ in range(6)]
+    assert len(out) == 65
+    return out
 
 
 __all__ = ["OraclePortalAgent", "PortalState", "RuleBasedPortalAgent"]
