@@ -57,7 +57,43 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
 * 未使用 EquipAction、ObservationFromGrid、PlaceBlock
 * **NEW OBSIDIAN = TRUE**。这是机械可行性验证，不是 Oracle、Evaluator 或 Agent 能力结论
 
-下一步才是 L1 Evaluator + Full Scripted Oracle。不要提前开发 Planner / Reflection / L2。
+**2026-08-20 L1 Evaluator**（`obsidianlink/benchmark/l1_evaluator.py`，live `run_l1_evaluator_smoke.py`）：
+
+* evaluator-only truth channels，live-verified on this MineRL 1.0.2 / MCP-Reborn / Malmo 0.37.0 stack：
+  * `portal_activated` / `portal_contacted` ← gym step `reward` from `RewardForTouchingBlockType(nether_portal)`（新增到 `L1ControlledEnv.create_rewardables`；reward 只经 `MineRLEnvironment.hidden_state["reward"]`，从不写入 `Observation`）
+  * `nether_entered` ← `biome_id == 8` (Nether) from `ObservationFromCurrentLocation`/`location_stats`，且必须发生在 `portal_activated` **之后**（防止 biome 噪声单独判定成功）
+  * `portal_constructed` 保持 `"unknown"`：这台 stack 上没有便宜可靠、非 `ObservationFromGrid` 的 frame-complete 真值，不为它开发 block parser
+* `success = nether_entered`，`nether_entered` 必须同时满足 activation 证据与 strict biome match；只有弱 biome 变化（未命中 8）不算 success
+* live smoke 确认：`hidden_state` 含 `reward`/`biome_id`/`can_see_sky`/`light_level` 等字段，Agent-visible `Observation`（`frame`/`inventory`/`selected_item`）不变；空场景下 `evaluator.evaluate(...)` 正确 fail-closed（`success=False`, `reason=nether_entry_not_confirmed`）
+
+**2026-08-20 Water Recovery Isolation**（`obsidianlink/experiments/run_water_recovery_isolation.py`，live `water_recovery_iso_20260820_105237Z` + `105355Z`）：
+
+* 最小场景：fresh reset → 低头放 1 格 water source → fluid wait → 单次 `USE` 回收 → **20 tick 纯 WAIT**（无 USE / ATTACK / MOVE / HOTBAR / CAMERA；每 tick 记录 mapped `minerl.use`）
+* 两次独立 episode 时间线相同：放水前 `bucket=1, water_bucket=1`；pour `USE` 当 tick（tick 3）稳定为 `bucket=2, water_bucket=0`；recover `USE` 当 tick（tick 13）出现 `water_bucket=1, bucket=1`；随后 20 WAIT 全程保持，`minerl.use=0`
+* **没有 inventory rollback**。`water_bucket=1` 在这个 WAIT-only 窗口里不是 transient observation，也不是 delayed sync 后被权威状态打回 empty bucket
+* 因此 **不要** 为这个 primitive 加 `N=3` consecutive confirmation，也不要把单帧 `water_bucket>=1` 一律当成假读数
+* 这不是 Gate 1、不是完整地狱门。Gate 1 里曾经看到的 “CAMERA/WAIT 后 water_bucket 消失” **不能**用 “MineRL inventory 天生会回滚” 解释；剩余嫌疑是 recover 后的额外交互（多 tick `USE` burst、随后 CAMERA 瞄到残留流动水）或岩浆模具场景，本次 isolation 按协议没有测 CAMERA
+* POV：回收后准星处水源消失，hotbar 变为 empty bucket + water bucket，与 inventory 一致
+
+**2026-08-20 Gate 1 — one obsidian**（`run_l1_oracle.py`，live `l1_oracle_20260820_113909Z` + `114030Z`）：
+
+* 最短序列：scoop lava → place lava → 邻格放水 → wait until obsidian。无模具、无 2 格底边、无 portal frame、无点火
+* 桶交互全部 **单次 `USE`**（3 次 USE / episode）。约 65 steps，wall ≈ 28s，远低于 240s socket 超时
+* 成功标准：`observed_new_obsidian`（inventory 链 + POV `obsidian_visual_rose`）。`L1Evaluator.success` 仍是 Nether entry，Gate 1 不为 True
+* Run `113730Z` 是假阳性：对准岩浆格放水会把 lava source **替换成水**，`lava_frac` 下降但 `obsidian_frac` 几乎不变。已要求 `obsidian_visual_rose`，并改为邻格放水 + lava settle wait
+* 修正后 2/2：`obsidian_frac` 0.0009 → 0.041 / 0.023，水保持放下（WAIT 时不再被空桶舀回）
+* 限制：开阔地面岩浆仍会蔓延，这不是精确 portal 格；`exact_block_truth` 不可用
+
+**2026-08-20 Full Scripted Oracle — 卡在 Gate 1**（`obsidianlink/experiments/run_l1_oracle.py` / `l1_oracle.py`，`obsidianlink/tasks/portal.py`）：
+
+* Portal 参考几何：经典 cornerless 10-block frame（省略四角），`base_x=-1, base_y=4, z=3`，底边落在已验证的 y=3 grass 施工面正上方；offline tests 覆盖 frame/interior 形状、method-agnostic Task goal
+* Live 发现 1 — **不加模具的浇灌不可控**：在开阔草地上倒岩浆会向四周多格蔓延，不会停留在单一目标格（有截图证据），之前 `l1_mechanics` 的“NEW OBSIDIAN=TRUE”只是启发式视觉判定，不是几何证明。修复：Oracle 在浇筑前先用 cobblestone 在目标两侧砌矮墙（mold）约束岩浆
+* Live 发现 2（更严重，未解决）— **长 episode 会话可能挂起并触发 240s socket 超时**：`minerl/env/_multiagent.py` 硬编码 `SOCKTIME = 240s`。纯 `WAIT` 循环验证 93,200 步 / 340s 无异常（排除固定 wall-clock episode 上限）；但一旦 episode 内出现较多真实液体/方块放置动作（造好模具 + 舀岩浆 + 往返移动），会在约 270–280s 处遇到 `TimeoutError` → `RuntimeError: Attempted to step an environment server with done=True`，两次独立复现，失败点不完全固定在同一动作类型上（一次卡在放置模具的 `use`，一次卡在返回途中的 `move`），符合“服务器端因流体模拟负载累积而逐步变卡、最终某一步响应超过 240s”的特征，而不是我们代码的死循环（步数预算已大幅收紧后仍复现）
+* Gate 1（浇筑 2 块底边 obsidian）**未在单次稳定 episode 内端到端确认**：模具搭建与至少一次舀岩浆已经真实成功，但受上述挂起风险影响，尚未拿到一次完整跑通 pour→water→obsidian 视觉确认的干净 run
+* 未使用 EquipAction、PlaceBlock、ObservationFromGrid、DrawBlock portal、teleport、command、预建 frame、inventory 注入
+* 结论：**Oracle SUCCESS = False**，停在 Gate 1（bottom row casting），不是几何/瞄准逻辑问题，而是 MCP-Reborn/Malmo 在长时间高频液体交互下的服务器端稳定性限制。下一步需要先定位/缓解这个挂起（例如减少单 episode 内的液体方块更新总量、拆分动作节奏、或确认是否有官方已知 issue），而不是继续堆 Gate 2-8 的建造逻辑
+
+下一步：Gate 1 一格黑曜石已在短 episode 内 live 确认。不要自动继续完整 10 格 frame / 点火 / 入 Nether。精确几何仍需要模具，长 episode 240s 挂起风险仍在。不要提前开发 Planner / Reflection / L2 / ReactiveAgent L1 Pilot。
 
 ## Completed
 
@@ -83,10 +119,14 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
 * Tool-enabled ReactiveAgent
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
 * **L1 Mechanical Interaction Test**（正式 L1 上 scripted 浇灌 mechanics；NEW OBSIDIAN = TRUE；无 Oracle / 无 Evaluator / 无 Agent）
+* **L1 Evaluator**（evaluator-only `reward` + `biome_id` truth；live-verified fail-closed；无 ObservationFromGrid；无 Observation 泄漏）
+* **Formal L1 Portal Task**（method-agnostic goal，`obsidianlink/tasks/portal.py`）与 cornerless 10-block 参考几何（offline-tested）
+* **Water Recovery Isolation**（单次 `USE` 回收 + 20 WAIT；2/2 fresh episodes 无 rollback；非 Gate 1）
+* **Gate 1 one obsidian**（短 scripted 浇灌；修正后 2/2 `observed_new_obsidian=True`；非 portal frame）
 
 ## Next
 
-实现 L1 Evaluator（不依赖 ObservationFromGrid），再做完整 Scripted / Oracle（10 块 frame / 点燃 / 入 Nether）。在此之前不要开始 L2 / Planner / Reflection。
+Gate 1 一格黑曜石已 live 确认。下一步若做精确 frame，需要模具，并继续避开长 episode 240s 挂起。在此之前不要开始 Gate 2-8 / L2 / Planner / Reflection / ReactiveAgent L1 Pilot。
 
 ## Blocked
 
@@ -99,6 +139,8 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
 * DrawingDecorator：仅 `DrawBlock`，仅 `lava` / `obsidian`
 * `EquipAction`：MineRL 1.0.2 MCP-Reborn `constructKeyboardState` 对 `equip none` / `equip <item>` 做 `Integer.parseInt`，episode 直接结束。L1 应使用 hotbar keys
 * 流动水（flowing water）不能用空桶回收，只会推玩家。scripted 放置/挖掘圆石时准星必须打在方块上，不能打在水面。这不是 Benchmark 定义问题，也不要为此启用 PlaceBlock
+* 在开阔地面（无模具）浇岩浆会自由蔓延到多个相邻格，不会停在单一目标格；构造精确几何（如 portal frame）前必须先用 cobblestone 砌矮墙围住目标格
+* **2026-08-20**：长 episode（约 270-280s 内出现较多真实液体/方块放置动作）可能触发 `minerl/env/_multiagent.py` 硬编码的 240s socket 超时（`RuntimeError: Attempted to step an environment server with done=True`）。纯 `WAIT` 循环 93,200 步 / 340s 验证无此问题，说明不是固定 episode 时长上限，而更像服务器端因液体模拟负载累积导致某一步响应变慢。两次复现的具体失败动作类型不同（一次 `use`、一次 `move`），指向服务器端渐进变卡而非单一确定性触发点。这是 Full Scripted Oracle 卡在 Gate 1 的直接原因之一，需要专项调查（不要通过修改 L1 语义规避）
 
 ## Historical L1
 

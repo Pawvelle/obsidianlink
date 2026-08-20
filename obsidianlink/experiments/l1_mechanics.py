@@ -49,6 +49,16 @@ def scooped_lava(
     )
 
 
+def scooped_water(
+    before: Mapping[str, int] | None, after: Mapping[str, int] | None
+) -> bool:
+    """Empty bucket consumed a water source (recovering a placed one)."""
+    return (
+        qty(after, "water_bucket") > qty(before, "water_bucket")
+        and qty(after, "bucket") < qty(before, "bucket")
+    )
+
+
 def poured_lava(
     before: Mapping[str, int] | None, after: Mapping[str, int] | None
 ) -> bool:

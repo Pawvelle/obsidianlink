@@ -119,3 +119,20 @@ def test_l1_spec_has_hotbar_and_no_equip() -> None:
     assert not any("grid" in n.lower() for n in obs_names)
     equipped = [h for h in spec.observables if h.to_string() == "equipped_items"][0]
     assert "lava_bucket" in equipped._items
+
+
+def test_l1_spec_has_evaluator_only_portal_touch_reward() -> None:
+    from obsidianlink.env.l1_scene import _REGISTERED_SPECS, register_l1_spec
+
+    register_l1_spec()
+    spec = _REGISTERED_SPECS[L1_ENV_ID]
+    names = {h.to_string() for h in spec.rewardables}
+    assert names == {"reward_for_touching_block_type"}
+    handler = next(iter(spec.rewardables))
+    assert handler.blocks == [
+        {"type": "nether_portal", "behaviour": "onceOnly", "reward": 1.0}
+    ]
+    # Reward is a gym step() return value, not an observable: it must
+    # never appear alongside RGB/inventory/selected_item.
+    obs_names = {h.to_string() for h in spec.observables}
+    assert "reward" not in obs_names

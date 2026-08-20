@@ -68,9 +68,12 @@ class MineRLEnvironment(Environment):
         if self._action_keys is None:
             self._action_keys = tuple(self._env.action_space.spaces.keys())
         minerl_action = self._to_minerl_action(action, self._action_keys)
-        raw, _reward, _done, info = self._env.step(minerl_action)
+        raw, reward, done, info = self._env.step(minerl_action)
         self._last_info = info if isinstance(info, dict) else {}
         self._last_observation = self._convert(raw, info=self._last_info)
+        # Evaluator-only: gym reward/done are never copied onto Observation.
+        self._last_hidden["reward"] = _scalar(reward)
+        self._last_hidden["done"] = bool(done)
         return self._last_observation
 
     def close(self) -> None:
@@ -215,12 +218,23 @@ def _scalar(value: Any) -> float | None:
 
 
 def _pose_from_mapping(loc: Mapping[str, Any]) -> dict[str, float]:
+    """Evaluator-only pose + ``ObservationFromCurrentLocation`` fields.
+
+    ``biome_id`` / ``can_see_sky`` / ``light_level`` are dimension-transition
+    truth candidates for the L1 Evaluator. Never copied onto Observation.
+    """
     pose = {
         "yaw": _scalar(loc.get("yaw")),
         "pitch": _scalar(loc.get("pitch")),
         "xpos": _scalar(loc.get("xpos")),
         "ypos": _scalar(loc.get("ypos")),
         "zpos": _scalar(loc.get("zpos")),
+        "biome_id": _scalar(loc.get("biome_id")),
+        "biome_temperature": _scalar(loc.get("biome_temperature")),
+        "can_see_sky": _scalar(loc.get("can_see_sky")),
+        "light_level": _scalar(loc.get("light_level")),
+        "sky_light_level": _scalar(loc.get("sky_light_level")),
+        "sea_level": _scalar(loc.get("sea_level")),
     }
     return {k: v for k, v in pose.items() if v is not None}
 

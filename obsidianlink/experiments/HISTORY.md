@@ -82,6 +82,104 @@ Live evidence:
 
 Earlier attempts `032340Z` (scoop miss on grass rim), `032545Z` / `032740Z` / `032915Z` (obsidian yes, cobble break no because crosshair hit water / current pushed the player) are local debugging records, not git-tracked.
 
+### L1 Evaluator — 2026-08-20
+
+Live smoke `run_l1_evaluator_smoke.py` (local `runs/` only; no summary
+JSON needed, the assertions are the evidence). Confirms on this MineRL
+1.0.2 / MCP-Reborn / Malmo 0.37.0 stack:
+
+* `RewardForTouchingBlockType(nether_portal)` registers and steps without
+  crashing; its reward reaches `Environment.hidden_state["reward"]`
+  (never `Observation`).
+* `ObservationFromCurrentLocation` exposes `biome_id`, `can_see_sky`,
+  `light_level`, etc. in `location_stats` (both gym `info` and raw obs).
+* With no portal touched, `L1Evaluator.evaluate(...)` returns
+  `success=False, reason=nether_entry_not_confirmed` — fails closed.
+
+Not an Oracle or Agent run.
+
+### Full Scripted Oracle — 2026-08-20, blocked at Gate 1
+
+`run_l1_oracle.py` / `l1_oracle.py`. Local `runs/l1_oracle_*` only (raw
+JSON + PNG, not git-tracked).
+
+Live evidence:
+
+* Reference geometry: cornerless 10-block frame at `base_x=-1, base_y=4,
+  z=3` (bottom row rests on the already-validated y=3 grass floor).
+* First attempt (no mold): pouring lava on open grass spread across
+  several adjacent cells instead of staying in the single target cell —
+  POV evidence contradicts the earlier mechanics test's "NEW
+  OBSIDIAN=TRUE" being a precise geometric proof; it was only a visual
+  heuristic. Fix: cobblestone mold walls (left/right of the 2-cell
+  bottom row) placed via the same proven hotbar+`use` mechanic, before
+  pouring.
+* Mold construction and at least one full lava-bucket scoop succeeded
+  live. Full Gate 1 (both bottom-row cells poured, watered, and
+  obsidian-confirmed) was not completed in one clean episode: two
+  independent runs hit `TimeoutError` → `RuntimeError: Attempted to
+  step an environment server with done=True` at ~270-280s wall time,
+  even after cutting the action/retry budget substantially between
+  attempts.
+* Diagnostic: a pure-`WAIT` loop ran 93,200 steps / 340s with **no**
+  timeout, ruling out a fixed episode wall-clock cap. `minerl/env/
+  _multiagent.py` hardcodes `SOCKTIME = 240s` per-step socket recv
+  timeout. The two Oracle failures did not share the same triggering
+  action type (one on a mold `use`, one on a return-trip `move`),
+  consistent with progressive Minecraft-server-side slowdown from
+  fluid-simulation load rather than one deterministic bad action.
+* No EquipAction, PlaceBlock, ObservationFromGrid, DrawBlock portal,
+  teleport, command, prebuilt frame, or inventory injection were used.
+* **ORACLE SUCCESS = False**, stopped at Gate 1 per the no-fake-success
+  rule. Root cause is a stack-level stability limit, not a geometry or
+  aiming bug.
+
+### Water recovery isolation — 2026-08-20
+
+Live runs (local `runs/` only, not git-tracked):
+
+* `water_recovery_iso_20260820_105237Z` (Run 1)
+* `water_recovery_iso_20260820_105355Z` (Run 2)
+
+Not Gate 1. Not an Oracle or Agent capability result. Protocol: place one water source on grass, recover with a **single** `USE`, then 20 WAIT-only ticks (no USE / ATTACK / MOVE / HOTBAR / CAMERA). Mapped MineRL `use` was recorded every tick.
+
+Phenomenon:
+
+* Before pour: `bucket=1`, `water_bucket=1`
+* Pour `USE` (tick 3): inventory stable immediately at `bucket=2`, `water_bucket=0` (held through 8 fluid-wait ticks)
+* Recover `USE` (tick 13): `water_bucket` first appears; `bucket=1`, `water_bucket=1`, `selected_item=water_bucket`
+* Consecutive hold: 21 ticks (recover + 20 WAIT). Did **not** disappear
+* Wait window: all `wait`, `minerl.use=0`. reward / done / pose / selected_item unchanged
+* Run 2 reproduced Run 1 exactly
+
+Root cause of the hypothesized WAIT-only rollback: **not confirmed, because it did not happen**. `water_bucket=1` after a single legal recover is not a transient observation in this setting.
+
+Fix: none. No `N=3` stable-state confirmation — live evidence says the same-tick inventory delta is already authoritative here.
+
+Limitation: this isolation forbids CAMERA after recover, so it does not explain a Gate 1 flip that only appears once the camera moves. Remaining suspects for that earlier symptom are a multi-tick `USE` burst or a later CAMERA aimed at leftover flowing water / the lava-mold scene — not delayed Malmo inventory sync under WAIT.
+
+### Gate 1 one obsidian — 2026-08-20
+
+Live runs (local `runs/` only):
+
+* `l1_oracle_20260820_113730Z` — **invalid**: water replaced the lava source
+  (`lava_frac` 0.38→0, `obsidian_frac` unchanged). Heuristic `ok` was a
+  false positive because it treated lava disappearance as obsidian.
+* `l1_oracle_20260820_113909Z` — **valid**: neighbor-cell water after
+  lava settle. `obsidian_frac` 0.0009→0.041, `obsidian_visual_rose=True`.
+  65 steps, 3 `USE`, ~28s.
+* `l1_oracle_20260820_114030Z` — **valid**, reproduced. `obsidian_frac`
+  0.0009→0.023. Same 65-step / 3-`USE` sequence.
+
+Sequence: scoop lava (`USE`×1) → place lava (`USE`×1 sneak) → wait 8 →
+yaw nudge → place water beside lava (`USE`×1 sneak) → look away 2 ticks
+→ wait until `obsidian_visual_rose`. Starting `water_bucket` is used
+directly (no extra collect/recover before the pour).
+
+Not a portal frame, ignition, or Nether entry. `L1Evaluator.success`
+stays False (`nether_entry_not_confirmed`). Lava still spreads on open
+grass; this is not geometric proof of a specific frame cell.
+
 ### Other historical pilots
 
 D1 / D2 / D3 live JSON files remain useful as pipeline / scene-validity

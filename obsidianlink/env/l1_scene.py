@@ -228,7 +228,22 @@ def register_l1_spec(*, name: str = L1_ENV_ID) -> str:
             return [handlers.ObservationFromCurrentLocation()]
 
         def create_rewardables(self) -> list[Handler]:
-            return []
+            # Evaluator-only reward channel. ``reward`` is gym step() return
+            # value, never copied onto Observation (see MineRLEnvironment).
+            # A per-tick reward while touching ``nether_portal`` is
+            # portal-activation evidence: the block only exists if ignition
+            # created a real, functioning portal.
+            return [
+                handlers.RewardForTouchingBlockType(
+                    [
+                        {
+                            "type": "nether_portal",
+                            "behaviour": "onceOnly",
+                            "reward": 1.0,
+                        }
+                    ]
+                )
+            ]
 
         def create_agent_handlers(self) -> list[Handler]:
             return []
