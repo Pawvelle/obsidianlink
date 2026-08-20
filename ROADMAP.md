@@ -18,7 +18,36 @@ Phase 2  Benchmark MVP                    ✅
 
 ## Current Task
 
-**Formal L1 Controlled Construction**
+**L2 Nether Portal construction benchmark**
+
+First LLM embodied control experiment 已完成（见下）。下一步把同一套 `LLMAgent` 接到正式 portal goal。不要加 memory / RAG / planner / tool calling。中国区 MiniMax 用 `api.minimaxi.com`（client 在国际站 401 时会回退）。
+
+**2026-08-20 First LLM embodied control experiment**（`obsidianlink/experiments/run_llm_smoke.py`）：
+
+* 目标不是 Nether Portal：prompt 只要求 camera / move / hotbar / USE-or-WAIT
+* `llm_smoke_20260820_150552Z`：Minecraft reset 成功；`api.minimax.io` HTTP 401 `invalid api key (2049)`（国际站拒国内 key）
+* `llm_smoke_20260820_151507Z`：**成功**。改用 `https://api.minimaxi.com/v1/chat/completions` 后 MiniMax-M3 8/8 调用成功，parser 8/8，Minecraft `env.step` 8/8，wall ≈ 33s
+* 模型本 episode 只输出 `camera`（yaw ±30，最后一步 pitch=-10）。frame mean 69.4 → 53.2，说明相机确实转了。未做 move / hotbar / USE
+* `valid_for_l1_agent_conclusion: false`。未改 env / evaluator / oracle / task
+* MiniMax client 现对 401 会回退国际站 ↔ 中国站
+
+**2026-08-20 Agent Interface Layer**（`obsidianlink/agents/base_agent.py`）：
+
+* `BaseAgent.reset` / `act(observation)` — 最小统一 Agent API，无 framework
+* `RandomAgent`：在 L1 合法动作面（MOVE / CAMERA / USE / ATTACK / HOTBAR / WAIT）上随机采样；不发 EQUIP / PLACE
+* 规则 `ReactiveAgent`（`reactive_agent.py`）：inventory FSM 浇灌 baseline，**不是** LLM。现有视觉/Wiki agent 仍在 `agents.reactive`
+* `experiments/run_agent.py`：`reset → act(obs) → env.step(action)`；reward/done 只由 runner 从 `hidden_state` 读出并打印，从不传入 `agent.act`
+* 这是 interface smoke / rule baseline，不是 L1 能力结论
+
+**2026-08-20 LLM Agent Adapter**（`obsidianlink/agents/llm_agent.py`）：
+
+* `LLMAgent(BaseAgent)`：`Observation → prompt → BaseLLMClient.generate → parse_action → Action`
+* `obsidianlink/models/`：`BaseLLMClient.generate(prompt) -> str`；`MiniMaxClient` 读 `MINIMAX_API_KEY`，不把 key 写入代码
+* `agents/prompt.py`：任务目标 + Observation + 合法 action space + JSON 输出格式；非法 JSON / EQUIP / PLACE fallback 为 WAIT
+* `run_agent.py --agent llm`；offline tests 不启动 Minecraft、不打真实 API
+* 无 memory / RAG / planner / LangChain / multi-agent / tool calling。这是 adapter，不是模型评测结论
+
+**Formal L1 Controlled Construction**（背景，本阶段不扩展）
 
 端到端目标保持 method-agnostic：
 
@@ -93,7 +122,7 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
 * 未使用 EquipAction、PlaceBlock、ObservationFromGrid、DrawBlock portal、teleport、command、预建 frame、inventory 注入
 * 结论：**Oracle SUCCESS = False**，停在 Gate 1（bottom row casting），不是几何/瞄准逻辑问题，而是 MCP-Reborn/Malmo 在长时间高频液体交互下的服务器端稳定性限制。下一步需要先定位/缓解这个挂起（例如减少单 episode 内的液体方块更新总量、拆分动作节奏、或确认是否有官方已知 issue），而不是继续堆 Gate 2-8 的建造逻辑
 
-下一步：Gate 1 一格黑曜石已在短 episode 内 live 确认。不要自动继续完整 10 格 frame / 点火 / 入 Nether。精确几何仍需要模具，长 episode 240s 挂起风险仍在。不要提前开发 Planner / Reflection / L2 / ReactiveAgent L1 Pilot。
+L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / 入 Nether。精确几何仍需要模具，长 episode 240s 挂起风险仍在。不要提前开发 Planner / Reflection / L2。
 
 ## Completed
 
@@ -123,10 +152,13 @@ Bucket Casting 是第一版受控评测的主要 reference strategy，而非强�
 * **Formal L1 Portal Task**（method-agnostic goal，`obsidianlink/tasks/portal.py`）与 cornerless 10-block 参考几何（offline-tested）
 * **Water Recovery Isolation**（单次 `USE` 回收 + 20 WAIT；2/2 fresh episodes 无 rollback；非 Gate 1）
 * **Gate 1 one obsidian**（短 scripted 浇灌；修正后 2/2 `observed_new_obsidian=True`；非 portal frame）
+* **Agent interface layer**（`BaseAgent` + `RandomAgent` + 规则 `reactive_agent.ReactiveAgent` + `run_agent.py`；Agent 只看 Observation；未改 evaluator / oracle / task）
+* **LLM Agent Adapter**（`LLMAgent` + `BaseLLMClient` / `MiniMaxClient` + prompt/parser；`run_agent.py --agent llm`；未改 Environment / Evaluator / Oracle / task）
+* **First LLM embodied control experiment**（`run_llm_smoke.py`：`150552Z` 国际站 401；`151507Z` 中国站 8/8 MiniMax + 8/8 Minecraft step，全是 camera；非 L1 能力结论）
 
 ## Next
 
-Gate 1 一格黑曜石已 live 确认。下一步若做精确 frame，需要模具，并继续避开长 episode 240s 挂起。在此之前不要开始 Gate 2-8 / L2 / Planner / Reflection / ReactiveAgent L1 Pilot。
+**L2 Nether Portal construction benchmark**。Smoke 已确认 MiniMax JSON action 能进入 `env.step`。下一步接到 portal goal。不要加 memory / RAG / planner / LangChain / multi-agent / tool calling。
 
 ## Blocked
 
@@ -141,6 +173,7 @@ Gate 1 一格黑曜石已 live 确认。下一步若做精确 frame，需要模�
 * 流动水（flowing water）不能用空桶回收，只会推玩家。scripted 放置/挖掘圆石时准星必须打在方块上，不能打在水面。这不是 Benchmark 定义问题，也不要为此启用 PlaceBlock
 * 在开阔地面（无模具）浇岩浆会自由蔓延到多个相邻格，不会停在单一目标格；构造精确几何（如 portal frame）前必须先用 cobblestone 砌矮墙围住目标格
 * **2026-08-20**：长 episode（约 270-280s 内出现较多真实液体/方块放置动作）可能触发 `minerl/env/_multiagent.py` 硬编码的 240s socket 超时（`RuntimeError: Attempted to step an environment server with done=True`）。纯 `WAIT` 循环 93,200 步 / 340s 验证无此问题，说明不是固定 episode 时长上限，而更像服务器端因液体模拟负载累积导致某一步响应变慢。两次复现的具体失败动作类型不同（一次 `use`、一次 `move`），指向服务器端渐进变卡而非单一确定性触发点。这是 Full Scripted Oracle 卡在 Gate 1 的直接原因之一，需要专项调查（不要通过修改 L1 语义规避）
+* **2026-08-20 MiniMax live smoke**：同一把国内 key 在 `api.minimax.io` 返回 HTTP 401，在 `api.minimaxi.com` 成功。不要为此修改 Environment。client 现对 401 做国际站/中国站回退
 
 ## Historical L1
 
