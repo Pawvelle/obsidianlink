@@ -158,7 +158,15 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 
 ## Next
 
-**L2 Nether Portal construction benchmark**。Smoke 已确认 MiniMax JSON action 能进入 `env.step`。下一步接到 portal goal。不要加 memory / RAG / planner / LangChain / multi-agent / tool calling。
+**L2 Nether Portal construction benchmark**。正式最小闭环已接入：
+
+* `OraclePortalAgent(BaseAgent)`：确定性、无 LLM、只发合法动作的 portal mechanics reference controller；不读取 hidden truth。它会尝试取岩浆、浇筑 10 次、点火和走入 portal。当前不能把它当作 live 成功证据，受下述 fluid/server timeout 限制。
+* `RuleBasedPortalAgent(BaseAgent)`：最小 inventory FSM，状态固定为 `FIND_RESOURCE → COLLECT → BUILD → ACTIVATE → COMPLETE`；它是 baseline，不读 hidden truth。
+* `experiments/run_agent.py --agent random|rule|llm|oracle` 已走正式 `L1_PORTAL_TASK + BenchmarkRunner + L1Evaluator`；每次运行写入 `results/episode_XXX.json`，包括 agent name、success、steps、duration、failure reason 与 evaluator episode statistics。
+* `BenchmarkRunner` 现在会 reset agent/evaluator，并逐 tick 提供 evaluator-only `hidden_state` 给 `L1Evaluator.observe_step`；`Observation` API 未变，Agent 永远看不到 reward / biome / pose。
+* Offline test suite: 139 passed (2026-08-20). 尚未把长液体建造 Oracle 标记为完成的 live benchmark evidence。
+
+下一步是在已知的 MCP-Reborn/Malmo 液体负载不稳定性下取得一个干净的真实 Oracle run，或记录其结构化环境失败；不要加 memory / RAG / planner / LangChain / multi-agent / tool calling。
 
 ## Blocked
 

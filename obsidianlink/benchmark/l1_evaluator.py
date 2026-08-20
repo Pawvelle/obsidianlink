@@ -192,6 +192,13 @@ class L1Evaluator(Evaluator):
                 "not_used": "ObservationFromGrid",
             },
             "steps_observed": self.milestones.steps_observed,
+            "episode_statistics": {
+                "steps": steps,
+                "model_calls": model_calls,
+                "invalid_actions": invalid_actions,
+                "duration_seconds": elapsed_time,
+                "hidden_samples": self.milestones.steps_observed,
+            },
         }
 
         if leaked:
@@ -208,6 +215,12 @@ class L1Evaluator(Evaluator):
 
         success = bool(resolution["nether_entered"])
         reason = "ok" if success else "nether_entry_not_confirmed"
+        if not success:
+            evidence["failure_detail"] = (
+                "portal_activation_not_confirmed"
+                if not resolution["portal_activated"]
+                else "nether_transition_not_confirmed"
+            )
         return Result(
             task_id=task.task_id,
             success=success,

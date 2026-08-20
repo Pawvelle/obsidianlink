@@ -11,6 +11,7 @@ from obsidianlink.agents.model_client import (
     call_model,
 )
 from obsidianlink.agents.random_agent import RandomAgent
+from obsidianlink.agents.portal_agent import OraclePortalAgent, PortalState, RuleBasedPortalAgent
 from obsidianlink.agents.reactive import ReactiveAgent, parse_model_response
 
 __all__ = [
@@ -21,6 +22,9 @@ __all__ = [
     "ModelCall",
     "ModelClient",
     "RandomAgent",
+    "OraclePortalAgent",
+    "PortalState",
+    "RuleBasedPortalAgent",
     "ReactiveAgent",
     "VisionModelClient",
     "call_model",

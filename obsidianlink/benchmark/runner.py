@@ -154,9 +154,18 @@ class BenchmarkRunner:
 
         try:
             try:
+                reset_agent = getattr(agent, "reset", None)
+                if callable(reset_agent):
+                    reset_agent()
+                reset_evaluator = getattr(evaluator, "reset", None)
+                if callable(reset_evaluator):
+                    reset_evaluator()
                 env.reset()
                 observation = env.observe()
                 last_hidden_state = getattr(env, "hidden_state", None)
+                observe_step = getattr(evaluator, "observe_step", None)
+                if callable(observe_step):
+                    observe_step(last_hidden_state)
             except Exception as exc:
                 aborted = _abort(ENVIRONMENT_FAILURE, "environment_exception", exc)
             else:
@@ -177,12 +186,20 @@ class BenchmarkRunner:
                         env.step(action)
                         observation = env.observe()
                         last_hidden_state = getattr(env, "hidden_state", None)
+                        if callable(observe_step):
+                            observe_step(last_hidden_state)
                     except Exception as exc:
                         aborted = _abort(
                             ENVIRONMENT_FAILURE, "environment_exception", exc
                         )
                         break
                     steps += 1
+                    if isinstance(last_hidden_state, dict) and bool(
+                        last_hidden_state.get("done")
+                    ):
+                        break
+                    if bool(getattr(agent, "finished", False)):
+                        break
                     if debug_dir is not None:
                         _save_frame_png(
                             getattr(last_input_observation, "frame", None),

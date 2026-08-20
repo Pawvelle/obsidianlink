@@ -1,4 +1,4 @@
-"""Agent ↔ Environment loop for the unified Agent API.
+"""Run the formal Nether Portal benchmark.
 
 Does not modify the Oracle, Task, or L1Evaluator. The agent only sees
 ``Observation``. Reward / done are read from evaluator-only
@@ -18,12 +18,17 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
+from pathlib import Path
 import time
 from typing import Any
 
 from obsidianlink.agents.base_agent import BaseAgent
 from obsidianlink.agents.random_agent import RandomAgent
-from obsidianlink.agents.reactive_agent import ReactiveAgent
+from obsidianlink.agents.portal_agent import OraclePortalAgent, RuleBasedPortalAgent
+from obsidianlink.benchmark.l1_evaluator import L1Evaluator
+from obsidianlink.benchmark.runner import BenchmarkRunner
+from obsidianlink.tasks.portal import L1_PORTAL_TASK
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
 
@@ -96,36 +101,61 @@ def _make_agent(name: str) -> BaseAgent:
     key = name.strip().lower()
     if key == "random":
         return RandomAgent()
-    if key == "reactive":
-        return ReactiveAgent()
+    if key in {"rule", "reactive"}:
+        return RuleBasedPortalAgent()
+    if key == "oracle":
+        return OraclePortalAgent()
     if key == "llm":
         from obsidianlink.agents.llm_agent import LLMAgent
         from obsidianlink.models.minimax_client import MiniMaxClient
 
         return LLMAgent(MiniMaxClient())
-    raise ValueError("unknown agent; use 'random', 'reactive', or 'llm'")
+    raise ValueError("unknown agent; use 'random', 'rule', 'oracle', or 'llm'")
+
+
+def _result_payload(agent: BaseAgent, result: Any) -> dict[str, Any]:
+    """Stable on-disk episode record; evaluator evidence is retained."""
+    payload = asdict(result)
+    payload.update(
+        {
+            "agent_name": type(agent).__name__,
+            "duration": result.elapsed_time,
+            "failure_reason": result.evidence.get("reason"),
+        }
+    )
+    return payload
+
+
+def _episode_path(results_dir: Path) -> Path:
+    results_dir.mkdir(parents=True, exist_ok=True)
+    existing = sorted(results_dir.glob("episode_*.json"))
+    return results_dir / f"episode_{len(existing) + 1:03d}.json"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run RandomAgent, ReactiveAgent, or LLMAgent on L1")
-    parser.add_argument("--agent", choices=("random", "reactive", "llm"), default="random")
-    parser.add_argument("--max-steps", type=int, default=64)
+    parser = argparse.ArgumentParser(description="Run an agent on the formal Nether Portal task")
+    parser.add_argument("--agent", choices=("random", "rule", "reactive", "oracle", "llm"), default="random")
+    parser.add_argument("--max-steps", type=int, default=L1_PORTAL_TASK.max_steps)
+    parser.add_argument("--results-dir", default="results")
     args = parser.parse_args()
 
     from obsidianlink.env.l1_scene import L1ControlledEnv
 
     agent = _make_agent(args.agent)
     env = L1ControlledEnv()
-    try:
-        report = run_episode(agent, env, max_steps=max(1, int(args.max_steps)))
-    finally:
-        try:
-            env.close()
-        except Exception:
-            pass
-    print(json.dumps(report, indent=2))
+    task = L1_PORTAL_TASK
+    if args.max_steps != task.max_steps:
+        from dataclasses import replace
+
+        task = replace(task, max_steps=max(1, int(args.max_steps)))
+    result = BenchmarkRunner().run(task, env, agent, L1Evaluator())
+    report = _result_payload(agent, result)
+    output = _episode_path(Path(args.results_dir))
+    output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    report["result_file"] = str(output)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
     sys.stdout.flush()
-    return 0 if report.get("success") and not report.get("error") else 1
+    return 0 if result.success else 1
 
 
 if __name__ == "__main__":
