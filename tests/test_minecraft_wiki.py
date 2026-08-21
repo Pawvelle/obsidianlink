@@ -93,3 +93,26 @@ def test_search_extracts_mechanic_rules() -> None:
     assert result.knowledge is not None
     assert result.knowledge.knowledge_type == "mechanic"
     assert len(result.knowledge.attributes["rules"]) == 2
+
+
+def test_search_extracts_spatial_generation_knowledge() -> None:
+    def transport(url: str):
+        if "action=parse" in url:
+            return {
+                "parse": {
+                    "text": (
+                        "<p>Ancient debris is found in the Nether.</p>"
+                        "<h2>Natural generation</h2>"
+                        "<p>It generates most commonly around Y-level 15.</p>"
+                    )
+                }
+            }
+        return _payload(title="Ancient Debris", snippet="A rare ore")
+
+    result = MinecraftWikiTool(transport=transport).search(
+        "where to find ancient debris"
+    )
+
+    assert result.knowledge is not None
+    assert result.knowledge.knowledge_type == "spatial"
+    assert len(result.knowledge.attributes["locations"]) == 2

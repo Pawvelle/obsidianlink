@@ -27,6 +27,15 @@ Natural-language Task → GeneralAgent → Planner
 
 **Agent Reasoning Foundation**
 
+2026-08-22 Cognitive Retrieval + Long-Horizon Planning：
+
+* 新增本地、确定性 Memory Retrieval：按当前 goal/subgoal 对 semantic / episodic / spatial memory 做词法相关性、失败优先级、recency 与 spatial confidence 排序；结果有界进入 `retrieved_memory`，不引入 embedding、vector DB 或 RAG
+* `GeneralAgent` 每轮自动准备相关记忆；Planner 也可显式输出有预算的 `memory` decision，指定 query、memory types 与 limit，再根据返回记忆调整计划；外部未知 Minecraft 规则仍走 Wiki
+* Wiki structured knowledge 增加 `spatial` 类型，抽取 generation / biome / dimension / Y-level 等位置规则；同时保存到 Semantic Memory，并以 `source=wiki`、较低 confidence 写入 Spatial Memory，与 agent-observed location 区分
+* Hierarchical plan 增加可审计 revision history；subgoal 记录 attempts、failures、status 与 last outcome，失败会显式标记节点，后续 Planner 可恢复同一节点或修改 downstream plan；completed/skipped 状态保持单调，避免长任务回退循环
+* `GeneralAgentResult` 增加 explicit `memory_queries` evidence；旧 Planner JSON、GeneralAgent、Autonomous prototype 与 primitive-only skill surface 保持兼容
+* 新增 retrieval ranking/type filter、active Planner retrieval、spatial Wiki integration、failure recovery state 与 plan revision 测试；完整 offline regression：**210 passed**；未启动 MineRL/Minecraft，未改 benchmark task，未增加 workflow skill、Vision 或 Multi-Agent
+
 2026-08-22 Cognitive Layer 重构：
 
 * Wiki 从单一搜索摘要升级为有界的 `search → article parse → structured knowledge`：解析正文段落、章节与表格，输出 `recipe` / `item` / `mechanic` 类型及可审计 attributes；正文请求失败时安全回退搜索摘要

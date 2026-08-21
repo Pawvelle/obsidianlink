@@ -278,6 +278,71 @@ def test_general_agent_reuses_semantic_memory_without_second_network_call() -> N
     assert memory.knowledge_uses[-1].cache_hit is True
 
 
+def test_general_agent_handles_active_memory_retrieval_before_skill() -> None:
+    memory = AgentMemory()
+    memory.remember_knowledge(
+        "stone acquisition technique",
+        "Cobblestone is obtained by mining stone.",
+        knowledge_type="mechanic",
+        subject="Cobblestone",
+    )
+
+    class RetrievalAwarePlanner:
+        def plan(self, memory, observation, skill_descriptions):
+            if memory.last_retrieval.query != "stone acquisition technique":
+                return PlannerDecision(
+                    "memory",
+                    query="stone acquisition technique",
+                    memory_types=("semantic",),
+                )
+            if not memory.completed_steps:
+                return PlannerDecision(
+                    "skill",
+                    name="collect_cobblestone",
+                    arguments={"quantity": 2},
+                )
+            return PlannerDecision("finish")
+
+    agent = GeneralAgent(
+        RetrievalAwarePlanner(),
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([CollectCobblestoneSkill()]),
+        memory=memory,
+        goal_verifier=_cobblestone_goal,
+    )
+
+    result = agent.run("Collect 2 cobblestone")
+
+    assert result.success is True
+    assert result.memory_queries == ("stone acquisition technique",)
+    assert memory.last_retrieval is None
+
+
+def test_wiki_spatial_knowledge_populates_semantic_and_spatial_memory() -> None:
+    def transport(url: str):
+        if "action=parse" in url:
+            return {
+                "parse": {
+                    "text": "<p>Coal ore is found underground and generates in stone.</p>"
+                }
+            }
+        return {
+            "query": {"search": [{"title": "Coal Ore", "snippet": "An ore"}]}
+        }
+
+    memory = AgentMemory()
+    memory.reset("Find coal")
+    result = WikiKnowledge(MinecraftWikiTool(transport=transport)).search_wiki(
+        "where to find coal ore", memory
+    )
+
+    assert result.error is None
+    assert memory.find_knowledge("where to find coal ore").knowledge_type == "spatial"
+    spatial = next(iter(memory.spatial_memory.values()))
+    assert spatial.source == "wiki"
+    assert spatial.confidence == 0.5
+
+
 def test_general_agent_records_subgoals_failures_and_inventory_delta() -> None:
     planner = SequencePlanner(
         [

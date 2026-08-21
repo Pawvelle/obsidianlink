@@ -8,7 +8,7 @@ memory is cleared between tasks unless ``clear_long_term`` is requested.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Iterable
 
 from obsidianlink.env.environment import Observation
@@ -88,6 +88,44 @@ class SpatialMemoryRecord:
     resources: dict[str, int] = field(default_factory=dict)
     notes: str = ""
     confidence: float = 1.0
+    source: str = "agent_observation"
+
+
+@dataclass(frozen=True)
+class RetrievedMemory:
+    """One ranked, compact memory returned to the Planner."""
+
+    memory_type: str
+    key: str
+    score: float
+    summary: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class MemoryRetrieval:
+    """Bounded retrieval result for one goal or subgoal query."""
+
+    query: str
+    subgoal_id: str | None
+    items: tuple[RetrievedMemory, ...] = ()
+
+    def prompt_state(self) -> dict[str, Any]:
+        return {
+            "query": self.query,
+            "subgoal_id": self.subgoal_id,
+            "items": [asdict(item) for item in self.items],
+        }
+
+
+@dataclass(frozen=True)
+class PlanRevisionRecord:
+    """Auditable snapshot of one hierarchical plan update."""
+
+    revision: int
+    reason: str
+    active_subgoal_id: str | None
+    statuses: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -100,6 +138,7 @@ class SubgoalState:
     parent_id: str | None = None
     depends_on: tuple[str, ...] = ()
     attempts: int = 0
+    failures: int = 0
     last_outcome: str = ""
 
 
@@ -127,6 +166,7 @@ class AgentMemory:
     active_subgoal_id: str | None = None
     plan_revision: int = 0
     plan_revision_reason: str = ""
+    plan_history: list[PlanRevisionRecord] = field(default_factory=list)
     completed_steps: list[StepRecord] = field(default_factory=list)
     failed_attempts: list[FailureRecord] = field(default_factory=list)
     reflections: list[ReflectionRecord] = field(default_factory=list)
@@ -143,6 +183,7 @@ class AgentMemory:
     semantic_memory: dict[str, SemanticMemoryRecord] = field(default_factory=dict)
     episodic_memory: list[EpisodicMemoryRecord] = field(default_factory=list)
     spatial_memory: dict[str, SpatialMemoryRecord] = field(default_factory=dict)
+    last_retrieval: MemoryRetrieval | None = None
     _state_initialized: bool = field(default=False, repr=False)
 
     def reset(self, goal: str, *, clear_long_term: bool = False) -> None:
@@ -156,6 +197,7 @@ class AgentMemory:
         self.active_subgoal_id = None
         self.plan_revision = 0
         self.plan_revision_reason = ""
+        self.plan_history.clear()
         self.completed_steps.clear()
         self.failed_attempts.clear()
         self.knowledge_uses.clear()
@@ -166,6 +208,7 @@ class AgentMemory:
         self.selected_item = None
         self.last_error = None
         self.last_observation = None
+        self.last_retrieval = None
         self._state_initialized = False
         if clear_long_term:
             self.known_knowledge.clear()
@@ -249,6 +292,16 @@ class AgentMemory:
             self._sync_legacy_plan_views()
             self.plan_revision += 1
             self.plan_revision_reason = revision_reason.strip()
+            self.plan_history.append(
+                PlanRevisionRecord(
+                    revision=self.plan_revision,
+                    reason=self.plan_revision_reason,
+                    active_subgoal_id=self.active_subgoal_id,
+                    statuses={
+                        node.id: node.status for node in self.subgoal_states.values()
+                    },
+                )
+            )
             return
 
         self.begin_subgoal(subgoal)
@@ -280,6 +333,155 @@ class AgentMemory:
 
     def find_knowledge(self, query: str) -> SemanticMemoryRecord | None:
         return self.semantic_memory.get(_normalize_key(query))
+
+    def retrieve(
+        self,
+        query: str | None = None,
+        *,
+        memory_types: Iterable[str] = ("semantic", "episodic", "spatial"),
+        limit: int = 6,
+    ) -> MemoryRetrieval:
+        """Rank long-term memories against the current goal/subgoal.
+
+        Retrieval is deterministic and local: normalized token overlap, exact
+        phrase matches, failure relevance, recency, and spatial confidence. It
+        intentionally avoids embeddings or a vector database.
+        """
+        if limit < 1:
+            raise ValueError("retrieval limit must be >= 1")
+        retrieval_query = str(query or self.current_subgoal or self.goal).strip()
+        allowed = {
+            str(item).strip().casefold()
+            for item in memory_types
+            if str(item).strip().casefold() in {"semantic", "episodic", "spatial"}
+        }
+        candidates: list[tuple[float, int, RetrievedMemory]] = []
+        order = 0
+        if "semantic" in allowed:
+            for record in self.semantic_memory.values():
+                searchable = " ".join(
+                    (
+                        record.query,
+                        record.knowledge_type,
+                        record.subject,
+                        record.summary,
+                        _searchable(record.attributes),
+                    )
+                )
+                score = _relevance_score(retrieval_query, searchable)
+                if score > 0:
+                    candidates.append(
+                        (
+                            score + min(0.25, record.retrieval_count * 0.03),
+                            order,
+                            RetrievedMemory(
+                                "semantic",
+                                record.key,
+                                0.0,
+                                record.summary[:360],
+                                {
+                                    "knowledge_type": record.knowledge_type,
+                                    "subject": record.subject,
+                                    "attributes": dict(record.attributes),
+                                    "source_url": record.source_url,
+                                },
+                            ),
+                        )
+                    )
+                order += 1
+        if "episodic" in allowed:
+            total = max(1, len(self.episodic_memory))
+            for index, record in enumerate(self.episodic_memory):
+                searchable = " ".join(
+                    (
+                        record.task,
+                        record.subgoal,
+                        record.action,
+                        record.outcome,
+                        _searchable(record.arguments),
+                        _searchable(record.inventory_delta),
+                    )
+                )
+                score = _relevance_score(retrieval_query, searchable)
+                if score > 0:
+                    score += (index + 1) / total * 0.15
+                    if not record.success:
+                        score += 0.35
+                    candidates.append(
+                        (
+                            score,
+                            order,
+                            RetrievedMemory(
+                                "episodic",
+                                f"episode-{index}",
+                                0.0,
+                                record.outcome[:360],
+                                {
+                                    "task": record.task,
+                                    "subgoal": record.subgoal,
+                                    "action": record.action,
+                                    "success": record.success,
+                                    "arguments": dict(record.arguments),
+                                    "inventory_delta": dict(record.inventory_delta),
+                                },
+                            ),
+                        )
+                    )
+                order += 1
+        if "spatial" in allowed:
+            for record in self.spatial_memory.values():
+                searchable = " ".join(
+                    (
+                        record.label,
+                        record.dimension,
+                        _searchable(record.resources),
+                        record.notes,
+                        record.source,
+                    )
+                )
+                score = _relevance_score(retrieval_query, searchable)
+                if score > 0:
+                    candidates.append(
+                        (
+                            score + record.confidence * 0.2,
+                            order,
+                            RetrievedMemory(
+                                "spatial",
+                                record.key,
+                                0.0,
+                                record.notes[:360] or record.label,
+                                {
+                                    "label": record.label,
+                                    "position": record.position,
+                                    "dimension": record.dimension,
+                                    "resources": dict(record.resources),
+                                    "confidence": record.confidence,
+                                    "source": record.source,
+                                },
+                            ),
+                        )
+                    )
+                order += 1
+        candidates.sort(key=lambda item: (-item[0], -item[1]))
+        ranked = tuple(
+            RetrievedMemory(
+                item.memory_type,
+                item.key,
+                round(score, 3),
+                item.summary,
+                item.metadata,
+            )
+            for score, _, item in candidates[:limit]
+        )
+        for item in ranked:
+            if item.memory_type == "semantic" and item.key in self.semantic_memory:
+                record = self.semantic_memory[item.key]
+                self.semantic_memory[item.key] = replace(
+                    record, retrieval_count=record.retrieval_count + 1
+                )
+        result = MemoryRetrieval(retrieval_query, self.active_subgoal_id, ranked)
+        self.last_retrieval = result
+        return result
 
     def remember_knowledge(
         self,
@@ -321,6 +523,11 @@ class AgentMemory:
         return record
 
     def record_knowledge_use(self, record: SemanticMemoryRecord, *, cache_hit: bool) -> None:
+        current = self.semantic_memory.get(record.key)
+        if current is not None:
+            self.semantic_memory[record.key] = replace(
+                current, retrieval_count=current.retrieval_count + 1
+            )
         self.knowledge_uses.append(
             KnowledgeRecord(
                 query=record.query,
@@ -341,6 +548,7 @@ class AgentMemory:
         resources: dict[str, int] | None = None,
         notes: str = "",
         confidence: float = 1.0,
+        source: str = "agent_observation",
     ) -> SpatialMemoryRecord:
         """Store only location information observed or supplied by the agent."""
         key = _normalize_key(f"{dimension}:{label}")
@@ -352,6 +560,7 @@ class AgentMemory:
             resources={str(k): int(v) for k, v in (resources or {}).items()},
             notes=notes.strip(),
             confidence=max(0.0, min(1.0, float(confidence))),
+            source=source.strip() or "agent_observation",
         )
         self.spatial_memory[key] = record
         return record
@@ -382,7 +591,11 @@ class AgentMemory:
             )
         )
         if self.active_subgoal_id in self.subgoal_states:
-            self.subgoal_states[self.active_subgoal_id].last_outcome = message
+            node = self.subgoal_states[self.active_subgoal_id]
+            node.failures += 1
+            if node.status not in {"completed", "skipped"}:
+                node.status = "failed"
+            node.last_outcome = message
         self.last_error = message
 
     def record_reflection(self, record: ReflectionRecord) -> None:
@@ -435,6 +648,9 @@ class AgentMemory:
             "plan_revision": self.plan_revision,
             "plan_revision_reason": self.plan_revision_reason,
             "plan": plan_nodes[-12:],
+            "recent_plan_revisions": [
+                asdict(item) for item in self.plan_history[-4:]
+            ],
             "inventory": dict(self.inventory),
             "selected_item": self.selected_item,
             "inventory_delta": dict(self.inventory_delta),
@@ -457,6 +673,16 @@ class AgentMemory:
                 "nodes": plan_nodes[-12:],
             },
             "working_memory": working,
+            "retrieved_memory": (
+                self.last_retrieval.prompt_state()
+                if self.last_retrieval is not None
+                else {"query": None, "subgoal_id": self.active_subgoal_id, "items": []}
+            ),
+            "memory_index": {
+                "semantic_count": len(self.semantic_memory),
+                "episodic_count": len(self.episodic_memory),
+                "spatial_count": len(self.spatial_memory),
+            },
             "environment": {
                 "inventory": dict(self.inventory),
                 "selected_item": self.selected_item,
@@ -509,6 +735,7 @@ class AgentMemory:
                 parent_id=parent,
                 depends_on=dependencies,
                 attempts=previous.attempts if previous else 0,
+                failures=previous.failures if previous else 0,
                 last_outcome=previous.last_outcome if previous else "",
             )
 
@@ -535,6 +762,48 @@ class AgentMemory:
 
 def _normalize_key(value: str) -> str:
     return " ".join(str(value).strip().casefold().split())
+
+
+def _searchable(value: Any) -> str:
+    if isinstance(value, dict):
+        return " ".join(f"{key} {_searchable(item)}" for key, item in value.items())
+    if isinstance(value, (list, tuple, set)):
+        return " ".join(_searchable(item) for item in value)
+    return str(value)
+
+
+def _tokens(value: str) -> set[str]:
+    raw = str(value).casefold()
+    words = re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]", raw)
+    stopwords = {
+        "a",
+        "an",
+        "and",
+        "for",
+        "how",
+        "in",
+        "of",
+        "the",
+        "to",
+        "with",
+    }
+    return {word for word in words if word not in stopwords}
+
+
+def _relevance_score(query: str, candidate: str) -> float:
+    query_key = _normalize_key(query)
+    candidate_key = _normalize_key(candidate)
+    if not query_key or not candidate_key:
+        return 0.0
+    query_tokens = _tokens(query_key)
+    candidate_tokens = _tokens(candidate_key)
+    overlap = query_tokens & candidate_tokens
+    if not overlap:
+        return 0.0
+    score = len(overlap) / max(1, len(query_tokens))
+    if query_key in candidate_key:
+        score += 1.0
+    return score
 
 
 def _subgoal_key(description: str) -> str:
@@ -566,7 +835,10 @@ __all__ = [
     "EpisodicMemoryRecord",
     "FailureRecord",
     "KnowledgeRecord",
+    "MemoryRetrieval",
+    "PlanRevisionRecord",
     "ReflectionRecord",
+    "RetrievedMemory",
     "SemanticMemoryRecord",
     "SpatialMemoryRecord",
     "StepRecord",

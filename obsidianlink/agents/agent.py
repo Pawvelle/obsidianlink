@@ -64,6 +64,8 @@ class AutonomousMinecraftAgent:
             if self.controller.exhausted:
                 reason = "environment step budget exhausted"
                 return self._result(False, reason, cycle - 1, wiki_queries)
+            if self.memory.last_retrieval is None:
+                self.memory.retrieve(self.memory.current_subgoal or goal)
             try:
                 decision = self.planner.plan(
                     self.memory, observation, self.skills.descriptions
@@ -114,6 +116,16 @@ class AutonomousMinecraftAgent:
                 observation = self.controller.observe()
                 continue
 
+            if decision.type == "memory":
+                self.memory.retrieve(
+                    decision.query,
+                    memory_types=decision.memory_types,
+                    limit=decision.retrieval_limit,
+                )
+                observation = self.controller.observe()
+                self.memory.update_state(observation)
+                continue
+
             start = self.controller.steps
             try:
                 result = self.skills.execute(
@@ -145,6 +157,7 @@ class AutonomousMinecraftAgent:
                     environment_steps=result.steps,
                 )
             )
+            self.memory.last_retrieval = None
             observation = self.controller.observe()
 
         return self._result(False, reason, self.max_planning_cycles, wiki_queries)

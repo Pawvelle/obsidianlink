@@ -29,6 +29,8 @@ class PlannerDecision:
     name: str = ""
     arguments: dict[str, Any] = field(default_factory=dict)
     query: str = ""
+    memory_types: tuple[str, ...] = ()
+    retrieval_limit: int = 6
     reason: str = ""
     subgoal: str = ""
     pending_subgoals: tuple[str, ...] = ()
@@ -118,6 +120,8 @@ def _build_planner_prompt(
         '{"type":"wiki","plan":[{"id":"sg1","description":"learn recipe",'
         '"status":"in_progress","parent_id":null,"depends_on":[]}],'
         '"active_subgoal_id":"sg1","query":"how to craft a wooden pickaxe","reason":"..."}\n'
+        '{"type":"memory","active_subgoal_id":"sg1","query":"previous failures mining iron",'
+        '"memory_types":["episodic","semantic","spatial"],"retrieval_limit":6,"reason":"..."}\n'
         '{"type":"finish","plan":[{"id":"sg1","description":"...",'
         '"status":"completed","parent_id":null,"depends_on":[]}],'
         '"reason":"goal verified from inventory"}\n'
@@ -129,6 +133,8 @@ def _build_planner_prompt(
         '"status":"in_progress","parent_id":null,"depends_on":[]}],'
         '"active_subgoal_id":"sg1","name":"<available skill>","arguments":{},'
         '"expected":{"inventory_min":{}},"plan_revision_reason":"...","reason":"..."}\n'
+        '{"type":"memory","active_subgoal_id":"sg1","query":"known resource locations",'
+        '"memory_types":["episodic","semantic","spatial"],"retrieval_limit":6,"reason":"..."}\n'
         '{"type":"finish","plan":[{"id":"sg1","description":"...",'
         '"status":"completed","parent_id":null,"depends_on":[]}],'
         '"reason":"goal verified from observation"}\n'
@@ -151,11 +157,15 @@ def _build_planner_prompt(
         "- working_memory/subgoal_progress: node status, dependencies, attempts, and progress\n"
         "- last_reflection: expected vs observed outcome of the previous skill\n"
         "- episodic_memory/relevant_failure_experience: avoid repeating failed approaches\n"
-        "- semantic_memory/knowledge_usage: apply structured recipe, item, and mechanic facts\n"
+        "- semantic_memory/knowledge_usage: apply structured recipe, item, mechanic, and spatial facts\n"
         "- spatial_memory: reuse known resource and landmark locations\n"
+        "- retrieved_memory: the bounded memories most relevant to the latest retrieval query\n"
         "- environment.inventory / selected_item / inventory_delta: ground the next skill\n"
         "When a subgoal should change the world, set expected.inventory_min or "
         "expected.inventory_delta so a mismatch can be reflected.\n"
+        "Use a memory decision when the current retrieved_memory is insufficient or targeted "
+        "failure/recipe/location recall would improve the plan. Use Wiki only for missing "
+        "external Minecraft knowledge.\n"
         "Finish only when the current observation already satisfies the task.\n"
         f"Available skills:\n{skills}\n"
         f"{operation_instructions}"
@@ -214,6 +224,35 @@ def parse_planner_decision(
         return PlannerDecision(
             kind,
             query=query,
+            **common,
+        )
+    if kind == "memory":
+        query = str(data.get("query", "") or "").strip()
+        if not query:
+            raise ValueError("memory retrieval query must be non-empty")
+        raw_types = data.get("memory_types", ("semantic", "episodic", "spatial"))
+        if isinstance(raw_types, str):
+            raw_types = (raw_types,)
+        elif not isinstance(raw_types, (list, tuple)):
+            raw_types = ()
+        memory_types = tuple(
+            dict.fromkeys(
+                str(item).strip().casefold()
+                for item in raw_types
+                if str(item).strip().casefold() in {"semantic", "episodic", "spatial"}
+            )
+        )
+        if not memory_types:
+            memory_types = ("semantic", "episodic", "spatial")
+        try:
+            retrieval_limit = int(data.get("retrieval_limit", 6))
+        except (TypeError, ValueError):
+            retrieval_limit = 6
+        return PlannerDecision(
+            kind,
+            query=query,
+            memory_types=memory_types,
+            retrieval_limit=max(1, min(12, retrieval_limit)),
             **common,
         )
     if kind == "finish":

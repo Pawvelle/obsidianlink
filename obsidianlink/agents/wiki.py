@@ -39,6 +39,15 @@ class WikiKnowledge:
                 attributes=knowledge.attributes if knowledge else {},
                 source_url=result.url,
             )
+            if knowledge is not None and knowledge.knowledge_type == "spatial":
+                locations = knowledge.attributes.get("locations", ())
+                notes = " ".join(str(item) for item in locations) or rendered
+                memory.remember_location(
+                    knowledge.subject or result.title or result.query,
+                    notes=notes,
+                    confidence=0.5,
+                    source="wiki",
+                )
             memory.last_error = None
         return result
 

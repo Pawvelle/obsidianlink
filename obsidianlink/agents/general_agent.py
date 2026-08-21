@@ -42,6 +42,7 @@ class GeneralAgentResult:
     inventory: dict[str, int]
     completed_steps: tuple[StepRecord, ...]
     wiki_queries: tuple[str, ...] = ()
+    memory_queries: tuple[str, ...] = ()
 
 
 class GeneralAgent:
@@ -64,6 +65,7 @@ class GeneralAgent:
         goal_verifier: GoalVerifier | None = None,
         max_planning_cycles: int = 16,
         max_wiki_calls: int = 4,
+        max_memory_retrievals: int = 8,
     ) -> None:
         if max_planning_cycles < 1:
             raise ValueError("max_planning_cycles must be >= 1")
@@ -77,16 +79,21 @@ class GeneralAgent:
         if max_wiki_calls < 0:
             raise ValueError("max_wiki_calls must be >= 0")
         self.max_wiki_calls = int(max_wiki_calls)
+        if max_memory_retrievals < 0:
+            raise ValueError("max_memory_retrievals must be >= 0")
+        self.max_memory_retrievals = int(max_memory_retrievals)
         self._wiki_queries: list[str] = []
+        self._memory_queries: list[str] = []
 
     def run(self, task: str) -> GeneralAgentResult:
-        """Run one bounded Task → Subgoal → Skill/Wiki → Observe → Memory episode."""
+        """Run Task → Plan → Subgoal → Memory/Wiki/Skill → Observation updates."""
         task = task.strip()
         if not task:
             raise ValueError("task must be non-empty")
 
         self.memory.reset(task)
         self._wiki_queries = []
+        self._memory_queries = []
         try:
             observation = self.controller.reset()
         except Exception as exc:
@@ -105,6 +112,9 @@ class GeneralAgent:
                 return self._result(
                     task, False, "environment step budget exhausted", cycle - 1
                 )
+
+            if self.memory.last_retrieval is None:
+                self.memory.retrieve(self.memory.current_subgoal or task)
 
             try:
                 decision = self.planner.plan(
@@ -157,6 +167,26 @@ class GeneralAgent:
                         message=wiki_result.error,
                         arguments={"query": decision.query},
                     )
+                else:
+                    self.memory.retrieve(decision.query)
+                observation = self.controller.observe()
+                self.memory.update_state(observation)
+                continue
+
+            if decision.type == "memory":
+                if len(self._memory_queries) >= self.max_memory_retrievals:
+                    self.memory.record_failure(
+                        source="memory",
+                        message="memory retrieval budget exhausted",
+                        arguments={"query": decision.query},
+                    )
+                    continue
+                self._memory_queries.append(decision.query)
+                self.memory.retrieve(
+                    decision.query,
+                    memory_types=decision.memory_types,
+                    limit=decision.retrieval_limit,
+                )
                 observation = self.controller.observe()
                 self.memory.update_state(observation)
                 continue
@@ -199,6 +229,7 @@ class GeneralAgent:
                     skill_success=False,
                     skill_message=skill_result_message,
                 )
+                self.memory.last_retrieval = None
                 continue
 
             observation = self.controller.observe()
@@ -220,6 +251,7 @@ class GeneralAgent:
                 skill_success=skill_result.success,
                 skill_message=skill_result.message,
             )
+            self.memory.last_retrieval = None
             verified, verify_error = self._verify(task, observation)
             if verify_error is not None:
                 return self._result(task, False, verify_error, cycle)
@@ -273,6 +305,7 @@ class GeneralAgent:
             inventory=dict(self.memory.inventory),
             completed_steps=tuple(self.memory.completed_steps),
             wiki_queries=tuple(self._wiki_queries),
+            memory_queries=tuple(self._memory_queries),
         )
 
 

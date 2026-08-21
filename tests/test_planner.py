@@ -78,3 +78,16 @@ def test_planner_parser_accepts_hierarchical_plan_update() -> None:
     assert decision.plan[0].status == "completed"
     assert decision.plan[1].depends_on == ("find",)
     assert decision.plan_revision_reason == "stone is now reachable"
+
+
+def test_planner_parser_accepts_bounded_memory_retrieval() -> None:
+    decision = parse_planner_decision(
+        '{"type":"memory","query":"failed attempts mining iron",'
+        '"memory_types":["episodic","semantic","unknown","episodic"],'
+        '"retrieval_limit":99,"reason":"recover from failure"}',
+        frozenset(),
+    )
+
+    assert decision.type == "memory"
+    assert decision.memory_types == ("episodic", "semantic")
+    assert decision.retrieval_limit == 12

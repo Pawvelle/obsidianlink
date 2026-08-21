@@ -141,6 +141,10 @@ def test_memory_merges_hierarchical_plan_and_tracks_attempts() -> None:
     assert memory.subgoal_states["materials"].attempts == 1
     assert memory.pending_subgoals == ["craft tool"]
     assert state["working_memory"]["plan_revision"] == 1
+    assert state["working_memory"]["recent_plan_revisions"][0]["statuses"] == {
+        "materials": "in_progress",
+        "craft": "pending",
+    }
     assert state["subgoal_progress"]["nodes"][1]["depends_on"] == ("materials",)
 
     memory.apply_plan(
@@ -157,3 +161,56 @@ def test_memory_merges_hierarchical_plan_and_tracks_attempts() -> None:
         active_subgoal_id="materials",
     )
     assert memory.subgoal_states["materials"].status == "completed"
+
+
+def test_memory_retrieval_ranks_relevant_semantic_episodic_and_spatial_records() -> None:
+    memory = AgentMemory()
+    memory.reset("Mine iron")
+    memory.remember_knowledge(
+        "iron ore item",
+        "Iron ore requires a stone pickaxe or better.",
+        knowledge_type="item",
+        subject="Iron Ore",
+    )
+    memory.remember_knowledge(
+        "bread recipe",
+        "Bread is crafted from wheat.",
+        knowledge_type="recipe",
+        subject="Bread",
+    )
+    memory.remember_location(
+        "nearby iron vein",
+        position=(12.0, 20.0, -3.0),
+        resources={"iron_ore": 5},
+        notes="iron vein below the stone ridge",
+    )
+    memory.begin_subgoal("mine iron ore", subgoal_id="mine")
+    memory.record_failure(
+        source="attack",
+        message="iron ore did not break with wooden pickaxe",
+        arguments={"ticks": 20},
+    )
+
+    result = memory.retrieve("mine iron ore", limit=4)
+
+    assert {item.memory_type for item in result.items} == {
+        "semantic",
+        "episodic",
+        "spatial",
+    }
+    assert all("bread" not in item.summary.casefold() for item in result.items)
+    assert result.items[0].score >= result.items[-1].score
+    assert memory.prompt_state()["retrieved_memory"]["query"] == "mine iron ore"
+    assert memory.subgoal_states["mine"].status == "failed"
+    assert memory.subgoal_states["mine"].failures == 1
+
+
+def test_memory_retrieval_can_limit_memory_types() -> None:
+    memory = AgentMemory()
+    memory.reset("Find oak logs")
+    memory.remember_knowledge("oak logs", "Oak logs come from oak trees.")
+    memory.remember_location("oak grove", resources={"oak_log": 4})
+
+    result = memory.retrieve("oak logs", memory_types=("spatial",), limit=2)
+
+    assert [item.memory_type for item in result.items] == ["spatial"]

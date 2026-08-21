@@ -195,6 +195,17 @@ def _extract_knowledge(
             if re.search(r"\b(can|cannot|must|requires?|when|if|only|causes?)\b", sentence, re.I)
         ]
         attributes["rules"] = tuple(rules[:6])
+    elif kind == "spatial":
+        locations = [
+            sentence.strip()
+            for sentence in _SENTENCE_RE.split(content)
+            if re.search(
+                r"\b(found|generates?|spawns?|located|biome|dimension|altitude|y-level)\b",
+                sentence,
+                re.I,
+            )
+        ]
+        attributes["locations"] = tuple(locations[:6])
     return StructuredKnowledge(kind, title, content, attributes)
 
 
@@ -203,6 +214,11 @@ def _knowledge_type(query: str, sections: Mapping[str, str]) -> str:
     headings = " ".join(sections).casefold()
     if re.search(r"\b(recipe|craft|crafting|ingredients?|make)\b", lowered):
         return "recipe"
+    if re.search(
+        r"\b(where|find|location|located|spawn|generation|generate|biome|dimension|y-level)\b",
+        lowered,
+    ):
+        return "spatial"
     if re.search(r"\b(how|mechanic|works?|behavior|interaction|rule)\b", lowered):
         return "mechanic"
     if "crafting" in headings and re.search(r"\b(recipe|craft)\b", headings):
@@ -257,7 +273,15 @@ def _parse_html_value(payload: Mapping[str, Any]) -> str:
 
 def _article_text(sections: Mapping[str, str]) -> str:
     ordered = [sections.get("summary", "")]
-    preferred = ("usage", "obtaining", "crafting", "behavior", "mechanics")
+    preferred = (
+        "usage",
+        "obtaining",
+        "crafting",
+        "behavior",
+        "mechanics",
+        "generation",
+        "location",
+    )
     ordered.extend(value for key, value in sections.items() if any(name in key for name in preferred))
     return _clean_text(" ".join(ordered))
 
