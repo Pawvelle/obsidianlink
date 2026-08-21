@@ -73,7 +73,7 @@ class AutonomousMinecraftAgent:
                 self.memory.record_failure(source="planner", message=reason)
                 return self._result(False, reason, cycle, wiki_queries)
 
-            self.memory.begin_subgoal(decision.subgoal)
+            self.memory.apply_plan(decision.subgoal, decision.pending_subgoals)
 
             if decision.type == "wiki":
                 if len(wiki_queries) >= self.max_wiki_calls:

@@ -1,4 +1,4 @@
-from obsidianlink.agents.memory import AgentMemory, StepRecord
+from obsidianlink.agents.memory import AgentMemory, ReflectionRecord, StepRecord
 from obsidianlink.env.environment import Observation
 
 
@@ -67,3 +67,27 @@ def test_successful_skill_clears_last_error_but_keeps_failure_history() -> None:
     assert memory.last_error is None
     assert [item.source for item in memory.failed_attempts] == ["attack"]
     assert memory.prompt_state()["recent_skills"][-1]["success"] is True
+
+
+def test_memory_tracks_pending_subgoals_knowledge_usage_and_reflection() -> None:
+    memory = AgentMemory()
+    memory.reset("Mine 1 cobblestone")
+    memory.update_state(Observation(inventory={}))
+    memory.apply_plan("learn cobblestone rule", ("approach stone", "mine stone"))
+    memory.remember_knowledge("cobblestone", "Mine stone with a pickaxe.")
+    memory.record_reflection(
+        ReflectionRecord(
+            skill="attack",
+            subgoal="mine stone",
+            matched=False,
+            reason="expected at least 1 cobblestone, observed 0",
+        )
+    )
+
+    state = memory.prompt_state()
+    assert state["subgoal_progress"]["current"] == "learn cobblestone rule"
+    assert state["subgoal_progress"]["pending"] == ["approach stone", "mine stone"]
+    assert state["knowledge_usage"]["retrieved"]["cobblestone"] == "Mine stone with a pickaxe."
+    assert state["knowledge_usage"]["recent"][0]["query"] == "cobblestone"
+    assert state["last_reflection"]["matched"] is False
+    assert "expected at least 1 cobblestone" in state["last_reflection"]["reason"]

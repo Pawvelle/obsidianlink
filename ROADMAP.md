@@ -12,11 +12,11 @@
 
 ```text
 Natural-language Task → GeneralAgent → Planner
-                                      ├─ Subgoal
+                                      ├─ Subgoal decomposition
                                       ├─ Wiki Knowledge → Memory → Planner
                                       └─ Primitive Skill → Controller
                                                               ↓
-                         Memory ← Observation ← Environment
+              Memory ← Reflection ← Observation ← Fake or live Environment
                                       ↓
                                  Next Decision
 ```
@@ -25,9 +25,20 @@ Natural-language Task → GeneralAgent → Planner
 
 ## Current Task
 
-**GeneralAgent Planner / Memory Foundation**
+**Agent Reasoning Foundation**
 
 2026-08-21 当前实现：
+
+* 新增 `FakeMinecraftEnv`：不启动 Minecraft/MineRL，模拟 inventory、可采矿资源、hotbar、放置与 GUI crafting；primitive skill 仍发同一套 `Action`，Observation 只有 `frame` / `inventory` / `selected_item`
+* Planner 从单步选择提升为任务分解：`pending_subgoals` + `current subgoal` + 可选 `expected` 观察结果；prompt 要求根据 subgoal progress、last_reflection、failure history、knowledge usage 调整计划
+* Memory 增加 `subgoal_progress`（current / completed / pending）、`knowledge_usage`、`failure_history` 与 `last_reflection`
+* 轻量 Reflection：skill 后比较 expected vs observed；不匹配则写入 Memory，影响下一轮 Planner。不是额外 LLM、也不是 reflection framework
+* Offline reasoning 闭环已验证：Wiki → 过早 attack 失败 → Memory 记录 mismatch → 改为 move → 再 attack → inventory 验证成功
+* 完整 offline regression：**198 passed**；`obsidianlink/benchmark/` 无变更；未恢复 `collect_wood` / `mine_iron` / `build_portal`
+
+**GeneralAgent Planner / Memory Foundation**
+
+2026-08-21 先前实现：
 
 * Planner 决策循环明确为 `Task → Subgoal → Primitive Skill/Wiki → Observation → Memory → Next Decision`
 * `PlannerDecision` 增加可选 `subgoal`；`LLMSkillPlanner` prompt 使用结构化 Memory 与 agent-visible Observation 摘要，不再把 skill metadata 当日志塞进上下文
@@ -248,6 +259,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * **2026-08-21 GeneralAgent Phase 1 core**：自然语言 `run(task)` 统一入口、Task→Planner→Skill→Environment→Observation→Memory 有界闭环、可注入 GoalVerifier、失败重规划；保留全部 baseline 与 benchmark；offline 163 passed
 * **2026-08-21 GeneralAgent first live task**：controlled survival-mode MineRL 中 `Mine 1 obsidian block` 成功；Planner 1 call，254 environment steps，inventory Observation 验证 `obsidian=1`；未使用 benchmark/Wiki/RAG/Vision/Multi-Agent
 * **2026-08-21 GeneralAgent Planner/Memory foundation**：Task→Subgoal→Primitive/Wiki→Observation→Memory 决策状态；offline 189 passed；未改 benchmark
+* **2026-08-21 Agent Reasoning Foundation**：FakeMinecraftEnv + Planner 分解/进度 + Memory 知识使用 + 轻量 expected/observed reflection；offline 198 passed；未改 benchmark；未启动真实 Minecraft 任务
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
 * **L1 Mechanical Interaction Test**（正式 L1 上 scripted 浇灌 mechanics；NEW OBSIDIAN = TRUE；无 Oracle / 无 Evaluator / 无 Agent）
 * **L1 Evaluator**（evaluator-only `reward` + `biome_id` truth；live-verified fail-closed；无 ObservationFromGrid；无 Observation 泄漏）
@@ -264,9 +276,9 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 
 ## Next
 
-1. 用 fake environment 验证 Planner 多步 primitive 组合：同一任务经 Wiki → 多个 subgoal → 多个 primitive 完成，确认 Memory 中的失败经验真能改变下一步决策。
-2. 验证 primitive 的 live 可靠性（`move` / `look` / `attack` / `interact`），再恢复自然森林资源任务；不要恢复 `collect_wood` 等高层 workflow skill。
-3. 自然木头成功后再测组合资源任务。不要提前开发 Multi-Agent、Vision pipeline 或 RAG。
+1. 继续用 `FakeMinecraftEnv` 测更长的 primitive 组合（例如 log → planks），仍不启动真实 Minecraft 任务。
+2. Reasoning 闭环稳定后再验证 primitive 的 live 可靠性（`move` / `look` / `attack` / `interact`）；不要恢复 `collect_wood` 等高层 workflow skill。
+3. 不要提前开发 Multi-Agent、Vision pipeline 或 RAG。
 
 不恢复 Nether Portal，不增加多 Agent、reflection framework 或通用 RAG pipeline。
 

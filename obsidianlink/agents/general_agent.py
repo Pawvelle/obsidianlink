@@ -13,6 +13,7 @@ from typing import Protocol
 
 from obsidianlink.agents.memory import AgentMemory, StepRecord
 from obsidianlink.agents.planner import TaskPlanner
+from obsidianlink.agents.reflection import reflect_skill_outcome
 from obsidianlink.agents.wiki import WikiKnowledge
 from obsidianlink.controller.minecraft_controller import MinecraftController
 from obsidianlink.env.environment import Observation
@@ -47,8 +48,9 @@ class GeneralAgent:
     """Unified entry point for task-agnostic, single-agent Minecraft runs.
 
     The planner can request live Wiki knowledge or invoke one bounded
-    primitive skill. Vision-specific policy, reflection frameworks, and
-    multi-agent coordination remain outside this core loop.
+    primitive skill. A lightweight expected-vs-observed check is written
+    into memory after each skill. Vision pipelines, reflection frameworks,
+    and multi-agent coordination remain outside this core loop.
     """
 
     def __init__(
@@ -115,7 +117,7 @@ class GeneralAgent:
                 self.memory.record_failure(source="planner", message=reason)
                 return self._result(task, False, reason, cycle)
 
-            self.memory.begin_subgoal(decision.subgoal)
+            self.memory.apply_plan(decision.subgoal, decision.pending_subgoals)
 
             if decision.type == "finish":
                 if self.goal_verifier is None:
@@ -182,6 +184,13 @@ class GeneralAgent:
                         environment_steps=self.controller.steps - start,
                     )
                 )
+                reflect_skill_outcome(
+                    self.memory,
+                    decision,
+                    observation,
+                    skill_success=False,
+                    skill_message=skill_result_message,
+                )
                 continue
 
             observation = self.controller.observe()
@@ -195,6 +204,13 @@ class GeneralAgent:
                     environment_steps=skill_result.steps,
                     metadata=dict(skill_result.metadata),
                 )
+            )
+            reflect_skill_outcome(
+                self.memory,
+                decision,
+                observation,
+                skill_success=skill_result.success,
+                skill_message=skill_result.message,
             )
             verified, verify_error = self._verify(task, observation)
             if verify_error is not None:

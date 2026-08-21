@@ -20,6 +20,8 @@ class PlannerDecision:
     query: str = ""
     reason: str = ""
     subgoal: str = ""
+    pending_subgoals: tuple[str, ...] = ()
+    expected: dict[str, Any] = field(default_factory=dict)
 
 
 class TaskPlanner(Protocol):
@@ -95,30 +97,36 @@ def _build_planner_prompt(
     operation_instructions = (
         "You may request current game knowledge with search_wiki when a rule is unknown.\n"
         "Return exactly one JSON object in one of these forms:\n"
-        '{"type":"skill","subgoal":"<current subgoal>","name":"<available skill>","arguments":{},"reason":"..."}\n'
-        '{"type":"wiki","subgoal":"<current subgoal>","query":"how to craft a wooden pickaxe","reason":"..."}\n'
+        '{"type":"skill","subgoal":"<current subgoal>","pending_subgoals":["..."],'
+        '"name":"<available skill>","arguments":{},"expected":{"inventory_min":{}},"reason":"..."}\n'
+        '{"type":"wiki","subgoal":"<current subgoal>","pending_subgoals":["..."],'
+        '"query":"how to craft a wooden pickaxe","reason":"..."}\n'
         '{"type":"finish","subgoal":"<current subgoal>","reason":"goal verified from inventory"}\n'
         if allow_wiki
         else
         "Knowledge lookup is unavailable in this phase.\n"
         "Return exactly one JSON object in one of these forms:\n"
-        '{"type":"skill","subgoal":"<current subgoal>","name":"<available skill>","arguments":{},"reason":"..."}\n'
+        '{"type":"skill","subgoal":"<current subgoal>","pending_subgoals":["..."],'
+        '"name":"<available skill>","arguments":{},"expected":{"inventory_min":{}},"reason":"..."}\n'
         '{"type":"finish","subgoal":"<current subgoal>","reason":"goal verified from observation"}\n'
     )
     return (
         "You are the planner of one autonomous Minecraft agent.\n"
-        "Follow this loop: task → current subgoal → one primitive skill or wiki "
-        "lookup → observe the result in memory → choose the next decision.\n"
-        "First name the smallest current subgoal that advances the task, then "
-        "choose exactly one operation that serves that subgoal.\n"
+        "Decompose the task before acting: remaining subgoals → current subgoal → "
+        "one primitive skill or wiki lookup → compare the result in memory → "
+        "choose the next decision.\n"
+        "Keep pending_subgoals as unfinished work after the current subgoal. "
+        "Do not repeat completed_subgoals.\n"
         "Compose complex tasks from the named primitive skills; never invent "
         "MineRL actions or unavailable skills.\n"
-        "Use memory to decide the next subgoal:\n"
-        "- completed_subgoals: do not repeat finished work\n"
-        "- recent_failures: change approach instead of retrying the same failing skill blindly\n"
-        "- wiki_knowledge: apply retrieved game rules\n"
-        "- environment.inventory / selected_item / inventory_delta: ground the plan in current items\n"
-        "- last_error: recover from the most recent failure\n"
+        "Use memory to adjust the plan:\n"
+        "- subgoal_progress: current, completed, and pending work\n"
+        "- last_reflection: expected vs observed outcome of the previous skill\n"
+        "- failure_history: change approach instead of retrying the same failing skill blindly\n"
+        "- knowledge_usage: apply retrieved game rules\n"
+        "- environment.inventory / selected_item / inventory_delta: ground the next skill\n"
+        "When a subgoal should change the world, set expected.inventory_min or "
+        "expected.inventory_delta so a mismatch can be reflected.\n"
         "Finish only when the current observation already satisfies the task.\n"
         f"Available skills:\n{skills}\n"
         f"{operation_instructions}"
@@ -139,6 +147,10 @@ def parse_planner_decision(
     kind = str(data.get("type", "")).strip().lower()
     reason = str(data.get("reason", "") or "")
     subgoal = str(data.get("subgoal", "") or "").strip()
+    pending = _parse_pending_subgoals(data)
+    expected = data.get("expected", {})
+    if not isinstance(expected, dict):
+        expected = {}
     if kind == "skill":
         name = str(data.get("name", "")).strip()
         if name not in allowed_skills:
@@ -152,6 +164,8 @@ def parse_planner_decision(
             arguments=dict(arguments),
             reason=reason,
             subgoal=subgoal,
+            pending_subgoals=pending,
+            expected=dict(expected),
         )
     if kind == "wiki":
         if not allow_wiki:
@@ -159,10 +173,27 @@ def parse_planner_decision(
         query = str(data.get("query", "")).strip()
         if not query:
             raise ValueError("wiki query must be non-empty")
-        return PlannerDecision(kind, query=query, reason=reason, subgoal=subgoal)
+        return PlannerDecision(
+            kind,
+            query=query,
+            reason=reason,
+            subgoal=subgoal,
+            pending_subgoals=pending,
+        )
     if kind == "finish":
-        return PlannerDecision(kind, reason=reason, subgoal=subgoal)
+        return PlannerDecision(kind, reason=reason, subgoal=subgoal, pending_subgoals=pending)
     raise ValueError(f"unknown planner decision type: {kind!r}")
+
+
+def _parse_pending_subgoals(data: dict[str, Any]) -> tuple[str, ...]:
+    raw = data.get("pending_subgoals", data.get("remaining_subgoals", ()))
+    if isinstance(raw, str):
+        items = [raw]
+    elif isinstance(raw, (list, tuple)):
+        items = list(raw)
+    else:
+        items = []
+    return tuple(str(item).strip() for item in items if str(item).strip())
 
 
 __all__ = [

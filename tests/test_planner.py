@@ -41,8 +41,10 @@ def test_planner_prompt_exposes_observation_memory_and_subgoal_loop() -> None:
         observation=observation,
     )
 
-    assert "task → current subgoal" in prompt
-    assert "completed_subgoals" in prompt
+    assert "remaining subgoals → current subgoal" in prompt
+    assert "subgoal_progress" in prompt
+    assert "last_reflection" in prompt
+    assert "knowledge_usage" in prompt
     assert "recent_failures" in prompt
     assert "wiki_knowledge" in prompt
     assert '"has_visual_frame": true' in prompt
@@ -50,3 +52,14 @@ def test_planner_prompt_exposes_observation_memory_and_subgoal_loop() -> None:
     assert "secret" not in prompt
     assert "no block broke" in prompt
     assert "Mine stone with a pickaxe." in prompt
+
+
+def test_planner_parser_accepts_pending_subgoals_and_expected_outcome() -> None:
+    decision = parse_planner_decision(
+        '{"type":"skill","subgoal":"mine stone","pending_subgoals":["verify inventory"],'
+        '"name":"attack","arguments":{"ticks":8},"expected":{"inventory_min":{"cobblestone":1}}}',
+        frozenset({"attack"}),
+    )
+    assert decision.subgoal == "mine stone"
+    assert decision.pending_subgoals == ("verify inventory",)
+    assert decision.expected == {"inventory_min": {"cobblestone": 1}}
