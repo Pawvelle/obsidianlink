@@ -24,6 +24,7 @@ class ActionType(Enum):
     PLACE = "place"
     EQUIP = "equip"
     HOTBAR = "hotbar"
+    INVENTORY = "inventory"
     WAIT = "wait"
 
 
@@ -46,6 +47,9 @@ class Action:
     # Optional modifier. Needed to place against a block without
     # falling into fluids. Maps to MineRL ``sneak``, not a new verb.
     sneak: bool = False
+
+    # Controller-only movement modifier for natural terrain traversal.
+    jump: bool = False
 
 
 __all__ = ["Action", "ActionType"]

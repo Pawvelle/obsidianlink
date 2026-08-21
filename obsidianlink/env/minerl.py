@@ -116,10 +116,8 @@ class MineRLEnvironment(Environment):
         if "use" in keyset:
             out["use"] = 1 if action.type is ActionType.USE else 0
         if "jump" in keyset:
-            if "use" in keyset:
-                out["jump"] = 0
-            else:
-                out["jump"] = 1 if action.type is ActionType.USE else 0
+            legacy_use_jump = "use" not in keyset and action.type is ActionType.USE
+            out["jump"] = 1 if action.jump or legacy_use_jump else 0
         if "sneak" in keyset:
             out["sneak"] = 1 if action.sneak else 0
         if "sprint" in keyset:
@@ -141,6 +139,8 @@ class MineRLEnvironment(Environment):
                 key = f"hotbar.{slot}"
                 if key in keyset:
                     out[key] = 1
+        if "inventory" in keyset:
+            out["inventory"] = 1 if action.type is ActionType.INVENTORY else 0
         return out
 
 

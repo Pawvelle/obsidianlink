@@ -43,6 +43,14 @@ def test_move_forward() -> None:
     assert translated["back"] == 0
 
 
+def test_move_can_jump_over_natural_terrain() -> None:
+    translated = MineRLEnvironment._to_minerl_action(
+        Action(type=ActionType.MOVE, dx=1, jump=True), _TREECHOP_KEYS
+    )
+    assert translated["forward"] == 1
+    assert translated["jump"] == 1
+
+
 def test_camera_is_pitch_then_yaw() -> None:
     translated = MineRLEnvironment._to_minerl_action(
         Action(type=ActionType.CAMERA, yaw=15.0, pitch=-5.0), _TREECHOP_KEYS
@@ -100,6 +108,16 @@ def test_wait_does_not_emit_equip_or_hotbar() -> None:
     )
     assert "equip" not in translated
     assert "hotbar.1" not in translated
+
+
+def test_inventory_action_is_explicit_and_wait_releases_key() -> None:
+    keys = _TREECHOP_KEYS + ("inventory",)
+    opened = MineRLEnvironment._to_minerl_action(
+        Action(type=ActionType.INVENTORY), keys
+    )
+    assert opened["inventory"] == 1
+    waited = MineRLEnvironment._to_minerl_action(Action(type=ActionType.WAIT), keys)
+    assert waited["inventory"] == 0
 
 
 def test_hotbar_slot_parser() -> None:

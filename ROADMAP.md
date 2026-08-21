@@ -4,21 +4,37 @@
 
 ## Current Phase
 
-**Phase 3 — Single-Agent Portal Benchmark**
+**Phase 3 — Single-Agent Autonomous Minecraft Prototype**
 
-Phase 1 与 Phase 2 已关闭：
+用户于 2026-08-21 明确调整当前优先级：暂停 Benchmark / Nether Portal 工作，先开发 Agent 本身。保留既有 benchmark 代码与历史证据，但当前不重构、不扩展。
+
+当前架构：
 
 ```text
-Phase 1  Minimal Minecraft Agent Loop     ✅
-Phase 2  Benchmark MVP                    ✅
-           D1 Perception (Lava Presence)  ✅ representative
+LLM Brain → Task Planner → Memory → Skill Library → Minecraft Controller → Environment
 ```
 
-不要再增加 D1 / D2 / D3 diagnostic task。不要提前开发 D4 / D5 / D6。不要实现 Planner / Reflection / Multi-Agent。
+约束：单 Agent；LLM 只调用高层 skill；不引入 LangChain、复杂 Agent framework、Multi-Agent 或 RAG pipeline。
 
 ## Current Task
 
-**L2 Nether Portal construction benchmark**
+**最小闭环：获取木头并制作木镐**
+
+2026-08-21 当前实现：
+
+* 新增 `AutonomousMinecraftAgent`：`observe → plan → skill/wiki → memory update`；Planner 只接受 `skill` / `wiki` / `finish`，拒绝 `move` / camera / mouse 等低级动作
+* 新增 episode-local `AgentMemory`：目标、完成步骤、Wiki 知识、inventory / selected item、last error
+* 新增高层 skill library：`collect_wood` / `mine_block` / `craft_item` / `explore_area` / `build_structure`
+* 新增 `MinecraftController` 与 `WoodPickaxeEnv`；旧 benchmark 路径未重构
+* 复用 live Minecraft Wiki，并把查询结果写入 memory；无 embedding / vector DB / RAG pipeline
+* MCP-Reborn live 发现：结构化 `CraftAction` 会把 `craft none` 送入 `constructKeyboardState` 并触发 `NumberFormatException`，因此不使用该 handler；`craft_item` 改走真实 inventory / crafting-table GUI 控制
+* Live environment smoke：reset / WAIT / inventory open / inventory close 全部成功；POV `(360, 640, 3)`，真实初始 inventory `iron_axe=1`
+* Offline tests：159 passed
+* **尚未获得 live task success**：`collect_wood(quantity=3)` 在 3 次有界 run（300 / 500 / 500 steps）均为 `0/3 logs`；已加入 RGB tree servo、dense forest generator 与 jump movement，但目标接近仍未解决。因此 GUI 木镐制作只通过 fake-environment 闭环，尚未 live 验证
+
+下一步只解决 `collect_wood` 的 live 视觉导航/接近；采集成功前，不扩展长程任务或恢复 Nether Portal。
+
+## Prior Benchmark Context
 
 **L1 LLMAgent Vision Baseline v3** 已完成（见下）。RGB POV 已接到 MiniMax-M3；视觉 grounding 明显提高 world interaction，但 276/500 步因 `agent_exception` 中断，任务仍未成功。不要加 memory / RAG / planner。
 
@@ -186,6 +202,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
   * Live 2026-08-19：Qwen3-VL-2B，`vision_completions=1`，`success=True`，GT 只在 hidden_state
 * Live Minecraft Wiki Tool
 * Tool-enabled ReactiveAgent
+* **2026-08-21 Autonomous Agent prototype architecture**（LLM high-level planner + memory + skill library + controller + dedicated env；fake-environment wood→wooden_pickaxe 闭环通过；live task success 尚未通过）
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
 * **L1 Mechanical Interaction Test**（正式 L1 上 scripted 浇灌 mechanics；NEW OBSIDIAN = TRUE；无 Oracle / 无 Evaluator / 无 Agent）
 * **L1 Evaluator**（evaluator-only `reward` + `biome_id` truth；live-verified fail-closed；无 ObservationFromGrid；无 Observation 泄漏）
@@ -202,19 +219,17 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 
 ## Next
 
-**L2 Nether Portal construction benchmark**。正式最小闭环已接入：
+1. 为 `collect_wood` 增加可诊断的视觉轨迹（候选目标、yaw correction、接近阶段、最终帧），找出 0/3 logs 的具体失败模式。
+2. 在不读取 hidden truth 的前提下跑通一次真实 `collect_wood(quantity=3)`。
+3. 采集成功后，单独 live 验证 inventory GUI → crafting table → 3×3 wooden pickaxe 配方。
+4. 机械链稳定后再运行 `run_autonomous_agent.py` 的 MiniMax planner + Wiki 完整 episode。
 
-* `OraclePortalAgent(BaseAgent)`：确定性、无 LLM、只发合法动作的 portal mechanics reference controller；不读取 hidden truth。它会尝试取岩浆、浇筑 10 次、点火和走入 portal。当前不能把它当作 live 成功证据，受下述 fluid/server timeout 限制。
-* `RuleBasedPortalAgent(BaseAgent)`：最小 inventory FSM，状态固定为 `FIND_RESOURCE → COLLECT → BUILD → ACTIVATE → COMPLETE`；它是 baseline，不读 hidden truth。
-* `experiments/run_agent.py --agent random|rule|llm|oracle` 已走正式 `L1_PORTAL_TASK + BenchmarkRunner + L1Evaluator`；每次运行写入 `results/episode_XXX.json`，包括 agent name、success、steps、duration、failure reason 与 evaluator episode statistics。
-* `BenchmarkRunner` 现在会 reset agent/evaluator，并逐 tick 提供 evaluator-only `hidden_state` 给 `L1Evaluator.observe_step`；`Observation` API 未变，Agent 永远看不到 reward / biome / pose。
-* Offline test suite: 151 passed (2026-08-21). 尚未把长液体建造 Oracle 标记为完成的 live benchmark evidence。
-* Vision v3 证明 RGB grounding 能提高 move/use/attack。下一步可处理长 episode API 稳定性，或分析为何仍以 camera 为主；不要加 memory / RAG / planner。
-
-下一步是在已知的 MCP-Reborn/Malmo 液体负载不稳定性下取得一个干净的真实 Oracle run，或记录其结构化环境失败；不要加 memory / RAG / planner / LangChain / multi-agent / tool calling。
+不恢复 Nether Portal，不增加多 Agent、reflection framework 或通用 RAG pipeline。
 
 ## Blocked
 
+* **Autonomous prototype live blocker（2026-08-21）**：`collect_wood` 在自然 Treechop world 中 300 / 500 / 500 steps 均为 0 logs；dense forest + RGB tree servo + jump 仍未解决目标接近。完整 wooden-pickaxe live success 因此前置阻塞。
+* **Structured crafting blocker（2026-08-21）**：MCP-Reborn EnvServer 对 `craft none` 执行 `Integer.parseInt("none")` 并终止 episode；原型必须使用真实 inventory GUI，不能用 `CraftAction` handler。
 * `MineRLNavigate-v0` 在本机 Malmo 0.37.0 上有 `NullPointerException`。Phase 1 使用 `MineRLTreechop-v0`。
 * Malmo 0.37.0 已知限制（记录，不在本次用 workaround 改 Benchmark 定义）：
   * `<Placement>` / `/teleport` 可能被忽略

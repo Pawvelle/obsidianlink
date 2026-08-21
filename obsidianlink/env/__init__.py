@@ -5,6 +5,7 @@ from obsidianlink.env.environment import Environment, Observation
 from obsidianlink.env.l1_scene import L1ControlledEnv
 from obsidianlink.env.minerl import MineRLEnvironment
 from obsidianlink.env.scene import ControlledSceneEnv
+from obsidianlink.env.wood_pickaxe import WoodPickaxeEnv
 
 __all__ = [
     "Action",
@@ -14,4 +15,5 @@ __all__ = [
     "L1ControlledEnv",
     "MineRLEnvironment",
     "Observation",
+    "WoodPickaxeEnv",
 ]

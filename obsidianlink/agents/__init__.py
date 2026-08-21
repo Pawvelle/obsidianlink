@@ -1,5 +1,6 @@
 """Agent interfaces."""
 
+from obsidianlink.agents.agent import AutonomousMinecraftAgent, AutonomousRunResult
 from obsidianlink.agents.base import Agent
 from obsidianlink.agents.base_agent import BaseAgent
 from obsidianlink.agents.heuristic import HeuristicModelClient
@@ -16,6 +17,8 @@ from obsidianlink.agents.reactive import ReactiveAgent, parse_model_response
 
 __all__ = [
     "Agent",
+    "AutonomousMinecraftAgent",
+    "AutonomousRunResult",
     "BaseAgent",
     "HeuristicModelClient",
     "LLMAgent",

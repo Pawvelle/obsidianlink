@@ -1,0 +1,151 @@
+"""Autonomous observe → plan → skill → memory loop."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from obsidianlink.agents.memory import AgentMemory, StepRecord
+from obsidianlink.agents.planner import TaskPlanner
+from obsidianlink.agents.wiki import WikiKnowledge
+from obsidianlink.controller.minecraft_controller import MinecraftController
+from obsidianlink.skills import SkillLibrary, default_skill_library
+
+WOODEN_PICKAXE_GOAL = "获取木头并制作木镐"
+
+
+@dataclass(frozen=True)
+class AutonomousRunResult:
+    success: bool
+    reason: str
+    planning_cycles: int
+    environment_steps: int
+    inventory: dict[str, int]
+    completed_steps: tuple[StepRecord, ...]
+    wiki_queries: tuple[str, ...]
+
+
+class AutonomousMinecraftAgent:
+    """Single-agent orchestrator whose planner can call only named skills."""
+
+    def __init__(
+        self,
+        planner: TaskPlanner,
+        controller: MinecraftController,
+        *,
+        skills: SkillLibrary | None = None,
+        wiki: WikiKnowledge | None = None,
+        memory: AgentMemory | None = None,
+        max_planning_cycles: int = 16,
+        max_wiki_calls: int = 4,
+    ) -> None:
+        if max_planning_cycles < 1:
+            raise ValueError("max_planning_cycles must be >= 1")
+        self.planner = planner
+        self.controller = controller
+        self.skills = skills or default_skill_library()
+        self.wiki = wiki or WikiKnowledge()
+        self.memory = memory or AgentMemory()
+        self.max_planning_cycles = int(max_planning_cycles)
+        self.max_wiki_calls = int(max_wiki_calls)
+
+    def run(self, goal: str = WOODEN_PICKAXE_GOAL) -> AutonomousRunResult:
+        self.memory.reset(goal)
+        observation = self.controller.reset()
+        self.memory.update_state(observation)
+        wiki_queries: list[str] = []
+        reason = "planning cycle budget exhausted"
+
+        for cycle in range(1, self.max_planning_cycles + 1):
+            if _has_wooden_pickaxe(self.memory.inventory):
+                return self._result(True, "wooden pickaxe verified in inventory", cycle - 1, wiki_queries)
+            if self.controller.exhausted:
+                reason = "environment step budget exhausted"
+                return self._result(False, reason, cycle - 1, wiki_queries)
+            try:
+                decision = self.planner.plan(
+                    self.memory, observation, self.skills.descriptions
+                )
+            except Exception as exc:  # planner/API/parser boundary
+                reason = f"planner failed: {type(exc).__name__}: {exc}"
+                self.memory.last_error = reason
+                return self._result(False, reason, cycle, wiki_queries)
+
+            if decision.type == "wiki":
+                if len(wiki_queries) >= self.max_wiki_calls:
+                    reason = "wiki call budget exhausted"
+                    self.memory.last_error = reason
+                    return self._result(False, reason, cycle, wiki_queries)
+                wiki_queries.append(decision.query)
+                self.wiki.search_wiki(decision.query, self.memory)
+                observation = self.controller.observe()
+                continue
+
+            if decision.type == "finish":
+                if _has_wooden_pickaxe(self.memory.inventory):
+                    return self._result(True, "planner finished after inventory verification", cycle, wiki_queries)
+                self.memory.last_error = "finish rejected: wooden_pickaxe is absent"
+                observation = self.controller.observe()
+                continue
+
+            start = self.controller.steps
+            try:
+                result = self.skills.execute(
+                    decision.name,
+                    self.controller,
+                    self.memory,
+                    decision.arguments,
+                )
+            except Exception as exc:  # skill safety boundary
+                result_message = f"skill exception: {type(exc).__name__}: {exc}"
+                self.memory.record_step(
+                    StepRecord(
+                        skill=decision.name,
+                        arguments=decision.arguments,
+                        success=False,
+                        message=result_message,
+                        environment_steps=self.controller.steps - start,
+                    )
+                )
+                reason = result_message
+                return self._result(False, reason, cycle, wiki_queries)
+            self.memory.update_state(self.controller.observe())
+            self.memory.record_step(
+                StepRecord(
+                    skill=decision.name,
+                    arguments=decision.arguments,
+                    success=result.success,
+                    message=result.message,
+                    environment_steps=result.steps,
+                )
+            )
+            observation = self.controller.observe()
+
+        return self._result(False, reason, self.max_planning_cycles, wiki_queries)
+
+    def _result(
+        self, success: bool, reason: str, cycles: int, wiki_queries: list[str]
+    ) -> AutonomousRunResult:
+        return AutonomousRunResult(
+            success=success,
+            reason=reason,
+            planning_cycles=cycles,
+            environment_steps=self.controller.steps,
+            inventory=dict(self.memory.inventory),
+            completed_steps=tuple(self.memory.completed_steps),
+            wiki_queries=tuple(wiki_queries),
+        )
+
+
+def _has_wooden_pickaxe(inventory: dict[str, Any]) -> bool:
+    try:
+        return int(inventory.get("wooden_pickaxe", 0) or 0) >= 1
+    except (TypeError, ValueError):
+        return False
+
+
+__all__ = [
+    "AutonomousMinecraftAgent",
+    "AutonomousRunResult",
+    "WOODEN_PICKAXE_GOAL",
+]
