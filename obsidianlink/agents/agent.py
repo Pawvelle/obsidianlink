@@ -70,23 +70,39 @@ class AutonomousMinecraftAgent:
                 )
             except Exception as exc:  # planner/API/parser boundary
                 reason = f"planner failed: {type(exc).__name__}: {exc}"
-                self.memory.last_error = reason
+                self.memory.record_failure(source="planner", message=reason)
                 return self._result(False, reason, cycle, wiki_queries)
+
+            self.memory.begin_subgoal(decision.subgoal)
 
             if decision.type == "wiki":
                 if len(wiki_queries) >= self.max_wiki_calls:
                     reason = "wiki call budget exhausted"
-                    self.memory.last_error = reason
+                    self.memory.record_failure(
+                        source="wiki",
+                        message=reason,
+                        arguments={"query": decision.query},
+                    )
                     return self._result(False, reason, cycle, wiki_queries)
                 wiki_queries.append(decision.query)
-                self.wiki.search_wiki(decision.query, self.memory)
+                wiki_result = self.wiki.search_wiki(decision.query, self.memory)
+                if wiki_result.error:
+                    self.memory.record_failure(
+                        source="wiki",
+                        message=wiki_result.error,
+                        arguments={"query": decision.query},
+                    )
                 observation = self.controller.observe()
+                self.memory.update_state(observation)
                 continue
 
             if decision.type == "finish":
                 if _has_wooden_pickaxe(self.memory.inventory):
                     return self._result(True, "planner finished after inventory verification", cycle, wiki_queries)
-                self.memory.last_error = "finish rejected: wooden_pickaxe is absent"
+                self.memory.record_failure(
+                    source="finish",
+                    message="finish rejected: wooden_pickaxe is absent",
+                )
                 observation = self.controller.observe()
                 continue
 

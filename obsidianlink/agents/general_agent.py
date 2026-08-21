@@ -1,8 +1,9 @@
 """Task-agnostic Minecraft agent orchestration loop.
 
 The general agent owns orchestration, not Minecraft mechanics.  A planner
-chooses a named primitive skill, the skill acts through the controller, and
-the resulting agent-visible observation is written back to episode memory.
+chooses a subgoal and one named primitive skill, the skill acts through the
+controller, and the resulting agent-visible observation is written back to
+episode memory for the next decision.
 """
 
 from __future__ import annotations
@@ -77,7 +78,7 @@ class GeneralAgent:
         self._wiki_queries: list[str] = []
 
     def run(self, task: str) -> GeneralAgentResult:
-        """Run one bounded Task → Plan → Knowledge/Skill → Observe → Memory episode."""
+        """Run one bounded Task → Subgoal → Skill/Wiki → Observe → Memory episode."""
         task = task.strip()
         if not task:
             raise ValueError("task must be non-empty")
@@ -88,7 +89,7 @@ class GeneralAgent:
             observation = self.controller.reset()
         except Exception as exc:
             reason = f"environment reset failed: {type(exc).__name__}: {exc}"
-            self.memory.last_error = reason
+            self.memory.record_failure(source="environment", message=reason)
             return self._result(task, False, reason, 0)
         self.memory.update_state(observation)
 
@@ -111,8 +112,10 @@ class GeneralAgent:
                 )
             except Exception as exc:
                 reason = f"planner failed: {type(exc).__name__}: {exc}"
-                self.memory.last_error = reason
+                self.memory.record_failure(source="planner", message=reason)
                 return self._result(task, False, reason, cycle)
+
+            self.memory.begin_subgoal(decision.subgoal)
 
             if decision.type == "finish":
                 if self.goal_verifier is None:
@@ -122,26 +125,41 @@ class GeneralAgent:
                     return self._result(task, False, verify_error, cycle)
                 if verified:
                     return self._result(task, True, "planner finish verified", cycle)
-                self.memory.last_error = "finish rejected: goal is not verified"
+                self.memory.record_failure(
+                    source="finish",
+                    message="finish rejected: goal is not verified",
+                )
                 continue
 
             if decision.type == "wiki":
                 if len(self._wiki_queries) >= self.max_wiki_calls:
-                    self.memory.last_error = "wiki call budget exhausted"
+                    self.memory.record_failure(
+                        source="wiki",
+                        message="wiki call budget exhausted",
+                        arguments={"query": decision.query},
+                    )
                     continue
                 self._wiki_queries.append(decision.query)
-                self.wiki.search_wiki(decision.query, self.memory)
+                wiki_result = self.wiki.search_wiki(decision.query, self.memory)
+                if wiki_result.error:
+                    self.memory.record_failure(
+                        source="wiki",
+                        message=wiki_result.error,
+                        arguments={"query": decision.query},
+                    )
                 observation = self.controller.observe()
+                self.memory.update_state(observation)
                 continue
 
             if decision.type != "skill":
                 reason = (
                     f"unsupported planner decision in core loop: {decision.type!r}"
                 )
-                self.memory.last_error = reason
+                self.memory.record_failure(source="planner", message=reason)
                 return self._result(task, False, reason, cycle)
 
             start = self.controller.steps
+            inventory_before = dict(self.memory.inventory)
             try:
                 skill_result = self.skills.execute(
                     decision.name,
@@ -154,7 +172,7 @@ class GeneralAgent:
                     f"skill exception: {type(exc).__name__}: {exc}"
                 )
                 observation = self.controller.observe()
-                self.memory.update_state(observation)
+                self.memory.update_state(observation, baseline=inventory_before)
                 self.memory.record_step(
                     StepRecord(
                         skill=decision.name,
@@ -167,7 +185,7 @@ class GeneralAgent:
                 continue
 
             observation = self.controller.observe()
-            self.memory.update_state(observation)
+            self.memory.update_state(observation, baseline=inventory_before)
             self.memory.record_step(
                 StepRecord(
                     skill=decision.name,
@@ -208,7 +226,7 @@ class GeneralAgent:
             return bool(self.goal_verifier(task, self.memory, observation)), None
         except Exception as exc:
             reason = f"goal verifier failed: {type(exc).__name__}: {exc}"
-            self.memory.last_error = reason
+            self.memory.record_failure(source="verifier", message=reason)
             return False, reason
 
     def _result(
@@ -218,6 +236,10 @@ class GeneralAgent:
         reason: str,
         cycles: int,
     ) -> GeneralAgentResult:
+        if success:
+            self.memory.mark_task_completed()
+        elif self.memory.task_status != "failed":
+            self.memory.mark_task_failed(reason)
         return GeneralAgentResult(
             task=task,
             success=success,

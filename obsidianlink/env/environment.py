@@ -29,6 +29,14 @@ class Observation:
     inventory: dict[str, int] | None = None
     selected_item: str | None = None
 
+    def agent_view(self) -> dict[str, Any]:
+        """Planner-safe summary. Never includes RGB pixels or evaluator truth."""
+        return {
+            "inventory": dict(self.inventory or {}),
+            "selected_item": self.selected_item,
+            "has_visual_frame": self.frame is not None,
+        }
+
 
 def observation_field_names() -> frozenset[str]:
     return frozenset(f.name for f in fields(Observation))

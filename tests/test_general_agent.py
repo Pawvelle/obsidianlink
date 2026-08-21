@@ -241,3 +241,32 @@ def test_general_agent_bounds_wiki_calls_and_replans() -> None:
 
     assert result.success is True
     assert result.wiki_queries == ("first",)
+
+
+def test_general_agent_records_subgoals_failures_and_inventory_delta() -> None:
+    planner = SequencePlanner(
+        [
+            PlannerDecision("skill", name="fail_once", subgoal="find cobblestone"),
+            PlannerDecision(
+                "skill",
+                name="collect_cobblestone",
+                arguments={"quantity": 2},
+                subgoal="collect cobblestone",
+            ),
+        ]
+    )
+    agent = GeneralAgent(
+        planner,
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([FailingSkill(), CollectCobblestoneSkill()]),
+        goal_verifier=_cobblestone_goal,
+    )
+
+    result = agent.run("Collect 2 cobblestone")
+
+    assert result.success is True
+    assert agent.memory.task_status == "completed"
+    assert agent.memory.completed_subgoals == ["collect cobblestone"]
+    assert [item.subgoal for item in agent.memory.failed_attempts] == ["find cobblestone"]
+    assert agent.memory.inventory_delta == {"cobblestone": 2}
+    assert agent.memory.prompt_state()["environment"]["inventory"] == {"cobblestone": 2}

@@ -21,3 +21,16 @@ def test_observation_does_not_carry_evaluator_truth() -> None:
         "yaw",
     ):
         assert not hasattr(obs, banned)
+
+
+def test_observation_agent_view_is_planner_safe() -> None:
+    obs = Observation(frame=object(), inventory={"dirt": 1}, selected_item="dirt")
+    view = obs.agent_view()
+    assert view == {
+        "inventory": {"dirt": 1},
+        "selected_item": "dirt",
+        "has_visual_frame": True,
+    }
+    assert "frame" not in view
+    assert "xpos" not in view
+    assert "hidden_state" not in view

@@ -11,27 +11,41 @@
 当前通用入口架构：
 
 ```text
-Natural-language Task → GeneralAgent → Task Planner
+Natural-language Task → GeneralAgent → Planner
+                                      ├─ Subgoal
                                       ├─ Wiki Knowledge → Memory → Planner
                                       └─ Primitive Skill → Controller
                                                               ↓
                          Memory ← Observation ← Environment
+                                      ↓
+                                 Next Decision
 ```
 
 约束：单 Agent；Planner 只调用 Wiki knowledge tool、primitive skill 或 finish；不引入 LangChain、复杂 Agent framework、Multi-Agent、Vision 或 RAG pipeline。
 
 ## Current Task
 
-**GeneralAgent Wiki Knowledge + Primitive Skill Foundation**
+**GeneralAgent Planner / Memory Foundation**
 
 2026-08-21 当前实现：
+
+* Planner 决策循环明确为 `Task → Subgoal → Primitive Skill/Wiki → Observation → Memory → Next Decision`
+* `PlannerDecision` 增加可选 `subgoal`；`LLMSkillPlanner` prompt 使用结构化 Memory 与 agent-visible Observation 摘要，不再把 skill metadata 当日志塞进上下文
+* `AgentMemory` 从步骤日志改为决策状态：`task_status`、`current_subgoal`、`completed_subgoals`、`wiki_knowledge`、`recent_failures`、`inventory_delta`、当前 inventory / selected item
+* skill 失败、被拒绝的 `finish`、Wiki 错误写入 `failed_attempts`，供下一轮 Planner 改策略而不是盲目重试
+* `Observation` 契约不变（仍只有 `frame` / `inventory` / `selected_item`）；新增 `agent_view()` 给 Planner，不含 RGB 像素与 evaluator-only pose
+* 完整 offline regression：**189 passed**；`obsidianlink/benchmark/` 无变更
+
+**GeneralAgent Wiki Knowledge + Primitive Skill Foundation**
+
+2026-08-21 先前实现：
 
 * `GeneralAgent` 正式处理 Planner 的 `wiki` decision；查询经 `WikiKnowledge` / `MinecraftWikiTool` 访问 live Minecraft Wiki，成功结果写入 episode-local `AgentMemory.known_knowledge`，下一 planning cycle 自动进入 prompt context
 * Wiki 调用有独立 `max_wiki_calls` 边界；网络/协议错误写入 `memory.last_error`，不引入缓存语料、embedding、向量数据库或 RAG pipeline
 * 默认 `SkillLibrary` 已改为 primitive-only：`move`、`look`、`attack`、`interact`、`select_hotbar`、`inspect_inventory`、`place_block`、`crafting_action`、`wait`
 * 默认 Planner surface 不再暴露 `collect_wood`、`explore_area`、完整木镐 `craft_item` 或 `build_structure`；复杂任务由 Planner 组合 primitives
 * 历史 workflow 类未删除，集中通过 `legacy_workflow_skill_library()` 显式注入，供旧 `AutonomousMinecraftAgent` 与 live smoke runner 兼容使用
-* 本阶段只做基础能力与 offline contract tests，不启动 MineRL 任务实验；完整 offline regression：**182 passed**；`obsidianlink/benchmark/` 无变更
+* 本阶段只做基础能力与 offline contract tests，不启动 MineRL 任务实验；当时完整 offline regression：**182 passed**；`obsidianlink/benchmark/` 无变更
 
 * 新增 `obsidianlink.agents.GeneralAgent`，以自然语言任务作为统一 `run(task)` 入口，不包含 Portal 专用目标
 * 核心闭环为 `Task → Planner → primitive skill Action → Environment → Observation → AgentMemory`
@@ -233,6 +247,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * **2026-08-21 Autonomous Agent prototype architecture**（LLM high-level planner + memory + skill library + controller + dedicated env；fake-environment wood→wooden_pickaxe 闭环通过；live task success 尚未通过）
 * **2026-08-21 GeneralAgent Phase 1 core**：自然语言 `run(task)` 统一入口、Task→Planner→Skill→Environment→Observation→Memory 有界闭环、可注入 GoalVerifier、失败重规划；保留全部 baseline 与 benchmark；offline 163 passed
 * **2026-08-21 GeneralAgent first live task**：controlled survival-mode MineRL 中 `Mine 1 obsidian block` 成功；Planner 1 call，254 environment steps，inventory Observation 验证 `obsidian=1`；未使用 benchmark/Wiki/RAG/Vision/Multi-Agent
+* **2026-08-21 GeneralAgent Planner/Memory foundation**：Task→Subgoal→Primitive/Wiki→Observation→Memory 决策状态；offline 189 passed；未改 benchmark
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
 * **L1 Mechanical Interaction Test**（正式 L1 上 scripted 浇灌 mechanics；NEW OBSIDIAN = TRUE；无 Oracle / 无 Evaluator / 无 Agent）
 * **L1 Evaluator**（evaluator-only `reward` + `biome_id` truth；live-verified fail-closed；无 ObservationFromGrid；无 Observation 泄漏）
@@ -249,10 +264,9 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 
 ## Next
 
-1. 让自然 `collect_wood(quantity=1)` 在多个 fresh world 中稳定完成 inventory pickup；当前 controlled block smoke 已成功，但随机森林仍不稳定。
-2. 将 collect trace 从全局颜色候选升级为更可靠的近场目标/掉落拾取状态机，仍不引入 vision model。
-3. 自然木头成功后验证 `move_forward` + `mine_block` 的组合资源任务，再扩到 3 logs。
-4. 基础资源闭环稳定后再扩充 Planner/工具能力；Wiki、RAG、Vision 与复杂 skill system 不在当前阶段。
+1. 用 fake environment 验证 Planner 多步 primitive 组合：同一任务经 Wiki → 多个 subgoal → 多个 primitive 完成，确认 Memory 中的失败经验真能改变下一步决策。
+2. 验证 primitive 的 live 可靠性（`move` / `look` / `attack` / `interact`），再恢复自然森林资源任务；不要恢复 `collect_wood` 等高层 workflow skill。
+3. 自然木头成功后再测组合资源任务。不要提前开发 Multi-Agent、Vision pipeline 或 RAG。
 
 不恢复 Nether Portal，不增加多 Agent、reflection framework 或通用 RAG pipeline。
 
