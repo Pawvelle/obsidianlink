@@ -11,25 +11,34 @@
 当前通用入口架构：
 
 ```text
-Natural-language Task → GeneralAgent → Task Planner → Skill Action
-                      ↑                                  ↓
-                    Memory ← Observation ← Environment ← Controller
+Natural-language Task → GeneralAgent → Task Planner
+                                      ├─ Wiki Knowledge → Memory → Planner
+                                      └─ Primitive Skill → Controller
+                                                              ↓
+                         Memory ← Observation ← Environment
 ```
 
-约束：单 Agent；LLM 只调用高层 skill；不引入 LangChain、复杂 Agent framework、Multi-Agent 或 RAG pipeline。
+约束：单 Agent；Planner 只调用 Wiki knowledge tool、primitive skill 或 finish；不引入 LangChain、复杂 Agent framework、Multi-Agent、Vision 或 RAG pipeline。
 
 ## Current Task
 
-**GeneralAgent 第一个真实可验证 Minecraft 任务**
+**GeneralAgent Wiki Knowledge + Primitive Skill Foundation**
 
 2026-08-21 当前实现：
 
+* `GeneralAgent` 正式处理 Planner 的 `wiki` decision；查询经 `WikiKnowledge` / `MinecraftWikiTool` 访问 live Minecraft Wiki，成功结果写入 episode-local `AgentMemory.known_knowledge`，下一 planning cycle 自动进入 prompt context
+* Wiki 调用有独立 `max_wiki_calls` 边界；网络/协议错误写入 `memory.last_error`，不引入缓存语料、embedding、向量数据库或 RAG pipeline
+* 默认 `SkillLibrary` 已改为 primitive-only：`move`、`look`、`attack`、`interact`、`select_hotbar`、`inspect_inventory`、`place_block`、`crafting_action`、`wait`
+* 默认 Planner surface 不再暴露 `collect_wood`、`explore_area`、完整木镐 `craft_item` 或 `build_structure`；复杂任务由 Planner 组合 primitives
+* 历史 workflow 类未删除，集中通过 `legacy_workflow_skill_library()` 显式注入，供旧 `AutonomousMinecraftAgent` 与 live smoke runner 兼容使用
+* 本阶段只做基础能力与 offline contract tests，不启动 MineRL 任务实验；完整 offline regression：**182 passed**；`obsidianlink/benchmark/` 无变更
+
 * 新增 `obsidianlink.agents.GeneralAgent`，以自然语言任务作为统一 `run(task)` 入口，不包含 Portal 专用目标
-* 核心闭环为 `Task → Planner → high-level skill Action → Environment → Observation → AgentMemory`
+* 核心闭环为 `Task → Planner → primitive skill Action → Environment → Observation → AgentMemory`
 * 复用现有 `TaskPlanner`、`AgentMemory`、`MinecraftController`、`SkillLibrary` 与 LLM model client 层；保留 `LLMAgent`、`AutonomousMinecraftAgent`、Portal/RuleBased/Random baselines
 * 支持注入只读取 agent-visible Observation/Memory 的 `GoalVerifier`；有 verifier 时拒绝未经验证的 `finish`，无 verifier 时允许 planner 声明完成
 * skill 失败或异常会记录为 `StepRecord` 并返回 Planner 重规划；planner、environment reset 与 verifier 边界返回结构化失败结果
-* `LLMSkillPlanner(allow_wiki=False)` 支持 Phase 1 只生成 `skill` / `finish`；未新增 Wiki、RAG、Vision、Multi-Agent 或复杂 Skill System
+* `LLMSkillPlanner` 可生成 `skill` / `wiki` / `finish`，也可用 `allow_wiki=False` 显式关闭知识查询；始终不包含 RAG、Vision、Multi-Agent 或复杂 Skill System
 * 新增 4 个通用闭环测试；完整离线回归 **163 passed**
 * 新增 `run_general_agent.py` 与 agent-local smoke task（不进入 benchmark）：默认任务 `Mine 1 obsidian block`
 * 新增 `GeneralBlockSmokeEnv`：真实 MineRL/Minecraft survival mode，固定出生点、diamond pickaxe 与单个 MCP-Reborn 允许的 obsidian 方块；成功只读 agent-visible inventory
@@ -51,7 +60,7 @@ Natural-language Task → GeneralAgent → Task Planner → Skill Action
 * 实现当时 Offline tests：159 passed
 * **尚未获得 live task success**：`collect_wood(quantity=3)` 在 3 次有界 run（300 / 500 / 500 steps）均为 `0/3 logs`；已加入 RGB tree servo、dense forest generator 与 jump movement，但目标接近仍未解决。因此 GUI 木镐制作只通过 fake-environment 闭环，尚未 live 验证
 
-当前第一个 controlled live task 已完成。下一步只解决自然森林 `collect_wood` 的稳定 grounding / pickup；不恢复 Nether Portal 专用开发。
+当前第一个 controlled live task 已完成。本轮按用户要求不启动任务实验；下一步优先验证 primitive 的 live 可靠性与 Planner 多步组合，再恢复自然森林任务测试，不恢复 Nether Portal 专用开发。
 
 ## Prior Benchmark Context
 

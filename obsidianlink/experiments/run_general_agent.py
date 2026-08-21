@@ -28,6 +28,7 @@ from obsidianlink.env.actions import Action
 from obsidianlink.env.environment import Environment, Observation
 from obsidianlink.env.general_smoke import GeneralBlockSmokeEnv
 from obsidianlink.env.wood_pickaxe import WoodPickaxeEnv
+from obsidianlink.skills import legacy_workflow_skill_library
 from obsidianlink.tasks.general_smoke import (
     COLLECT_ONE_LOG_SMOKE,
     CollectWoodSmokePlanner,
@@ -114,6 +115,10 @@ def run_live_smoke(
     agent = GeneralAgent(
         planner,
         controller,
+        # Historical live smoke planners intentionally exercise the earlier
+        # workflow implementations. Production GeneralAgent defaults remain
+        # primitive-only.
+        skills=legacy_workflow_skill_library(),
         goal_verifier=goal_verifier,
         max_planning_cycles=2,
     )

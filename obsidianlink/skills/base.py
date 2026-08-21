@@ -1,4 +1,4 @@
-"""High-level skill contracts and registry."""
+"""Small skill contracts and capability registry."""
 
 from __future__ import annotations
 

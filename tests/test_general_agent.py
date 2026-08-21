@@ -5,11 +5,14 @@ from dataclasses import dataclass
 import pytest
 
 from obsidianlink.agents.general_agent import GeneralAgent
+from obsidianlink.agents.memory import AgentMemory
 from obsidianlink.agents.planner import PlannerDecision, parse_planner_decision
+from obsidianlink.agents.wiki import WikiKnowledge
 from obsidianlink.controller.minecraft_controller import MinecraftController
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
 from obsidianlink.skills.base import SkillLibrary, SkillResult
+from obsidianlink.tools.minecraft_wiki import MinecraftWikiTool
 
 
 class ResourceEnv(Environment):
@@ -173,3 +176,68 @@ def test_core_planner_can_disable_wiki_decisions() -> None:
             frozenset(),
             allow_wiki=False,
         )
+
+
+def test_general_agent_wiki_result_enters_memory_before_replanning() -> None:
+    memory = AgentMemory()
+    planner = SequencePlanner(
+        [
+            PlannerDecision("wiki", query="how to obtain cobblestone"),
+            PlannerDecision("finish"),
+        ]
+    )
+    wiki = WikiKnowledge(
+        MinecraftWikiTool(
+            transport=lambda _url: {
+                "query": {
+                    "search": [
+                        {"title": "Cobblestone", "snippet": "Mine stone with a pickaxe."}
+                    ]
+                }
+            }
+        )
+    )
+    agent = GeneralAgent(
+        planner,
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([]),
+        wiki=wiki,
+        memory=memory,
+    )
+
+    result = agent.run("Learn how cobblestone is obtained")
+
+    assert result.success is True
+    assert result.wiki_queries == ("how to obtain cobblestone",)
+    assert memory.known_knowledge == {
+        "how to obtain cobblestone": "Cobblestone: Mine stone with a pickaxe."
+    }
+    assert planner.decisions == []
+
+
+def test_general_agent_bounds_wiki_calls_and_replans() -> None:
+    planner = SequencePlanner(
+        [
+            PlannerDecision("wiki", query="first"),
+            PlannerDecision("wiki", query="second"),
+            PlannerDecision("finish"),
+        ]
+    )
+    agent = GeneralAgent(
+        planner,
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([]),
+        wiki=WikiKnowledge(
+            MinecraftWikiTool(
+                transport=lambda _url: {
+                    "query": {"search": [{"title": "First", "snippet": "answer"}]}
+                }
+            )
+        ),
+        max_wiki_calls=1,
+    )
+
+    result = agent.run("Use bounded knowledge")
+
+    assert result.success is True
+    assert result.wiki_queries == ("first",)

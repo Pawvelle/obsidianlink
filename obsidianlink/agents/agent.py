@@ -9,7 +9,7 @@ from obsidianlink.agents.memory import AgentMemory, StepRecord
 from obsidianlink.agents.planner import TaskPlanner
 from obsidianlink.agents.wiki import WikiKnowledge
 from obsidianlink.controller.minecraft_controller import MinecraftController
-from obsidianlink.skills import SkillLibrary, default_skill_library
+from obsidianlink.skills import SkillLibrary, legacy_workflow_skill_library
 
 WOODEN_PICKAXE_GOAL = "获取木头并制作木镐"
 
@@ -43,7 +43,9 @@ class AutonomousMinecraftAgent:
             raise ValueError("max_planning_cycles must be >= 1")
         self.planner = planner
         self.controller = controller
-        self.skills = skills or default_skill_library()
+        # This compatibility prototype predates GeneralAgent and retains its
+        # explicit workflow library. GeneralAgent defaults to primitives only.
+        self.skills = skills or legacy_workflow_skill_library()
         self.wiki = wiki or WikiKnowledge()
         self.memory = memory or AgentMemory()
         self.max_planning_cycles = int(max_planning_cycles)

@@ -11,7 +11,7 @@ from obsidianlink.agents.wiki import WikiKnowledge
 from obsidianlink.controller.minecraft_controller import MinecraftController
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
-from obsidianlink.skills import default_skill_library
+from obsidianlink.skills import legacy_workflow_skill_library
 from obsidianlink.skills.mining import (
     _lava_ahead,
     _tree_horizontal_offset,
@@ -180,7 +180,7 @@ def test_autonomous_loop_queries_wiki_collects_and_crafts() -> None:
     agent = AutonomousMinecraftAgent(
         planner,
         MinecraftController(FakeWoodEnv(), max_steps=100),
-        skills=default_skill_library(),
+        skills=legacy_workflow_skill_library(),
         wiki=WikiKnowledge(wiki_tool),
         memory=memory,
     )

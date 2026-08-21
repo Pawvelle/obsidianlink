@@ -1,7 +1,7 @@
 """Task-agnostic Minecraft agent orchestration loop.
 
 The general agent owns orchestration, not Minecraft mechanics.  A planner
-chooses a named high-level skill, the skill acts through the controller, and
+chooses a named primitive skill, the skill acts through the controller, and
 the resulting agent-visible observation is written back to episode memory.
 """
 
@@ -12,6 +12,7 @@ from typing import Protocol
 
 from obsidianlink.agents.memory import AgentMemory, StepRecord
 from obsidianlink.agents.planner import TaskPlanner
+from obsidianlink.agents.wiki import WikiKnowledge
 from obsidianlink.controller.minecraft_controller import MinecraftController
 from obsidianlink.env.environment import Observation
 from obsidianlink.skills import SkillLibrary, default_skill_library
@@ -38,15 +39,15 @@ class GeneralAgentResult:
     environment_steps: int
     inventory: dict[str, int]
     completed_steps: tuple[StepRecord, ...]
+    wiki_queries: tuple[str, ...] = ()
 
 
 class GeneralAgent:
     """Unified entry point for task-agnostic, single-agent Minecraft runs.
 
-    The first version intentionally supports only high-level ``skill`` and
-    ``finish`` planner decisions.  Knowledge tools, vision-specific policy,
-    reflection frameworks, and multi-agent coordination remain outside this
-    core loop.
+    The planner can request live Wiki knowledge or invoke one bounded
+    primitive skill. Vision-specific policy, reflection frameworks, and
+    multi-agent coordination remain outside this core loop.
     """
 
     def __init__(
@@ -55,26 +56,34 @@ class GeneralAgent:
         controller: MinecraftController,
         *,
         skills: SkillLibrary | None = None,
+        wiki: WikiKnowledge | None = None,
         memory: AgentMemory | None = None,
         goal_verifier: GoalVerifier | None = None,
         max_planning_cycles: int = 16,
+        max_wiki_calls: int = 4,
     ) -> None:
         if max_planning_cycles < 1:
             raise ValueError("max_planning_cycles must be >= 1")
         self.planner = planner
         self.controller = controller
         self.skills = skills or default_skill_library()
+        self.wiki = wiki or WikiKnowledge()
         self.memory = memory or AgentMemory()
         self.goal_verifier = goal_verifier
         self.max_planning_cycles = int(max_planning_cycles)
+        if max_wiki_calls < 0:
+            raise ValueError("max_wiki_calls must be >= 0")
+        self.max_wiki_calls = int(max_wiki_calls)
+        self._wiki_queries: list[str] = []
 
     def run(self, task: str) -> GeneralAgentResult:
-        """Run one bounded Task → Plan → Skill → Observe → Memory episode."""
+        """Run one bounded Task → Plan → Knowledge/Skill → Observe → Memory episode."""
         task = task.strip()
         if not task:
             raise ValueError("task must be non-empty")
 
         self.memory.reset(task)
+        self._wiki_queries = []
         try:
             observation = self.controller.reset()
         except Exception as exc:
@@ -116,6 +125,15 @@ class GeneralAgent:
                 self.memory.last_error = "finish rejected: goal is not verified"
                 continue
 
+            if decision.type == "wiki":
+                if len(self._wiki_queries) >= self.max_wiki_calls:
+                    self.memory.last_error = "wiki call budget exhausted"
+                    continue
+                self._wiki_queries.append(decision.query)
+                self.wiki.search_wiki(decision.query, self.memory)
+                observation = self.controller.observe()
+                continue
+
             if decision.type != "skill":
                 reason = (
                     f"unsupported planner decision in core loop: {decision.type!r}"
@@ -155,8 +173,8 @@ class GeneralAgent:
                     skill=decision.name,
                     arguments=decision.arguments,
                     success=skill_result.success,
-                        message=skill_result.message,
-                        environment_steps=skill_result.steps,
+                    message=skill_result.message,
+                    environment_steps=skill_result.steps,
                     metadata=dict(skill_result.metadata),
                 )
             )
@@ -208,6 +226,7 @@ class GeneralAgent:
             environment_steps=self.controller.steps,
             inventory=dict(self.memory.inventory),
             completed_steps=tuple(self.memory.completed_steps),
+            wiki_queries=tuple(self._wiki_queries),
         )
 
 

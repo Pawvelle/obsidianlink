@@ -1,4 +1,4 @@
-"""LLM task planner that can emit only high-level skill/tool calls."""
+"""LLM task planner that can emit only primitive skill/tool calls."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class TaskPlanner(Protocol):
 
 
 class LLMSkillPlanner:
-    """One decision per call; the model never sees the low-level action API."""
+    """One decision per call; the model sees named capabilities, not MineRL."""
 
     def __init__(
         self,
@@ -87,20 +87,20 @@ def _build_planner_prompt(
     operation_instructions = (
         "You may request current game knowledge with search_wiki.\n"
         "Return exactly one JSON object in one of these forms:\n"
-        '{"type":"skill","name":"collect_wood","arguments":{"quantity":3},"reason":"..."}\n'
+        '{"type":"skill","name":"<available skill>","arguments":{},"reason":"..."}\n'
         '{"type":"wiki","query":"how to craft a wooden pickaxe","reason":"..."}\n'
         '{"type":"finish","reason":"goal verified from inventory"}\n'
         if allow_wiki
         else
         "Knowledge lookup is unavailable in this phase.\n"
         "Return exactly one JSON object in one of these forms:\n"
-        '{"type":"skill","name":"collect_wood","arguments":{"quantity":3},"reason":"..."}\n'
+        '{"type":"skill","name":"<available skill>","arguments":{},"reason":"..."}\n'
         '{"type":"finish","reason":"goal verified from observation"}\n'
     )
     return (
-        "You are the high-level brain of one autonomous Minecraft agent.\n"
-        "Choose exactly one next high-level operation. Never output keyboard, mouse, "
-        "WASD, camera, hotbar, attack, use, or other low-level actions.\n"
+        "You are the planner of one autonomous Minecraft agent.\n"
+        "Choose exactly one next operation. Compose complex tasks from the named "
+        "primitive skills; never invent MineRL actions or unavailable skills.\n"
         f"Available skills:\n{skills}\n"
         f"{operation_instructions}"
         f"Grounded memory: {state}"
