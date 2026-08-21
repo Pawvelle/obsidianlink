@@ -6,12 +6,11 @@ Does not start Minecraft and does not call a live MiniMax endpoint.
 from __future__ import annotations
 
 from obsidianlink.agents.llm_agent import LLMAgent
-from obsidianlink.agents.prompt import build_prompt, parse_action
+from obsidianlink.agents.prompt import L1_LLM_TASK_GOAL, build_prompt, parse_action
 from obsidianlink.agents.random_agent import LEGAL_TYPES
 from obsidianlink.env.actions import ActionType
 from obsidianlink.env.environment import Observation
 from obsidianlink.models.base_client import BaseLLMClient
-from obsidianlink.tasks.portal import L1_PORTAL_TASK
 
 
 class _StubClient(BaseLLMClient):
@@ -32,7 +31,17 @@ def test_build_prompt_includes_goal_observation_and_action_space() -> None:
     )
     prompt = build_prompt(obs)
     lower = prompt.lower()
-    assert L1_PORTAL_TASK.goal.split(".")[0] in prompt
+    task_section = prompt.split("## Observation")[0].lower()
+    assert "Nether Portal" in prompt
+    assert "Enter the Nether" in L1_LLM_TASK_GOAL
+    assert "obtain the resources" in task_section
+    assert "activate the portal" in task_section
+    assert "do not assume a specific" in task_section
+    assert "bucket casting" not in task_section
+    assert "lava" not in task_section
+    assert "obsidian" not in task_section
+    assert "do not switch hotbar slots aimlessly" in lower
+    assert "use use and attack" in lower
     assert "bucket=1" in prompt
     assert "water_bucket=1" in prompt
     assert "selected_item: 'bucket'" in prompt
@@ -59,6 +68,14 @@ def test_parse_action_plain_json_move() -> None:
     assert action.type is ActionType.MOVE
     assert action.dx == 1
     assert action.dz == -1
+
+
+def test_parse_action_json_camera() -> None:
+    action, ok = parse_action('{"action": "camera", "yaw": -30, "pitch": 10}')
+    assert ok is True
+    assert action.type is ActionType.CAMERA
+    assert action.yaw == -30.0
+    assert action.pitch == 10.0
 
 
 def test_parse_action_markdown_and_prose() -> None:
@@ -135,3 +152,46 @@ def test_llm_agent_illegal_output_is_wait() -> None:
     assert action.type is ActionType.WAIT
     assert agent.invalid_actions == 1
     assert agent.last_parsed_ok is False
+
+
+class _VisionStub(BaseLLMClient):
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+        self.frames: list[object] = []
+
+    def generate(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        return '{"action": "wait"}'
+
+    def generate_with_vision(self, prompt: str, *, frame: object) -> str:
+        self.prompts.append(prompt)
+        self.frames.append(frame)
+        return '{"action": "move", "dx": 1, "dz": 0}'
+
+
+def test_llm_agent_sends_rgb_frame_when_vision_enabled() -> None:
+    frame = object()
+    client = _VisionStub()
+    agent = LLMAgent(client, use_vision=True)
+    action = agent.act(
+        Observation(frame=frame, inventory={"bucket": 1}, selected_item="bucket")
+    )
+    assert action.type is ActionType.MOVE
+    assert action.dx == 1
+    assert client.frames == [frame]
+    assert agent.last_used_vision is True
+    assert agent.vision_calls == 1
+    assert agent.last_fallback_reason is None
+    assert "RGB image" in client.prompts[0]
+    assert "pixels not sent" not in client.prompts[0]
+
+
+def test_llm_agent_vision_falls_back_without_frame() -> None:
+    client = _VisionStub()
+    agent = LLMAgent(client, use_vision=True)
+    action = agent.act(Observation(frame=None))
+    assert action.type is ActionType.WAIT
+    assert agent.last_used_vision is False
+    assert agent.last_fallback_reason == "no_frame"
+    assert agent.vision_calls == 0
+    assert client.frames == []

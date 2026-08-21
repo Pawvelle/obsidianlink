@@ -6,7 +6,14 @@ from urllib.error import URLError
 
 import pytest
 
-from obsidianlink.models.minimax_client import MiniMaxClient, MiniMaxHTTPError, redact
+from obsidianlink.models.minimax_client import (
+    CHINA_URL,
+    DEFAULT_URL,
+    INTERNATIONAL_URL,
+    MiniMaxClient,
+    MiniMaxHTTPError,
+    redact,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -21,14 +28,23 @@ def test_missing_api_key_raises() -> None:
         MiniMaxClient()
 
 
+def test_default_endpoint_is_china() -> None:
+    assert DEFAULT_URL == CHINA_URL
+    assert DEFAULT_URL == "https://api.minimaxi.com/v1/chat/completions"
+
+
 def test_generate_stores_raw_response() -> None:
     payload = {
         "id": "chatcmpl-test",
         "choices": [{"message": {"content": '{"action": "wait"}'}}],
     }
+    seen: dict[str, object] = {}
 
     def transport(url, headers, body, timeout_s):
-        del url, headers, body, timeout_s
+        seen["url"] = url
+        seen["headers"] = dict(headers)
+        seen["body"] = dict(body)
+        seen["timeout_s"] = timeout_s
         return payload
 
     client = MiniMaxClient(api_key="sk-test-not-real", transport=transport)
@@ -38,7 +54,11 @@ def test_generate_stores_raw_response() -> None:
     assert client.last_text == text
     assert client.last_error is None
     assert client.model == "MiniMax-M3"
-    assert client.url == "https://api.minimax.io/v1/chat/completions"
+    assert client.url == CHINA_URL
+    assert seen["url"] == CHINA_URL
+    assert seen["headers"]["Authorization"] == "Bearer sk-test-not-real"
+    assert seen["body"]["model"] == "MiniMax-M3"
+    assert seen["body"]["messages"] == [{"role": "user", "content": "hello"}]
 
 
 def test_minimax_model_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,13 +88,13 @@ def test_http_error_is_explicit_and_keeps_payload() -> None:
     assert client.last_error is not None
 
 
-def test_http_401_retries_china_host() -> None:
+def test_http_401_retries_alternate_host() -> None:
     seen: list[str] = []
 
     def transport(url, headers, body, timeout_s):
         del headers, body, timeout_s
         seen.append(url)
-        if "minimax.io" in url:
+        if "minimaxi.com" in url:
             raise MiniMaxHTTPError(
                 "MiniMax API HTTP 401: invalid api key",
                 status=401,
@@ -85,9 +105,9 @@ def test_http_401_retries_china_host() -> None:
     client = MiniMaxClient(api_key="sk-test-not-real", transport=transport)
     text = client.generate("hello")
     assert text == '{"action":"wait"}'
-    assert any("minimax.io" in u for u in seen)
-    assert any("minimaxi.com" in u for u in seen)
-    assert "minimaxi.com" in client.url
+    assert seen[0] == CHINA_URL
+    assert INTERNATIONAL_URL in seen
+    assert client.url == INTERNATIONAL_URL
 
 
 def test_timeout_message() -> None:
@@ -121,6 +141,27 @@ def test_error_does_not_include_api_key() -> None:
 
 def test_redact() -> None:
     assert redact("token sk-abc used", "sk-abc") == "token <redacted> used"
+
+
+def test_generate_with_vision_sends_image_url() -> None:
+    from PIL import Image
+
+    seen: dict[str, object] = {}
+    frame = Image.new("RGB", (12, 8), color=(10, 20, 30))
+
+    def transport(url, headers, body, timeout_s):
+        seen["url"] = url
+        seen["body"] = dict(body)
+        del headers, timeout_s
+        return {"choices": [{"message": {"content": '{"action": "wait"}'}}]}
+
+    client = MiniMaxClient(api_key="sk-test-not-real", transport=transport)
+    text = client.generate_with_vision("look", frame=frame)
+    assert text == '{"action": "wait"}'
+    content = seen["body"]["messages"][0]["content"]
+    assert content[0] == {"type": "text", "text": "look"}
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
 
 def test_api_error_object_in_200_body() -> None:

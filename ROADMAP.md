@@ -20,7 +20,47 @@ Phase 2  Benchmark MVP                    ✅
 
 **L2 Nether Portal construction benchmark**
 
-First LLM embodied control experiment 已完成（见下）。下一步把同一套 `LLMAgent` 接到正式 portal goal。不要加 memory / RAG / planner / tool calling。中国区 MiniMax 用 `api.minimaxi.com`（client 在国际站 401 时会回退）。
+**L1 LLMAgent Vision Baseline v3** 已完成（见下）。RGB POV 已接到 MiniMax-M3；视觉 grounding 明显提高 world interaction，但 276/500 步因 `agent_exception` 中断，任务仍未成功。不要加 memory / RAG / planner。
+
+**2026-08-21 L1 LLMAgent Vision Baseline v3**（`run_l1_llm_agent.py --vision`，`l1_llm_20260821_071744Z`）：
+
+* RGB 来源：`MineRLEnvironment` `pov` → `Observation.frame`，live shape `(360, 640, 3) uint8`（spec `RESOLUTION=(640, 360)`）
+* MiniMax-M3 支持 `image_url`；JPEG data-URL 随 prompt 发出。`LLMAgent(use_vision=True)`，Agent interface 未改
+* 276/500 steps 后 `agent_exception` 中断（wall ≈ 1856s，≈6.7s/step）。全程 `vision_calls=276`，`last_used_vision=true`，无 text fallback。parser 276/276
+* Evaluator：`success=False`，`portal_activated=False`，`nether_entered=False`
+* 动作：camera 166（60.1%），**move 48（17.4%）**，hotbar 37（13.4%），**use 16（5.8%）**，wait 7（2.5%），**attack 2（0.7%）**
+* vs v2（500 步 text）：world interaction（move+use+attack）4.0% → **23.9%**；camera 仍最多但不再几乎只有转视角
+* `valid_for_l1_capability_conclusion: false`（未跑满 500，且未激活 portal）。未改 env / evaluator / oracle / Task schema
+* Offline tests: 151 passed（2026-08-21）
+
+**2026-08-21 L1 LLMAgent Prompt Baseline v2**（`obsidianlink/experiments/run_l1_llm_agent.py`，`l1_llm_20260821_064713Z`）：
+
+* Prompt：明确 Nether Portal 四步目标 + 行为约束；**不**写 lava / water / bucket casting / recipe。JSON 输出格式不变
+* Horizon：500 steps（官方 task 仍是 4000）。`L1Evaluator` / success 定义未改
+* MiniMax-M3 500/500 调用，parser 498/500（`invalid_actions=2`），Minecraft `env.step` 500/500，wall ≈ 1013s
+* Evaluator：`success=False`，`portal_activated=False`，`nether_entered=False`，`failure_reason=nether_entry_not_confirmed`
+* 动作分布：camera 328，hotbar 77，wait 75，move 14，**use 5**，**attack 1**
+* vs Baseline v1（64 步，hotbar 45 / wait 9 / camera 8 / move 2 / use 0 / attack 0）：hotbar 占比 70% → 15%；首次出现环境交互，但 camera 占 66%，USE/ATTACK 合计 1.2%
+* `valid_for_l1_capability_conclusion: false`。未改 env / evaluator / oracle / Task schema / Agent interface
+* Offline tests: 147 passed（2026-08-21）
+
+**2026-08-21 First L1 LLMAgent portal episode**（`obsidianlink/experiments/run_l1_llm_agent.py`，`l1_llm_20260821_063413Z`）：
+
+* 正式 `MineRLL1Controlled-v0` + `L1_PORTAL_TASK` + `L1Evaluator` + `LLMAgent(MiniMax-M3)`
+* Prompt 使用 portal goal（不是 smoke goal）。无 planner / memory / RAG / hard-coded solver
+* `--max-steps 64`（官方 task 预算 4000）。MiniMax 64/64，parser 64/64，Minecraft `env.step` 64/64，wall ≈ 133s
+* Evaluator：`success=False`，`portal_activated=False`，`nether_entered=False`，`failure_reason=nether_entry_not_confirmed`（`portal_activation_not_confirmed`）
+* 动作：hotbar 45，wait 9，camera 8，move 2；**0 USE / 0 ATTACK**。模型在选物品和转视角，没有对岩浆/水 `use`
+* `valid_for_l1_capability_conclusion: false`（预算低于 4000，且未发生液体交互）。未改 env / evaluator / oracle / task / Agent interface
+* Offline tests: 146 passed（2026-08-21）
+
+**2026-08-21 MiniMax default = China + 4-step live smoke**（`obsidianlink/experiments/run_llm_smoke.py`，`llm_smoke_20260821_050510Z`）：
+
+* 默认 endpoint 从 `api.minimax.io` 改为 `api.minimaxi.com`；key 仍只读 `MINIMAX_API_KEY`
+* 不是 Nether Portal：`--max-steps 4`。MiniMax-M3 4/4 API 成功，parser 4/4，Minecraft `env.step` 4/4，wall ≈ 29s
+* 本 episode 仍只输出 `camera`（yaw 30 / 20 / -30 / 30，最后一步 pitch=-10）。frame mean 66.2 → 64.4 → 60.8 → 65.9
+* `valid_for_l1_agent_conclusion: false`。未改 env / evaluator / oracle / task
+* Offline tests: 144 passed（2026-08-21）
 
 **2026-08-20 First LLM embodied control experiment**（`obsidianlink/experiments/run_llm_smoke.py`）：
 
@@ -42,7 +82,7 @@ First LLM embodied control experiment 已完成（见下）。下一步把同一
 **2026-08-20 LLM Agent Adapter**（`obsidianlink/agents/llm_agent.py`）：
 
 * `LLMAgent(BaseAgent)`：`Observation → prompt → BaseLLMClient.generate → parse_action → Action`
-* `obsidianlink/models/`：`BaseLLMClient.generate(prompt) -> str`；`MiniMaxClient` 读 `MINIMAX_API_KEY`，不把 key 写入代码
+* `obsidianlink/models/`：`BaseLLMClient.generate(prompt) -> str`；`MiniMaxClient` 读 `MINIMAX_API_KEY`，默认 `api.minimaxi.com`，不把 key 写入代码
 * `agents/prompt.py`：任务目标 + Observation + 合法 action space + JSON 输出格式；非法 JSON / EQUIP / PLACE fallback 为 WAIT
 * `run_agent.py --agent llm`；offline tests 不启动 Minecraft、不打真实 API
 * 无 memory / RAG / planner / LangChain / multi-agent / tool calling。这是 adapter，不是模型评测结论
@@ -155,6 +195,10 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * **Agent interface layer**（`BaseAgent` + `RandomAgent` + 规则 `reactive_agent.ReactiveAgent` + `run_agent.py`；Agent 只看 Observation；未改 evaluator / oracle / task）
 * **LLM Agent Adapter**（`LLMAgent` + `BaseLLMClient` / `MiniMaxClient` + prompt/parser；`run_agent.py --agent llm`；未改 Environment / Evaluator / Oracle / task）
 * **First LLM embodied control experiment**（`run_llm_smoke.py`：`150552Z` 国际站 401；`151507Z` 中国站 8/8 MiniMax + 8/8 Minecraft step，全是 camera；非 L1 能力结论）
+* **2026-08-21 MiniMax default China + 4-step smoke**（`llm_smoke_20260821_050510Z`：默认 `api.minimaxi.com`，4/4 API + 4/4 parse + 4/4 `env.step`；非 L1 能力结论）
+* **2026-08-21 First L1 LLMAgent portal episode**（`run_l1_llm_agent.py`，`l1_llm_20260821_063413Z`：正式 L1 env/task/evaluator；64/64 MiniMax+parse+step；`success=False`，无 USE；非 L1 能力结论）
+* **2026-08-21 L1 LLMAgent Prompt Baseline v2**（`l1_llm_20260821_064713Z`：task-aware prompt + 500 steps；camera 328 / hotbar 77 / wait 75 / move 14 / use 5 / attack 1；`success=False`；非 L1 能力结论）
+* **2026-08-21 L1 LLMAgent Vision Baseline v3**（`l1_llm_20260821_071744Z`：RGB→MiniMax-M3；276/500 后 agent_exception；move+use+attack 23.9% vs v2 4.0%；`success=False`；非 L1 能力结论）
 
 ## Next
 
@@ -164,7 +208,8 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * `RuleBasedPortalAgent(BaseAgent)`：最小 inventory FSM，状态固定为 `FIND_RESOURCE → COLLECT → BUILD → ACTIVATE → COMPLETE`；它是 baseline，不读 hidden truth。
 * `experiments/run_agent.py --agent random|rule|llm|oracle` 已走正式 `L1_PORTAL_TASK + BenchmarkRunner + L1Evaluator`；每次运行写入 `results/episode_XXX.json`，包括 agent name、success、steps、duration、failure reason 与 evaluator episode statistics。
 * `BenchmarkRunner` 现在会 reset agent/evaluator，并逐 tick 提供 evaluator-only `hidden_state` 给 `L1Evaluator.observe_step`；`Observation` API 未变，Agent 永远看不到 reward / biome / pose。
-* Offline test suite: 139 passed (2026-08-20). 尚未把长液体建造 Oracle 标记为完成的 live benchmark evidence。
+* Offline test suite: 151 passed (2026-08-21). 尚未把长液体建造 Oracle 标记为完成的 live benchmark evidence。
+* Vision v3 证明 RGB grounding 能提高 move/use/attack。下一步可处理长 episode API 稳定性，或分析为何仍以 camera 为主；不要加 memory / RAG / planner。
 
 下一步是在已知的 MCP-Reborn/Malmo 液体负载不稳定性下取得一个干净的真实 Oracle run，或记录其结构化环境失败；不要加 memory / RAG / planner / LangChain / multi-agent / tool calling。
 
@@ -181,7 +226,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * 流动水（flowing water）不能用空桶回收，只会推玩家。scripted 放置/挖掘圆石时准星必须打在方块上，不能打在水面。这不是 Benchmark 定义问题，也不要为此启用 PlaceBlock
 * 在开阔地面（无模具）浇岩浆会自由蔓延到多个相邻格，不会停在单一目标格；构造精确几何（如 portal frame）前必须先用 cobblestone 砌矮墙围住目标格
 * **2026-08-20**：长 episode（约 270-280s 内出现较多真实液体/方块放置动作）可能触发 `minerl/env/_multiagent.py` 硬编码的 240s socket 超时（`RuntimeError: Attempted to step an environment server with done=True`）。纯 `WAIT` 循环 93,200 步 / 340s 验证无此问题，说明不是固定 episode 时长上限，而更像服务器端因液体模拟负载累积导致某一步响应变慢。两次复现的具体失败动作类型不同（一次 `use`、一次 `move`），指向服务器端渐进变卡而非单一确定性触发点。这是 Full Scripted Oracle 卡在 Gate 1 的直接原因之一，需要专项调查（不要通过修改 L1 语义规避）
-* **2026-08-20 MiniMax live smoke**：同一把国内 key 在 `api.minimax.io` 返回 HTTP 401，在 `api.minimaxi.com` 成功。不要为此修改 Environment。client 现对 401 做国际站/中国站回退
+* **2026-08-20 MiniMax live smoke**：同一把国内 key 在 `api.minimax.io` 返回 HTTP 401，在 `api.minimaxi.com` 成功。不要为此修改 Environment。client 默认中国站，401 时回退国际站
 
 ## Historical L1
 

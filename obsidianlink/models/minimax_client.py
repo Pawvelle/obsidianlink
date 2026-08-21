@@ -10,16 +10,18 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from obsidianlink.models.base_client import BaseLLMClient
+from obsidianlink.models.frame import frame_to_data_url
 
 DEFAULT_MODEL = "MiniMax-M3"
-DEFAULT_URL = "https://api.minimax.io/v1/chat/completions"
 CHINA_URL = "https://api.minimaxi.com/v1/chat/completions"
+INTERNATIONAL_URL = "https://api.minimax.io/v1/chat/completions"
+DEFAULT_URL = CHINA_URL
 API_KEY_ENV = "MINIMAX_API_KEY"
 BASE_URL_ENV = "MINIMAX_BASE_URL"
 MODEL_ENV = "MINIMAX_MODEL"
 _ALT_URL = {
-    DEFAULT_URL: CHINA_URL,
-    CHINA_URL: DEFAULT_URL,
+    CHINA_URL: INTERNATIONAL_URL,
+    INTERNATIONAL_URL: CHINA_URL,
 }
 
 GenerateTransport = Callable[
@@ -31,9 +33,11 @@ GenerateTransport = Callable[
 class MiniMaxClient(BaseLLMClient):
     """OpenAI-compatible ``chat/completions`` against MiniMax.
 
-    Credentials: ``MINIMAX_API_KEY``. Optional ``MINIMAX_BASE_URL``
-    (full chat-completions URL) and ``MINIMAX_MODEL`` (default
-    ``MiniMax-M3``).
+    Credentials: ``MINIMAX_API_KEY``. Default endpoint is China
+    ``https://api.minimaxi.com/v1/chat/completions``. Optional
+    ``MINIMAX_BASE_URL`` (full chat-completions URL) and
+    ``MINIMAX_MODEL`` (default ``MiniMax-M3``). On HTTP 401 the client
+    retries the other region host.
 
     After each ``generate`` call, ``last_raw_response`` holds the API
     JSON (never the Authorization header). Exceptions never include the
@@ -74,16 +78,38 @@ class MiniMaxClient(BaseLLMClient):
         return self._url
 
     def generate(self, prompt: str) -> str:
-        self.completions += 1
-        self.last_text = None
-        self.last_error = None
+        return self._complete(_text_payload(self._model, prompt))
+
+    def generate_with_vision(self, prompt: str, *, frame: Any) -> str:
+        """OpenAI-compatible multimodal Chat Completions for MiniMax-M3."""
+        data_url = frame_to_data_url(frame)
         payload: dict[str, Any] = {
             "model": self._model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                }
+            ],
             "max_tokens": 256,
             "max_completion_tokens": 256,
             "thinking": {"type": "disabled"},
         }
+        return self._complete(payload)
+
+    def complete(self, prompt: str) -> str:
+        return self.generate(prompt)
+
+    def complete_with_vision(self, prompt: str, *, frame: Any) -> str:
+        return self.generate_with_vision(prompt, frame=frame)
+
+    def _complete(self, payload: dict[str, Any]) -> str:
+        self.completions += 1
+        self.last_text = None
+        self.last_error = None
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -138,6 +164,16 @@ class MiniMaxHTTPError(RuntimeError):
         super().__init__(message)
         self.status = status
         self.payload = dict(payload) if isinstance(payload, Mapping) else None
+
+
+def _text_payload(model: str, prompt: str) -> dict[str, Any]:
+    return {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 256,
+        "max_completion_tokens": 256,
+        "thinking": {"type": "disabled"},
+    }
 
 
 def _is_auth_error(exc: BaseException) -> bool:
@@ -256,6 +292,7 @@ __all__ = [
     "CHINA_URL",
     "DEFAULT_MODEL",
     "DEFAULT_URL",
+    "INTERNATIONAL_URL",
     "GenerateTransport",
     "MODEL_ENV",
     "MiniMaxClient",

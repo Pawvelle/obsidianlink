@@ -18,8 +18,27 @@ _FORBIDDEN = frozenset({ActionType.EQUIP, ActionType.PLACE})
 _HOTBAR_SLOTS = frozenset(str(i) for i in range(1, 10))
 _MOVE_VALUES = frozenset((-1, 0, 1))
 
-_DEFAULT_GOAL = (
-    f"{L1_PORTAL_TASK.goal} Starting setup: {L1_PORTAL_TASK.initial_condition}"
+# Prompt-only task text for vanilla LLMAgent. Not a Task schema change,
+# not a recipe, and not evaluator truth.
+L1_LLM_TASK_GOAL = (
+    "Your goal is to complete Nether Portal construction in the current "
+    "Minecraft environment.\n\n"
+    "Final objectives:\n"
+    "1. Obtain the resources required to finish the task.\n"
+    "2. Create a Nether Portal using vanilla Minecraft mechanics.\n"
+    "3. Activate the portal.\n"
+    "4. Enter the Nether.\n\n"
+    "Decide only from the current observation. Do not assume a specific "
+    "construction recipe."
+)
+
+L1_LLM_BEHAVIOR = (
+    "- Do not switch hotbar slots aimlessly or repeatedly.\n"
+    "- Do not keep repeating actions that have no effect.\n"
+    "- Prefer actions that can change the Minecraft world state.\n"
+    "- If the current situation is unclear, look around or move to explore first.\n"
+    "- Use USE and ATTACK to interact with the environment.\n"
+    "- Choose each action from the current observation."
 )
 
 _FORMAT = """Return exactly one JSON object. No markdown fences, no explanation.
@@ -48,13 +67,29 @@ def build_prompt(
     observation: Observation,
     *,
     goal: str | None = None,
+    vision_attached: bool = False,
 ) -> str:
     """Convert an agent-visible Observation into a single-user prompt."""
-    task_goal = goal if goal is not None else _DEFAULT_GOAL
+    if goal is None:
+        task_block = L1_LLM_TASK_GOAL
+        behavior_block = f"## Behavior\n{L1_LLM_BEHAVIOR}\n\n"
+    else:
+        task_block = goal
+        behavior_block = ""
+    vision_note = ""
+    if vision_attached:
+        vision_note = (
+            "## View\n"
+            "A first-person RGB image of the current Minecraft view is attached. "
+            "Use what you see in that image together with inventory to choose "
+            "the next action.\n\n"
+        )
     return (
         "You control a Minecraft agent through a bounded action interface.\n\n"
-        f"## Task\n{task_goal}\n\n"
-        f"## Observation\n{_observation_block(observation)}\n\n"
+        f"## Task\n{task_block}\n\n"
+        f"{behavior_block}"
+        f"{vision_note}"
+        f"## Observation\n{_observation_block(observation, vision_attached=vision_attached)}\n\n"
         f"## Action space\n{_action_space_block()}\n\n"
         f"## Output format\n{_FORMAT}"
     )
@@ -134,7 +169,11 @@ def extract_json_object(response: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _observation_block(observation: Observation) -> str:
+def _observation_block(
+    observation: Observation,
+    *,
+    vision_attached: bool = False,
+) -> str:
     inventory = observation.inventory or {}
     if inventory:
         items = ", ".join(f"{name}={qty}" for name, qty in sorted(inventory.items()))
@@ -144,10 +183,16 @@ def _observation_block(observation: Observation) -> str:
     frame = observation.frame
     if frame is None:
         frame_line = "frame: none"
+    elif vision_attached:
+        shape = getattr(frame, "shape", None)
+        dtype = getattr(frame, "dtype", None)
+        frame_line = (
+            f"frame: first-person RGB attached shape={shape} dtype={dtype}"
+        )
     else:
         shape = getattr(frame, "shape", None)
         dtype = getattr(frame, "dtype", None)
-        frame_line = f"frame: present shape={shape} dtype={dtype}"
+        frame_line = f"frame: present shape={shape} dtype={dtype} (pixels not sent)"
     lines = [
         inv_line,
         f"selected_item: {observation.selected_item!r}",
@@ -221,6 +266,8 @@ def _bool(value: Any) -> bool:
 
 
 __all__ = [
+    "L1_LLM_BEHAVIOR",
+    "L1_LLM_TASK_GOAL",
     "LEGAL_ACTIONS",
     "build_prompt",
     "extract_json_object",

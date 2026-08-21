@@ -61,3 +61,29 @@ OBSIDIANLINK_OFFLINE=1 /opt/anaconda3/bin/conda run -n mc-agent python main.py
 ```bash
 PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest tests/
 ```
+
+LLM smoke（不是 Nether Portal 评测；只验证 MiniMax → JSON action → Minecraft `env.step`）：
+
+```bash
+export MINIMAX_API_KEY=your_key
+PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
+    obsidianlink/experiments/run_llm_smoke.py --agent llm --max-steps 8
+```
+
+L1 Portal Benchmark（正式 `MineRLL1Controlled-v0` + `L1_PORTAL_TASK` + `L1Evaluator` + `LLMAgent`；默认 500 steps）：
+
+```bash
+export MINIMAX_API_KEY=your_key
+PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
+    obsidianlink/experiments/run_l1_llm_agent.py
+```
+
+Vision Baseline v3（把 `Observation.frame` RGB 发给 MiniMax-M3）：
+
+```bash
+export MINIMAX_API_KEY=your_key
+PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
+    obsidianlink/experiments/run_l1_llm_agent.py --vision
+```
+
+`MINIMAX_API_KEY` 只从环境变量读取，不要写入代码。默认 endpoint 为 `https://api.minimaxi.com/v1/chat/completions`。当前实现进度见 `ROADMAP.md`。
