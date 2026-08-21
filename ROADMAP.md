@@ -27,6 +27,15 @@ Natural-language Task → GeneralAgent → Planner
 
 **Agent Reasoning Foundation**
 
+2026-08-22 Cognitive Layer 重构：
+
+* Wiki 从单一搜索摘要升级为有界的 `search → article parse → structured knowledge`：解析正文段落、章节与表格，输出 `recipe` / `item` / `mechanic` 类型及可审计 attributes；正文请求失败时安全回退搜索摘要
+* `WikiKnowledge` 优先查询 `AgentMemory.semantic_memory`；相同规范化 query 跨 task 复用，不重复访问网络，也不消耗 live Wiki call budget
+* `AgentMemory` 明确支持四层：working（当前 task/plan/observation）、episodic（成功与失败经历）、semantic（Wiki 结构化知识）、spatial（Agent 可见来源的位置/资源）；默认只重置 working memory，长期记忆可影响后续 Planner prompt
+* Planner 增加稳定 subgoal ID、parent、dependency、status、attempt/outcome 与 plan revision；兼容旧 `subgoal` / `pending_subgoals` JSON，同时优先使用结构化 `Goal → Subgoal → Primitive Skill` plan
+* Planner prompt 同时读取 working / episodic / semantic / spatial memory，根据 expected-vs-observed mismatch 和历史失败修改 downstream plan；默认 skill surface 仍为 primitive-only
+* 新增 Knowledge / Memory / Planner / cache compatibility 测试；完整 offline regression：**204 passed**；未启动 MineRL/Minecraft，未改 `obsidianlink/benchmark/`，未增加 workflow skill、Vision 或 Multi-Agent
+
 2026-08-21 当前实现：
 
 * 新增 `FakeMinecraftEnv`：不启动 Minecraft/MineRL，模拟 inventory、可采矿资源、hotbar、放置与 GUI crafting；primitive skill 仍发同一套 `Action`，Observation 只有 `frame` / `inventory` / `selected_item`

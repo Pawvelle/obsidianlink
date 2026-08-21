@@ -50,3 +50,46 @@ def test_search_strips_markup_and_limits_content() -> None:
     )
     result = tool.search("portal")
     assert result.content == "one & two"
+
+
+def test_search_fetches_article_and_extracts_recipe() -> None:
+    calls: list[str] = []
+
+    def transport(url: str):
+        calls.append(url)
+        if "action=parse" in url:
+            return {
+                "parse": {
+                    "text": (
+                        "<p>A wooden pickaxe is a tool.</p><h2>Crafting</h2>"
+                        "<p>It is crafted using planks and sticks.</p>"
+                        "<table><tr><th>Ingredients</th><td>3 Planks + 2 Sticks</td></tr></table>"
+                    )
+                }
+            }
+        return _payload(title="Wooden Pickaxe", snippet="A tool")
+
+    result = MinecraftWikiTool(transport=transport).search("wooden pickaxe recipe")
+
+    assert len(calls) == 2
+    assert result.knowledge is not None
+    assert result.knowledge.knowledge_type == "recipe"
+    assert result.knowledge.attributes["ingredients"] == ("3 Planks", "2 Sticks")
+    assert "crafted using planks and sticks" in result.content
+
+
+def test_search_extracts_mechanic_rules() -> None:
+    def transport(url: str):
+        if "action=parse" in url:
+            return {
+                "parse": {
+                    "text": "<p>Water can convert lava when it touches a source block. Flowing lava cannot create the same block.</p>"
+                }
+            }
+        return _payload(title="Lava", snippet="Lava behavior")
+
+    result = MinecraftWikiTool(transport=transport).search("how water lava interaction works")
+
+    assert result.knowledge is not None
+    assert result.knowledge.knowledge_type == "mechanic"
+    assert len(result.knowledge.attributes["rules"]) == 2

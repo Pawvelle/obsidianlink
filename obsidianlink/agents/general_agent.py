@@ -117,7 +117,13 @@ class GeneralAgent:
                 self.memory.record_failure(source="planner", message=reason)
                 return self._result(task, False, reason, cycle)
 
-            self.memory.apply_plan(decision.subgoal, decision.pending_subgoals)
+            self.memory.apply_plan(
+                decision.subgoal,
+                decision.pending_subgoals,
+                plan=decision.plan,
+                active_subgoal_id=decision.active_subgoal_id,
+                revision_reason=decision.plan_revision_reason,
+            )
 
             if decision.type == "finish":
                 if self.goal_verifier is None:
@@ -134,14 +140,16 @@ class GeneralAgent:
                 continue
 
             if decision.type == "wiki":
-                if len(self._wiki_queries) >= self.max_wiki_calls:
+                cached = self.wiki.has_cached(decision.query, self.memory)
+                if not cached and len(self._wiki_queries) >= self.max_wiki_calls:
                     self.memory.record_failure(
                         source="wiki",
                         message="wiki call budget exhausted",
                         arguments={"query": decision.query},
                     )
                     continue
-                self._wiki_queries.append(decision.query)
+                if not cached:
+                    self._wiki_queries.append(decision.query)
                 wiki_result = self.wiki.search_wiki(decision.query, self.memory)
                 if wiki_result.error:
                     self.memory.record_failure(

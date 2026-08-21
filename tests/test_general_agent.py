@@ -243,6 +243,41 @@ def test_general_agent_bounds_wiki_calls_and_replans() -> None:
     assert result.wiki_queries == ("first",)
 
 
+def test_general_agent_reuses_semantic_memory_without_second_network_call() -> None:
+    calls: list[str] = []
+    memory = AgentMemory()
+    wiki = WikiKnowledge(
+        MinecraftWikiTool(
+            transport=lambda url: (
+                calls.append(url)
+                or {"query": {"search": [{"title": "Stone", "snippet": "Mine it."}]}}
+            )
+        )
+    )
+    agent = GeneralAgent(
+        SequencePlanner(
+            [
+                PlannerDecision("wiki", query="how to mine stone"),
+                PlannerDecision("wiki", query="  HOW TO MINE STONE  "),
+                PlannerDecision("finish"),
+            ]
+        ),
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([]),
+        wiki=wiki,
+        memory=memory,
+        max_wiki_calls=1,
+    )
+
+    result = agent.run("Learn stone mechanics")
+
+    # One search plus one best-effort article request; the repeated query is cached.
+    assert len(calls) == 2
+    assert result.success is True
+    assert result.wiki_queries == ("how to mine stone",)
+    assert memory.knowledge_uses[-1].cache_hit is True
+
+
 def test_general_agent_records_subgoals_failures_and_inventory_delta() -> None:
     planner = SequencePlanner(
         [

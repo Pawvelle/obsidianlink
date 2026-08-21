@@ -1,4 +1,5 @@
 from obsidianlink.agents.memory import AgentMemory, ReflectionRecord, StepRecord
+from obsidianlink.agents.planner import PlannedSubgoal
 from obsidianlink.env.environment import Observation
 
 
@@ -91,3 +92,68 @@ def test_memory_tracks_pending_subgoals_knowledge_usage_and_reflection() -> None
     assert state["knowledge_usage"]["recent"][0]["query"] == "cobblestone"
     assert state["last_reflection"]["matched"] is False
     assert "expected at least 1 cobblestone" in state["last_reflection"]["reason"]
+
+
+def test_long_term_memory_survives_working_memory_reset() -> None:
+    memory = AgentMemory()
+    memory.reset("First task")
+    memory.remember_knowledge(
+        "wooden pickaxe recipe",
+        "Wooden Pickaxe: crafted from planks and sticks",
+        knowledge_type="recipe",
+        subject="Wooden Pickaxe",
+        attributes={"ingredients": ("planks", "sticks")},
+    )
+    memory.remember_location(
+        "oak grove",
+        position=(10.0, 64.0, -4.0),
+        resources={"oak_log": 6},
+    )
+    memory.record_failure(source="attack", message="target was out of reach")
+
+    memory.reset("Second task")
+    state = memory.prompt_state()
+
+    assert memory.find_knowledge("  WOODEN PICKAXE RECIPE ") is not None
+    assert state["semantic_memory"][0]["knowledge_type"] == "recipe"
+    assert state["episodic_memory"][0]["outcome"] == "target was out of reach"
+    assert state["spatial_memory"][0]["resources"] == {"oak_log": 6}
+    assert state["working_memory"]["task"] == "Second task"
+    assert state["working_memory"]["inventory"] == {}
+
+
+def test_memory_merges_hierarchical_plan_and_tracks_attempts() -> None:
+    memory = AgentMemory()
+    memory.reset("Craft a tool")
+    memory.apply_plan(
+        "obtain materials",
+        plan=(
+            PlannedSubgoal("materials", "obtain materials", "in_progress"),
+            PlannedSubgoal("craft", "craft tool", "pending", depends_on=("materials",)),
+        ),
+        active_subgoal_id="materials",
+        revision_reason="initial decomposition",
+    )
+    memory.record_step(StepRecord("attack", {"ticks": 4}, True, "got logs", 4))
+
+    state = memory.prompt_state()
+    assert memory.active_subgoal_id == "materials"
+    assert memory.subgoal_states["materials"].attempts == 1
+    assert memory.pending_subgoals == ["craft tool"]
+    assert state["working_memory"]["plan_revision"] == 1
+    assert state["subgoal_progress"]["nodes"][1]["depends_on"] == ("materials",)
+
+    memory.apply_plan(
+        "craft tool",
+        plan=(
+            PlannedSubgoal("materials", "obtain materials", "completed"),
+            PlannedSubgoal("craft", "craft tool", "in_progress", depends_on=("materials",)),
+        ),
+        active_subgoal_id="craft",
+    )
+    memory.apply_plan(
+        "obtain materials",
+        plan=(PlannedSubgoal("materials", "obtain materials", "pending"),),
+        active_subgoal_id="materials",
+    )
+    assert memory.subgoal_states["materials"].status == "completed"

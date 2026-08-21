@@ -63,3 +63,18 @@ def test_planner_parser_accepts_pending_subgoals_and_expected_outcome() -> None:
     assert decision.subgoal == "mine stone"
     assert decision.pending_subgoals == ("verify inventory",)
     assert decision.expected == {"inventory_min": {"cobblestone": 1}}
+
+
+def test_planner_parser_accepts_hierarchical_plan_update() -> None:
+    decision = parse_planner_decision(
+        '{"type":"skill","name":"attack","arguments":{"ticks":8},'
+        '"active_subgoal_id":"mine","plan_revision_reason":"stone is now reachable",'
+        '"plan":[{"id":"find","description":"find stone","status":"completed"},'
+        '{"id":"mine","description":"mine stone","status":"in_progress",'
+        '"depends_on":["find"]}]}',
+        frozenset({"attack"}),
+    )
+    assert decision.active_subgoal_id == "mine"
+    assert decision.plan[0].status == "completed"
+    assert decision.plan[1].depends_on == ("find",)
+    assert decision.plan_revision_reason == "stone is now reachable"

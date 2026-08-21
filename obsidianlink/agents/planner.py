@@ -13,6 +13,17 @@ from obsidianlink.models.base_client import BaseLLMClient
 
 
 @dataclass(frozen=True)
+class PlannedSubgoal:
+    """One stable node in a Goal → Subgoal → Primitive Skill plan."""
+
+    id: str
+    description: str
+    status: str = "pending"
+    parent_id: str | None = None
+    depends_on: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class PlannerDecision:
     type: str
     name: str = ""
@@ -22,6 +33,9 @@ class PlannerDecision:
     subgoal: str = ""
     pending_subgoals: tuple[str, ...] = ()
     expected: dict[str, Any] = field(default_factory=dict)
+    plan: tuple[PlannedSubgoal, ...] = ()
+    active_subgoal_id: str = ""
+    plan_revision_reason: str = ""
 
 
 class TaskPlanner(Protocol):
@@ -97,33 +111,48 @@ def _build_planner_prompt(
     operation_instructions = (
         "You may request current game knowledge with search_wiki when a rule is unknown.\n"
         "Return exactly one JSON object in one of these forms:\n"
-        '{"type":"skill","subgoal":"<current subgoal>","pending_subgoals":["..."],'
-        '"name":"<available skill>","arguments":{},"expected":{"inventory_min":{}},"reason":"..."}\n'
-        '{"type":"wiki","subgoal":"<current subgoal>","pending_subgoals":["..."],'
-        '"query":"how to craft a wooden pickaxe","reason":"..."}\n'
-        '{"type":"finish","subgoal":"<current subgoal>","reason":"goal verified from inventory"}\n'
+        '{"type":"skill","plan":[{"id":"sg1","description":"...",'
+        '"status":"in_progress","parent_id":null,"depends_on":[]}],'
+        '"active_subgoal_id":"sg1","name":"<available skill>","arguments":{},'
+        '"expected":{"inventory_min":{}},"plan_revision_reason":"...","reason":"..."}\n'
+        '{"type":"wiki","plan":[{"id":"sg1","description":"learn recipe",'
+        '"status":"in_progress","parent_id":null,"depends_on":[]}],'
+        '"active_subgoal_id":"sg1","query":"how to craft a wooden pickaxe","reason":"..."}\n'
+        '{"type":"finish","plan":[{"id":"sg1","description":"...",'
+        '"status":"completed","parent_id":null,"depends_on":[]}],'
+        '"reason":"goal verified from inventory"}\n'
         if allow_wiki
         else
         "Knowledge lookup is unavailable in this phase.\n"
         "Return exactly one JSON object in one of these forms:\n"
-        '{"type":"skill","subgoal":"<current subgoal>","pending_subgoals":["..."],'
-        '"name":"<available skill>","arguments":{},"expected":{"inventory_min":{}},"reason":"..."}\n'
-        '{"type":"finish","subgoal":"<current subgoal>","reason":"goal verified from observation"}\n'
+        '{"type":"skill","plan":[{"id":"sg1","description":"...",'
+        '"status":"in_progress","parent_id":null,"depends_on":[]}],'
+        '"active_subgoal_id":"sg1","name":"<available skill>","arguments":{},'
+        '"expected":{"inventory_min":{}},"plan_revision_reason":"...","reason":"..."}\n'
+        '{"type":"finish","plan":[{"id":"sg1","description":"...",'
+        '"status":"completed","parent_id":null,"depends_on":[]}],'
+        '"reason":"goal verified from observation"}\n'
     )
     return (
         "You are the planner of one autonomous Minecraft agent.\n"
-        "Decompose the task before acting: remaining subgoals → current subgoal → "
-        "one primitive skill or wiki lookup → compare the result in memory → "
-        "choose the next decision.\n"
-        "Keep pending_subgoals as unfinished work after the current subgoal. "
-        "Do not repeat completed_subgoals.\n"
+        "Maintain a hierarchical Goal → Subgoal → Primitive Skill plan before acting. "
+        "Use stable subgoal IDs and dependencies so progress survives replanning.\n"
+        "Reason from remaining subgoals → current subgoal → one primitive operation.\n"
+        "Include plan as an ordered list of {id, description, status, parent_id, depends_on}; "
+        "status is pending|in_progress|completed|failed|blocked|skipped. Set exactly one "
+        "active_subgoal_id when work remains. Legacy subgoal/pending_subgoals fields are "
+        "accepted but the structured plan is preferred.\n"
+        "After every observation, preserve verified completed nodes, update the active node, "
+        "and revise downstream nodes when memory shows a failed assumption. Explain changes "
+        "in plan_revision_reason.\n"
         "Compose complex tasks from the named primitive skills; never invent "
         "MineRL actions or unavailable skills.\n"
         "Use memory to adjust the plan:\n"
-        "- subgoal_progress: current, completed, and pending work\n"
+        "- working_memory/subgoal_progress: node status, dependencies, attempts, and progress\n"
         "- last_reflection: expected vs observed outcome of the previous skill\n"
-        "- failure_history: change approach instead of retrying the same failing skill blindly\n"
-        "- knowledge_usage: apply retrieved game rules\n"
+        "- episodic_memory/relevant_failure_experience: avoid repeating failed approaches\n"
+        "- semantic_memory/knowledge_usage: apply structured recipe, item, and mechanic facts\n"
+        "- spatial_memory: reuse known resource and landmark locations\n"
         "- environment.inventory / selected_item / inventory_delta: ground the next skill\n"
         "When a subgoal should change the world, set expected.inventory_min or "
         "expected.inventory_delta so a mismatch can be reflected.\n"
@@ -151,6 +180,17 @@ def parse_planner_decision(
     expected = data.get("expected", {})
     if not isinstance(expected, dict):
         expected = {}
+    plan = _parse_plan(data)
+    active_subgoal_id = str(data.get("active_subgoal_id", "") or "").strip()
+    revision_reason = str(data.get("plan_revision_reason", "") or "").strip()
+    common = {
+        "reason": reason,
+        "subgoal": subgoal,
+        "pending_subgoals": pending,
+        "plan": plan,
+        "active_subgoal_id": active_subgoal_id,
+        "plan_revision_reason": revision_reason,
+    }
     if kind == "skill":
         name = str(data.get("name", "")).strip()
         if name not in allowed_skills:
@@ -162,10 +202,8 @@ def parse_planner_decision(
             kind,
             name=name,
             arguments=dict(arguments),
-            reason=reason,
-            subgoal=subgoal,
-            pending_subgoals=pending,
             expected=dict(expected),
+            **common,
         )
     if kind == "wiki":
         if not allow_wiki:
@@ -176,12 +214,10 @@ def parse_planner_decision(
         return PlannerDecision(
             kind,
             query=query,
-            reason=reason,
-            subgoal=subgoal,
-            pending_subgoals=pending,
+            **common,
         )
     if kind == "finish":
-        return PlannerDecision(kind, reason=reason, subgoal=subgoal, pending_subgoals=pending)
+        return PlannerDecision(kind, **common)
     raise ValueError(f"unknown planner decision type: {kind!r}")
 
 
@@ -196,8 +232,54 @@ def _parse_pending_subgoals(data: dict[str, Any]) -> tuple[str, ...]:
     return tuple(str(item).strip() for item in items if str(item).strip())
 
 
+def _parse_plan(data: dict[str, Any]) -> tuple[PlannedSubgoal, ...]:
+    raw_plan = data.get("plan", ())
+    if not isinstance(raw_plan, (list, tuple)):
+        return ()
+    nodes: list[PlannedSubgoal] = []
+    seen: set[str] = set()
+    allowed_statuses = {
+        "pending",
+        "in_progress",
+        "completed",
+        "failed",
+        "blocked",
+        "skipped",
+    }
+    for raw in raw_plan:
+        if not isinstance(raw, dict):
+            continue
+        node_id = str(raw.get("id", "") or "").strip()
+        description = str(raw.get("description", "") or "").strip()
+        if not node_id or not description or node_id in seen:
+            continue
+        status = str(raw.get("status", "pending") or "pending").strip().lower()
+        if status not in allowed_statuses:
+            status = "pending"
+        parent_id = str(raw.get("parent_id", "") or "").strip() or None
+        dependencies = raw.get("depends_on", ())
+        if isinstance(dependencies, str):
+            dependencies = (dependencies,)
+        elif not isinstance(dependencies, (list, tuple)):
+            dependencies = ()
+        nodes.append(
+            PlannedSubgoal(
+                id=node_id,
+                description=description,
+                status=status,
+                parent_id=parent_id,
+                depends_on=tuple(
+                    str(item).strip() for item in dependencies if str(item).strip()
+                ),
+            )
+        )
+        seen.add(node_id)
+    return tuple(nodes)
+
+
 __all__ = [
     "LLMSkillPlanner",
+    "PlannedSubgoal",
     "PlannerDecision",
     "TaskPlanner",
     "parse_planner_decision",
