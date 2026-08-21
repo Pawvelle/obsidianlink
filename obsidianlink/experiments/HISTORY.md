@@ -180,6 +180,25 @@ Not a portal frame, ignition, or Nether entry. `L1Evaluator.success`
 stays False (`nether_entry_not_confirmed`). Lava still spreads on open
 grass; this is not geometric proof of a specific frame cell.
 
+### GeneralAgent iron-sword live playtest — 2026-08-22
+
+`run_iron_sword.py` on empty-inventory survival (`MineRLObsidianLinkSurvivalIronSword-v0`) with MiniMax-M3 China (`api.minimaxi.com`), desktop POV window, Wiki, and vision. Not a capability conclusion (`success=False`).
+
+Git keeps:
+
+* `evidence/iron_sword_live_summary.json`
+* `evidence/iron_sword_live_console.txt`
+
+Local raw copy remains under gitignored `logs/iron_sword_live/`.
+
+Live evidence:
+
+* empty start inventory; first Wiki query then punch trees
+* 26 planner calls / 26 MiniMax completions; 769 environment steps; wall ≈ 270s
+* actions: attack 740, camera 9, move 20
+* inventory ended at `oak_log=1` (first log around planner 12); no planks, furnace, or iron_sword
+* stop reason: `planner failed: ValueError: planner response is not a JSON object`
+
 ### Other historical pilots
 
 D1 / D2 / D3 live JSON files remain useful as pipeline / scene-validity

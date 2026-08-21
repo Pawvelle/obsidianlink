@@ -59,6 +59,23 @@ def test_generate_stores_raw_response() -> None:
     assert seen["headers"]["Authorization"] == "Bearer sk-test-not-real"
     assert seen["body"]["model"] == "MiniMax-M3"
     assert seen["body"]["messages"] == [{"role": "user", "content": "hello"}]
+    assert seen["body"]["max_tokens"] == 256
+
+
+def test_max_tokens_override() -> None:
+    seen: dict[str, object] = {}
+
+    def transport(url, headers, body, timeout_s):
+        del url, headers, timeout_s
+        seen["body"] = dict(body)
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    client = MiniMaxClient(
+        api_key="sk-test-not-real", max_tokens=1024, transport=transport
+    )
+    assert client.generate("hello") == "ok"
+    assert seen["body"]["max_tokens"] == 1024
+    assert seen["body"]["max_completion_tokens"] == 1024
 
 
 def test_minimax_model_env(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -27,6 +27,12 @@ Natural-language Task → GeneralAgent → Planner
 
 **Agent Reasoning Foundation**
 
+2026-08-22 GeneralAgent iron-sword live playtest：
+
+* 新增空背包生存环境 `SurvivalIronSwordEnv`、桌面 POV `LiveDesktopView` 与 `run_iron_sword.py`；MiniMax-M3 中国站 + Wiki + 视觉
+* Live `iron_sword_live`：26 Planner / 769 steps / wall ≈ 270s；空背包开局，结束 inventory `oak_log=1`；第 26 轮 Planner JSON 解析失败；`success=False`，不是能力结论
+* 证据：`obsidianlink/experiments/evidence/iron_sword_live_summary.json` 与 `iron_sword_live_console.txt`
+
 2026-08-22 Cognitive Retrieval + Long-Horizon Planning：
 
 * 新增本地、确定性 Memory Retrieval：按当前 goal/subgoal 对 semantic / episodic / spatial memory 做词法相关性、失败优先级、recency 与 spatial confidence 排序；结果有界进入 `retrieved_memory`，不引入 embedding、vector DB 或 RAG
@@ -278,6 +284,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * **2026-08-21 GeneralAgent first live task**：controlled survival-mode MineRL 中 `Mine 1 obsidian block` 成功；Planner 1 call，254 environment steps，inventory Observation 验证 `obsidian=1`；未使用 benchmark/Wiki/RAG/Vision/Multi-Agent
 * **2026-08-21 GeneralAgent Planner/Memory foundation**：Task→Subgoal→Primitive/Wiki→Observation→Memory 决策状态；offline 189 passed；未改 benchmark
 * **2026-08-21 Agent Reasoning Foundation**：FakeMinecraftEnv + Planner 分解/进度 + Memory 知识使用 + 轻量 expected/observed reflection；offline 198 passed；未改 benchmark；未启动真实 Minecraft 任务
+* **2026-08-22 GeneralAgent iron-sword live playtest**：空背包生存 + MiniMax-M3 中国站 + 桌面 POV；26 Planner / 769 steps；`oak_log=1`；Planner JSON 失败退出；非能力结论
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
 * **L1 Mechanical Interaction Test**（正式 L1 上 scripted 浇灌 mechanics；NEW OBSIDIAN = TRUE；无 Oracle / 无 Evaluator / 无 Agent）
 * **L1 Evaluator**（evaluator-only `reward` + `biome_id` truth；live-verified fail-closed；无 ObservationFromGrid；无 Observation 泄漏）

@@ -51,6 +51,7 @@ class MiniMaxClient(BaseLLMClient):
         model: str | None = None,
         url: str | None = None,
         timeout_s: float = 60.0,
+        max_tokens: int = 256,
         transport: GenerateTransport | None = None,
     ) -> None:
         key = api_key if api_key is not None else os.environ.get(API_KEY_ENV, "")
@@ -63,6 +64,7 @@ class MiniMaxClient(BaseLLMClient):
         env_model = os.environ.get(MODEL_ENV, "").strip()
         self._model = model or env_model or DEFAULT_MODEL
         self._timeout_s = float(timeout_s)
+        self._max_tokens = max(16, int(max_tokens))
         self._transport = transport
         self.completions = 0
         self.last_raw_response: dict[str, Any] | None = None
@@ -78,7 +80,7 @@ class MiniMaxClient(BaseLLMClient):
         return self._url
 
     def generate(self, prompt: str) -> str:
-        return self._complete(_text_payload(self._model, prompt))
+        return self._complete(_text_payload(self._model, prompt, self._max_tokens))
 
     def generate_with_vision(self, prompt: str, *, frame: Any) -> str:
         """OpenAI-compatible multimodal Chat Completions for MiniMax-M3."""
@@ -94,8 +96,8 @@ class MiniMaxClient(BaseLLMClient):
                     ],
                 }
             ],
-            "max_tokens": 256,
-            "max_completion_tokens": 256,
+            "max_tokens": self._max_tokens,
+            "max_completion_tokens": self._max_tokens,
             "thinking": {"type": "disabled"},
         }
         return self._complete(payload)
@@ -166,12 +168,12 @@ class MiniMaxHTTPError(RuntimeError):
         self.payload = dict(payload) if isinstance(payload, Mapping) else None
 
 
-def _text_payload(model: str, prompt: str) -> dict[str, Any]:
+def _text_payload(model: str, prompt: str, max_tokens: int = 256) -> dict[str, Any]:
     return {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 256,
-        "max_completion_tokens": 256,
+        "max_tokens": max_tokens,
+        "max_completion_tokens": max_tokens,
         "thinking": {"type": "disabled"},
     }
 
