@@ -27,6 +27,7 @@ class AgentMemory:
     inventory: dict[str, int] = field(default_factory=dict)
     selected_item: str | None = None
     last_error: str | None = None
+    last_observation: Observation | None = field(default=None, repr=False)
 
     def reset(self, goal: str) -> None:
         self.goal = goal.strip()
@@ -35,8 +36,10 @@ class AgentMemory:
         self.inventory.clear()
         self.selected_item = None
         self.last_error = None
+        self.last_observation = None
 
     def update_state(self, observation: Observation) -> None:
+        self.last_observation = observation
         self.inventory = dict(observation.inventory or {})
         self.selected_item = observation.selected_item
 

@@ -4,23 +4,35 @@
 
 ## Current Phase
 
-**Phase 3 — Single-Agent Autonomous Minecraft Prototype**
+**General Minecraft Agent Plan — Phase 1: Core Framework**
 
 用户于 2026-08-21 明确调整当前优先级：暂停 Benchmark / Nether Portal 工作，先开发 Agent 本身。保留既有 benchmark 代码与历史证据，但当前不重构、不扩展。
 
-当前架构：
+当前通用入口架构：
 
 ```text
-LLM Brain → Task Planner → Memory → Skill Library → Minecraft Controller → Environment
+Natural-language Task → GeneralAgent → Task Planner → Skill Action
+                      ↑                                  ↓
+                    Memory ← Observation ← Environment ← Controller
 ```
 
 约束：单 Agent；LLM 只调用高层 skill；不引入 LangChain、复杂 Agent framework、Multi-Agent 或 RAG pipeline。
 
 ## Current Task
 
-**最小闭环：获取木头并制作木镐**
+**通用 `GeneralAgent` 与最小 Agent Loop**
 
 2026-08-21 当前实现：
+
+* 新增 `obsidianlink.agents.GeneralAgent`，以自然语言任务作为统一 `run(task)` 入口，不包含 Portal 专用目标
+* 核心闭环为 `Task → Planner → high-level skill Action → Environment → Observation → AgentMemory`
+* 复用现有 `TaskPlanner`、`AgentMemory`、`MinecraftController`、`SkillLibrary` 与 LLM model client 层；保留 `LLMAgent`、`AutonomousMinecraftAgent`、Portal/RuleBased/Random baselines
+* 支持注入只读取 agent-visible Observation/Memory 的 `GoalVerifier`；有 verifier 时拒绝未经验证的 `finish`，无 verifier 时允许 planner 声明完成
+* skill 失败或异常会记录为 `StepRecord` 并返回 Planner 重规划；planner、environment reset 与 verifier 边界返回结构化失败结果
+* `LLMSkillPlanner(allow_wiki=False)` 支持 Phase 1 只生成 `skill` / `finish`；未新增 Wiki、RAG、Vision、Multi-Agent 或复杂 Skill System
+* 新增 4 个通用闭环测试；完整离线回归 **163 passed**
+
+既有木镐 autonomous prototype 保留，当前不继续扩展 Portal 专用 Agent：
 
 * 新增 `AutonomousMinecraftAgent`：`observe → plan → skill/wiki → memory update`；Planner 只接受 `skill` / `wiki` / `finish`，拒绝 `move` / camera / mouse 等低级动作
 * 新增 episode-local `AgentMemory`：目标、完成步骤、Wiki 知识、inventory / selected item、last error
@@ -29,10 +41,10 @@ LLM Brain → Task Planner → Memory → Skill Library → Minecraft Controller
 * 复用 live Minecraft Wiki，并把查询结果写入 memory；无 embedding / vector DB / RAG pipeline
 * MCP-Reborn live 发现：结构化 `CraftAction` 会把 `craft none` 送入 `constructKeyboardState` 并触发 `NumberFormatException`，因此不使用该 handler；`craft_item` 改走真实 inventory / crafting-table GUI 控制
 * Live environment smoke：reset / WAIT / inventory open / inventory close 全部成功；POV `(360, 640, 3)`，真实初始 inventory `iron_axe=1`
-* Offline tests：159 passed
+* 实现当时 Offline tests：159 passed
 * **尚未获得 live task success**：`collect_wood(quantity=3)` 在 3 次有界 run（300 / 500 / 500 steps）均为 `0/3 logs`；已加入 RGB tree servo、dense forest generator 与 jump movement，但目标接近仍未解决。因此 GUI 木镐制作只通过 fake-environment 闭环，尚未 live 验证
 
-下一步只解决 `collect_wood` 的 live 视觉导航/接近；采集成功前，不扩展长程任务或恢复 Nether Portal。
+Phase 1 框架完成后，下一步先为 GeneralAgent 增加一个不依赖 Wiki/Vision 的真实 MineRL 运行入口与基础资源任务 smoke；不恢复 Nether Portal 专用开发。
 
 ## Prior Benchmark Context
 
@@ -203,6 +215,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * Live Minecraft Wiki Tool
 * Tool-enabled ReactiveAgent
 * **2026-08-21 Autonomous Agent prototype architecture**（LLM high-level planner + memory + skill library + controller + dedicated env；fake-environment wood→wooden_pickaxe 闭环通过；live task success 尚未通过）
+* **2026-08-21 GeneralAgent Phase 1 core**：自然语言 `run(task)` 统一入口、Task→Planner→Skill→Environment→Observation→Memory 有界闭环、可注入 GoalVerifier、失败重规划；保留全部 baseline 与 benchmark；offline 163 passed
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
 * **L1 Mechanical Interaction Test**（正式 L1 上 scripted 浇灌 mechanics；NEW OBSIDIAN = TRUE；无 Oracle / 无 Evaluator / 无 Agent）
 * **L1 Evaluator**（evaluator-only `reward` + `biome_id` truth；live-verified fail-closed；无 ObservationFromGrid；无 Observation 泄漏）
@@ -219,10 +232,10 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 
 ## Next
 
-1. 为 `collect_wood` 增加可诊断的视觉轨迹（候选目标、yaw correction、接近阶段、最终帧），找出 0/3 logs 的具体失败模式。
-2. 在不读取 hidden truth 的前提下跑通一次真实 `collect_wood(quantity=3)`。
-3. 采集成功后，单独 live 验证 inventory GUI → crafting table → 3×3 wooden pickaxe 配方。
-4. 机械链稳定后再运行 `run_autonomous_agent.py` 的 MiniMax planner + Wiki 完整 episode。
+1. 新增最小 `run_general_agent.py`，在真实 MineRL 上接受自然语言 task，并显式使用 `LLMSkillPlanner(allow_wiki=False)`。
+2. 为 GeneralAgent 定义第一个 agent-visible 基础资源 GoalVerifier，并跑通一次 live resource smoke。
+3. 再为 `collect_wood` 增加可诊断视觉轨迹，解决当前 0/3 logs 的导航/接近 blocker。
+4. 基础资源闭环稳定后再扩充 Planner/工具能力；Wiki、RAG、Vision 与复杂 skill system 不在当前阶段。
 
 不恢复 Nether Portal，不增加多 Agent、reflection framework 或通用 RAG pipeline。
 

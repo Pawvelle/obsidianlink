@@ -3,6 +3,7 @@
 from obsidianlink.agents.agent import AutonomousMinecraftAgent, AutonomousRunResult
 from obsidianlink.agents.base import Agent
 from obsidianlink.agents.base_agent import BaseAgent
+from obsidianlink.agents.general_agent import GeneralAgent, GeneralAgentResult, GoalVerifier
 from obsidianlink.agents.heuristic import HeuristicModelClient
 from obsidianlink.agents.llm_agent import LLMAgent
 from obsidianlink.agents.model_client import (
@@ -20,6 +21,9 @@ __all__ = [
     "AutonomousMinecraftAgent",
     "AutonomousRunResult",
     "BaseAgent",
+    "GeneralAgent",
+    "GeneralAgentResult",
+    "GoalVerifier",
     "HeuristicModelClient",
     "LLMAgent",
     "ModelCall",
