@@ -155,10 +155,21 @@ class GeneralAgent:
                     skill=decision.name,
                     arguments=decision.arguments,
                     success=skill_result.success,
-                    message=skill_result.message,
-                    environment_steps=skill_result.steps,
+                        message=skill_result.message,
+                        environment_steps=skill_result.steps,
+                    metadata=dict(skill_result.metadata),
                 )
             )
+            verified, verify_error = self._verify(task, observation)
+            if verify_error is not None:
+                return self._result(task, False, verify_error, cycle)
+            if verified:
+                return self._result(
+                    task,
+                    True,
+                    "goal verified from observation",
+                    cycle,
+                )
 
         return self._result(
             task,

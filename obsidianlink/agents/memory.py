@@ -15,6 +15,7 @@ class StepRecord:
     success: bool
     message: str
     environment_steps: int
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

@@ -62,6 +62,16 @@ OBSIDIANLINK_OFFLINE=1 /opt/anaconda3/bin/conda run -n mc-agent python main.py
 PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest tests/
 ```
 
+GeneralAgent 真实 Minecraft smoke（自然语言 → Planner → Skill → MineRL → inventory Observation）：
+
+```bash
+PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
+    obsidianlink/experiments/run_general_agent.py \
+    --task "Mine 1 obsidian block"
+```
+
+随机自然森林中的 `collect_wood` 诊断可加 `--natural-world`；该路径当前仍不稳定。
+
 LLM smoke（不是 Nether Portal 评测；只验证 MiniMax → JSON action → Minecraft `env.step`）：
 
 ```bash

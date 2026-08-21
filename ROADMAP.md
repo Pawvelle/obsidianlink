@@ -20,7 +20,7 @@ Natural-language Task → GeneralAgent → Task Planner → Skill Action
 
 ## Current Task
 
-**通用 `GeneralAgent` 与最小 Agent Loop**
+**GeneralAgent 第一个真实可验证 Minecraft 任务**
 
 2026-08-21 当前实现：
 
@@ -31,6 +31,13 @@ Natural-language Task → GeneralAgent → Task Planner → Skill Action
 * skill 失败或异常会记录为 `StepRecord` 并返回 Planner 重规划；planner、environment reset 与 verifier 边界返回结构化失败结果
 * `LLMSkillPlanner(allow_wiki=False)` 支持 Phase 1 只生成 `skill` / `finish`；未新增 Wiki、RAG、Vision、Multi-Agent 或复杂 Skill System
 * 新增 4 个通用闭环测试；完整离线回归 **163 passed**
+* 新增 `run_general_agent.py` 与 agent-local smoke task（不进入 benchmark）：默认任务 `Mine 1 obsidian block`
+* 新增 `GeneralBlockSmokeEnv`：真实 MineRL/Minecraft survival mode，固定出生点、diamond pickaxe 与单个 MCP-Reborn 允许的 obsidian 方块；成功只读 agent-visible inventory
+* **Live success（2026-08-21）**：`general_live_phase1_obsidian3`，1 次 Planner → `mine_block` → 240 ATTACK + 12 MOVE + 2 WAIT → inventory `obsidian=1`；254 steps；`success=True`
+* `MineBlockSkill` 支持目标 inventory feedback、独立 pickup/settle 阶段；`MoveForwardSkill` 提供 bounded basic movement；Controller 记录 action counts
+* 修复 GeneralAgent 在最后 planning cycle 执行 skill 后不再次验证目标的问题
+* 自然森林 `collect_wood` 已加入树干/岩浆诊断、连续 attack burst 与稀疏 POV trace；真实方块破坏曾观察到，但随机地形下尚未稳定完成 inventory pickup
+* 完整 offline regression：**175 passed**；`obsidianlink/benchmark/` 无变更
 
 既有木镐 autonomous prototype 保留，当前不继续扩展 Portal 专用 Agent：
 
@@ -44,7 +51,7 @@ Natural-language Task → GeneralAgent → Task Planner → Skill Action
 * 实现当时 Offline tests：159 passed
 * **尚未获得 live task success**：`collect_wood(quantity=3)` 在 3 次有界 run（300 / 500 / 500 steps）均为 `0/3 logs`；已加入 RGB tree servo、dense forest generator 与 jump movement，但目标接近仍未解决。因此 GUI 木镐制作只通过 fake-environment 闭环，尚未 live 验证
 
-Phase 1 框架完成后，下一步先为 GeneralAgent 增加一个不依赖 Wiki/Vision 的真实 MineRL 运行入口与基础资源任务 smoke；不恢复 Nether Portal 专用开发。
+当前第一个 controlled live task 已完成。下一步只解决自然森林 `collect_wood` 的稳定 grounding / pickup；不恢复 Nether Portal 专用开发。
 
 ## Prior Benchmark Context
 
@@ -216,6 +223,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * Tool-enabled ReactiveAgent
 * **2026-08-21 Autonomous Agent prototype architecture**（LLM high-level planner + memory + skill library + controller + dedicated env；fake-environment wood→wooden_pickaxe 闭环通过；live task success 尚未通过）
 * **2026-08-21 GeneralAgent Phase 1 core**：自然语言 `run(task)` 统一入口、Task→Planner→Skill→Environment→Observation→Memory 有界闭环、可注入 GoalVerifier、失败重规划；保留全部 baseline 与 benchmark；offline 163 passed
+* **2026-08-21 GeneralAgent first live task**：controlled survival-mode MineRL 中 `Mine 1 obsidian block` 成功；Planner 1 call，254 environment steps，inventory Observation 验证 `obsidian=1`；未使用 benchmark/Wiki/RAG/Vision/Multi-Agent
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
 * **L1 Mechanical Interaction Test**（正式 L1 上 scripted 浇灌 mechanics；NEW OBSIDIAN = TRUE；无 Oracle / 无 Evaluator / 无 Agent）
 * **L1 Evaluator**（evaluator-only `reward` + `biome_id` truth；live-verified fail-closed；无 ObservationFromGrid；无 Observation 泄漏）
@@ -232,9 +240,9 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 
 ## Next
 
-1. 新增最小 `run_general_agent.py`，在真实 MineRL 上接受自然语言 task，并显式使用 `LLMSkillPlanner(allow_wiki=False)`。
-2. 为 GeneralAgent 定义第一个 agent-visible 基础资源 GoalVerifier，并跑通一次 live resource smoke。
-3. 再为 `collect_wood` 增加可诊断视觉轨迹，解决当前 0/3 logs 的导航/接近 blocker。
+1. 让自然 `collect_wood(quantity=1)` 在多个 fresh world 中稳定完成 inventory pickup；当前 controlled block smoke 已成功，但随机森林仍不稳定。
+2. 将 collect trace 从全局颜色候选升级为更可靠的近场目标/掉落拾取状态机，仍不引入 vision model。
+3. 自然木头成功后验证 `move_forward` + `mine_block` 的组合资源任务，再扩到 3 logs。
 4. 基础资源闭环稳定后再扩充 Planner/工具能力；Wiki、RAG、Vision 与复杂 skill system 不在当前阶段。
 
 不恢复 Nether Portal，不增加多 Agent、reflection framework 或通用 RAG pipeline。
@@ -242,6 +250,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 ## Blocked
 
 * **Autonomous prototype live blocker（2026-08-21）**：`collect_wood` 在自然 Treechop world 中 300 / 500 / 500 steps 均为 0 logs；dense forest + RGB tree servo + jump 仍未解决目标接近。完整 wooden-pickaxe live success 因此前置阻塞。
+* **GeneralAgent natural collect blocker（2026-08-21）**：live trace 已确认 movement、树干接近与真实 log block 破坏，但多树候选、泥土/树皮误判、岩浆避障和掉落拾取仍使 fresh random forest 的 `Collect 1 log` 不稳定；controlled obsidian smoke 不受此 blocker 影响并已成功。
 * **Structured crafting blocker（2026-08-21）**：MCP-Reborn EnvServer 对 `craft none` 执行 `Integer.parseInt("none")` 并终止 episode；原型必须使用真实 inventory GUI，不能用 `CraftAction` handler。
 * `MineRLNavigate-v0` 在本机 Malmo 0.37.0 上有 `NullPointerException`。Phase 1 使用 `MineRLTreechop-v0`。
 * Malmo 0.37.0 已知限制（记录，不在本次用 workaround 改 Benchmark 定义）：

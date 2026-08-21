@@ -12,7 +12,12 @@ from obsidianlink.controller.minecraft_controller import MinecraftController
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
 from obsidianlink.skills import default_skill_library
-from obsidianlink.skills.mining import _tree_horizontal_offset
+from obsidianlink.skills.mining import (
+    _lava_ahead,
+    _tree_horizontal_offset,
+    _trunk_horizontal_offset,
+    _trunk_under_crosshair,
+)
 from obsidianlink.tools.minecraft_wiki import MinecraftWikiTool
 
 
@@ -118,6 +123,42 @@ def test_tree_visual_servo_points_toward_green_upper_mass() -> None:
     offset = _tree_horizontal_offset(frame)
     assert offset is not None
     assert offset > 0.25
+
+
+def test_trunk_servo_points_toward_vertical_brown_mass() -> None:
+    import numpy as np
+
+    frame = np.zeros((100, 200, 3), dtype=np.uint8)
+    frame[5:78, 145:175] = (90, 58, 25)
+    offset = _trunk_horizontal_offset(frame)
+    assert offset is not None
+    assert offset > 0.25
+
+
+def test_near_field_lava_cue_ignores_small_accents() -> None:
+    import numpy as np
+
+    safe = np.zeros((100, 200, 3), dtype=np.uint8)
+    safe[70:73, 98:102] = (240, 90, 10)
+    assert _lava_ahead(safe) is False
+
+    hazard = np.zeros((100, 200, 3), dtype=np.uint8)
+    hazard[60:95, 70:130] = (240, 90, 10)
+    assert _lava_ahead(hazard) is True
+
+
+def test_trunk_contact_requires_brown_mass_under_crosshair() -> None:
+    import numpy as np
+
+    frame = np.zeros((100, 200, 3), dtype=np.uint8)
+    frame[20:80, 80:120] = (90, 58, 25)
+    assert _trunk_under_crosshair(frame) is True
+
+    frame[:, :] = (90, 58, 42)
+    assert _trunk_under_crosshair(frame) is False
+
+    frame[:, :] = (65, 100, 60)
+    assert _trunk_under_crosshair(frame) is False
 
 
 def test_autonomous_loop_queries_wiki_collects_and_crafts() -> None:

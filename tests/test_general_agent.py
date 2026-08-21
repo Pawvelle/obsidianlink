@@ -130,6 +130,29 @@ def test_general_agent_rejects_unverified_finish_and_can_replan() -> None:
     assert result.planning_cycles == 2
 
 
+def test_general_agent_verifies_success_after_last_planning_cycle() -> None:
+    agent = GeneralAgent(
+        SequencePlanner(
+            [
+                PlannerDecision(
+                    "skill",
+                    name="collect_cobblestone",
+                    arguments={"quantity": 2},
+                )
+            ]
+        ),
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([CollectCobblestoneSkill()]),
+        goal_verifier=_cobblestone_goal,
+        max_planning_cycles=1,
+    )
+
+    result = agent.run("Collect 2 cobblestone")
+
+    assert result.success is True
+    assert result.planning_cycles == 1
+
+
 def test_general_agent_accepts_planner_finish_without_task_verifier() -> None:
     agent = GeneralAgent(
         SequencePlanner([PlannerDecision("finish")]),

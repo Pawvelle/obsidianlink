@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import Counter
+
 from obsidianlink.env.actions import Action
 from obsidianlink.env.environment import Environment, Observation
 
@@ -20,13 +22,20 @@ class MinecraftController:
         self.max_steps = int(max_steps)
         self.steps = 0
         self._observation: Observation | None = None
+        self._action_counts: Counter[str] = Counter()
 
     @property
     def exhausted(self) -> bool:
         return self.steps >= self.max_steps
 
+    @property
+    def action_counts(self) -> dict[str, int]:
+        """Low-level action totals for live smoke diagnostics."""
+        return dict(self._action_counts)
+
     def reset(self) -> Observation:
         self.steps = 0
+        self._action_counts.clear()
         self._observation = self.env.reset()
         return self._observation
 
@@ -42,6 +51,7 @@ class MinecraftController:
             raise TypeError("controller.step requires an Action")
         self._observation = self.env.step(action)
         self.steps += 1
+        self._action_counts[action.type.value] += 1
         return self._observation
 
     def close(self) -> None:
