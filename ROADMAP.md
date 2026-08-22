@@ -27,6 +27,13 @@ Natural-language Task → GeneralAgent → Planner
 
 **Agent Reasoning Foundation**
 
+2026-08-22 Execution feedback foundation (Voyager-inspired design, native implementation):
+
+* GeneralAgent now distinguishes a primitive action completing its requested ticks from its declared observable outcome succeeding: if Planner `expected.inventory_min` / `expected.inventory_delta` is unmet, the completed step is recorded as an execution failure with the reflection evidence
+* Added bounded consecutive execution-failure budget per active subgoal (default 3); after repeated unverified attempts it stops with a structured `executor` failure instead of consuming the full Minecraft budget in a blind action loop
+* Planner contract now explicitly requires recovery through target/position/plan change after an unverified attack, use, or crafting action; the change stays primitive-only and does not import Voyager, Mineflayer, Node, or a workflow skill system
+* Added offline coverage for unverified action outcomes and execution retry exhaustion; complete offline regression: **217 passed**; no MineRL/Minecraft task launched and no benchmark changes
+
 2026-08-22 GeneralAgent iron-sword live playtest：
 
 * 新增空背包生存环境 `SurvivalIronSwordEnv`、桌面 POV `LiveDesktopView` 与 `run_iron_sword.py`；MiniMax-M3 中国站 + Wiki + 视觉

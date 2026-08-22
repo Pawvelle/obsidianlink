@@ -66,6 +66,16 @@ class FailingSkill:
         return SkillResult(False, "target not found", 0)
 
 
+class UnverifiedAttackSkill:
+    name = "attack"
+    description = "Attack a block without changing inventory in this test environment."
+
+    def execute(self, controller, memory, arguments):
+        start = controller.steps
+        controller.step(Action(ActionType.ATTACK))
+        return SkillResult(True, "attack action completed", controller.steps - start)
+
+
 @dataclass
 class SequencePlanner:
     decisions: list[PlannerDecision]
@@ -154,6 +164,64 @@ def test_general_agent_verifies_success_after_last_planning_cycle() -> None:
 
     assert result.success is True
     assert result.planning_cycles == 1
+
+
+def test_general_agent_treats_unmet_expected_outcome_as_execution_failure() -> None:
+    agent = GeneralAgent(
+        SequencePlanner(
+            [
+                PlannerDecision(
+                    "skill",
+                    name="attack",
+                    subgoal="mine a log",
+                    expected={"inventory_delta": {"oak_log": 1}},
+                ),
+                PlannerDecision("finish"),
+            ]
+        ),
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([UnverifiedAttackSkill()]),
+        goal_verifier=lambda *_args: False,
+    )
+
+    result = agent.run("Collect one oak log")
+
+    assert result.success is False
+    assert result.completed_steps[0].success is False
+    assert result.completed_steps[0].message.startswith("execution outcome not verified")
+    assert any(item.source == "reflection" for item in agent.memory.failed_attempts)
+
+
+def test_general_agent_stops_after_bounded_unverified_execution_retries() -> None:
+    attempts = 3
+    agent = GeneralAgent(
+        SequencePlanner(
+            [
+                PlannerDecision(
+                    "skill",
+                    name="attack",
+                    subgoal="mine a log",
+                    active_subgoal_id="get_log",
+                    expected={"inventory_delta": {"oak_log": 1}},
+                )
+                for _ in range(attempts)
+            ]
+        ),
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([UnverifiedAttackSkill()]),
+        goal_verifier=lambda *_args: False,
+        max_consecutive_execution_failures=attempts,
+    )
+
+    result = agent.run("Collect one oak log")
+
+    assert result.success is False
+    assert result.planning_cycles == attempts
+    assert result.environment_steps == attempts
+    assert "execution retry budget exhausted" in result.reason
+    assert len(result.completed_steps) == attempts
+    assert all(not step.success for step in result.completed_steps)
+    assert agent.memory.failed_attempts[-1].source == "executor"
 
 
 def test_general_agent_accepts_planner_finish_without_task_verifier() -> None:

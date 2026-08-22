@@ -66,6 +66,7 @@ class GeneralAgent:
         max_planning_cycles: int = 16,
         max_wiki_calls: int = 4,
         max_memory_retrievals: int = 8,
+        max_consecutive_execution_failures: int = 3,
     ) -> None:
         if max_planning_cycles < 1:
             raise ValueError("max_planning_cycles must be >= 1")
@@ -82,8 +83,19 @@ class GeneralAgent:
         if max_memory_retrievals < 0:
             raise ValueError("max_memory_retrievals must be >= 0")
         self.max_memory_retrievals = int(max_memory_retrievals)
+        if max_consecutive_execution_failures < 1:
+            raise ValueError("max_consecutive_execution_failures must be >= 1")
+        # This is an execution safety budget, not a task budget.  It prevents
+        # a planner from repeatedly issuing an action whose own observable
+        # success condition has failed, while still allowing a new subgoal or
+        # a successful action to reset the budget.
+        self.max_consecutive_execution_failures = int(
+            max_consecutive_execution_failures
+        )
         self._wiki_queries: list[str] = []
         self._memory_queries: list[str] = []
+        self._consecutive_execution_failures = 0
+        self._failure_subgoal = ""
 
     def run(self, task: str) -> GeneralAgentResult:
         """Run Task → Plan → Subgoal → Memory/Wiki/Skill → Observation updates."""
@@ -94,6 +106,8 @@ class GeneralAgent:
         self.memory.reset(task)
         self._wiki_queries = []
         self._memory_queries = []
+        self._consecutive_execution_failures = 0
+        self._failure_subgoal = ""
         try:
             observation = self.controller.reset()
         except Exception as exc:
@@ -234,22 +248,26 @@ class GeneralAgent:
 
             observation = self.controller.observe()
             self.memory.update_state(observation, baseline=inventory_before)
-            self.memory.record_step(
-                StepRecord(
-                    skill=decision.name,
-                    arguments=decision.arguments,
-                    success=skill_result.success,
-                    message=skill_result.message,
-                    environment_steps=skill_result.steps,
-                    metadata=dict(skill_result.metadata),
-                )
-            )
-            reflect_skill_outcome(
+            reflection = reflect_skill_outcome(
                 self.memory,
                 decision,
                 observation,
                 skill_success=skill_result.success,
                 skill_message=skill_result.message,
+            )
+            execution_success = skill_result.success and reflection.matched
+            message = skill_result.message
+            if skill_result.success and not reflection.matched:
+                message = f"execution outcome not verified: {reflection.reason}"
+            self.memory.record_step(
+                StepRecord(
+                    skill=decision.name,
+                    arguments=decision.arguments,
+                    success=execution_success,
+                    message=message,
+                    environment_steps=skill_result.steps,
+                    metadata=dict(skill_result.metadata),
+                )
             )
             self.memory.last_retrieval = None
             verified, verify_error = self._verify(task, observation)
@@ -262,6 +280,30 @@ class GeneralAgent:
                     "goal verified from observation",
                     cycle,
                 )
+            if execution_success:
+                self._consecutive_execution_failures = 0
+                self._failure_subgoal = ""
+            else:
+                subgoal = decision.active_subgoal_id or decision.subgoal or decision.name
+                if subgoal != self._failure_subgoal:
+                    self._failure_subgoal = subgoal
+                    self._consecutive_execution_failures = 0
+                self._consecutive_execution_failures += 1
+                if (
+                    self._consecutive_execution_failures
+                    >= self.max_consecutive_execution_failures
+                ):
+                    reason = (
+                        "execution retry budget exhausted for subgoal "
+                        f"{subgoal!r} after {self._consecutive_execution_failures} "
+                        f"unverified attempts; last outcome: {message}"
+                    )
+                    self.memory.record_failure(
+                        source="executor",
+                        message=reason,
+                        arguments=dict(decision.arguments),
+                    )
+                    return self._result(task, False, reason, cycle)
 
         return self._result(
             task,

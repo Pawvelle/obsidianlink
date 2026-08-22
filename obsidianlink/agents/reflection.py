@@ -50,6 +50,9 @@ def reflect_skill_outcome(
         },
     )
     memory.record_reflection(record)
+    # A SkillResult failure is persisted by AgentMemory.record_step.  Only add
+    # a reflection failure when the primitive itself completed but its claimed
+    # observable outcome did not materialize.
     if not matched and skill_success:
         memory.record_failure(
             source="reflection",
