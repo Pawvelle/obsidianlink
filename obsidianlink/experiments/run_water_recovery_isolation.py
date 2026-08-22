@@ -6,7 +6,7 @@ with a single USE, then hold still with WAIT-only ticks.
 Not Gate 1. Not portal construction. Not an Oracle or Agent run.
 
 The 20-tick observation window after recovery forbids USE / ATTACK /
-MOVE / HOTBAR / CAMERA. Every wait tick records the mapped MineRL
+MOVE / EQUIP / CAMERA. Every wait tick records the mapped MineDojo
 ``use`` bit so a disappearing ``water_bucket`` cannot be blamed on an
 unlogged click.
 
@@ -26,7 +26,7 @@ from typing import Any
 
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.l1_scene import L1_ENV_ID, L1ControlledEnv
-from obsidianlink.env.minerl import MineRLEnvironment
+from obsidianlink.env.minedojo import MineDojoEnvironment
 from obsidianlink.experiments.l1_mechanics import qty, scooped_water, used_water
 
 _RUNS_DIR = os.path.join(os.path.dirname(__file__), "runs")
@@ -52,7 +52,7 @@ FORBIDDEN_WINDOW_TYPES = frozenset(
         ActionType.USE,
         ActionType.ATTACK,
         ActionType.MOVE,
-        ActionType.HOTBAR,
+        ActionType.EQUIP,
         ActionType.CAMERA,
     }
 )
@@ -75,10 +75,32 @@ def _pose(hidden: dict[str, Any]) -> dict[str, Any]:
     return {k: hidden.get(k) for k in ("xpos", "ypos", "zpos", "yaw", "pitch")}
 
 
+_NO_OP = {
+    "forward": 0,
+    "back": 0,
+    "left": 0,
+    "right": 0,
+    "jump": 0,
+    "sneak": 0,
+    "attack": 0,
+    "use": 0,
+    "drop": 0,
+    "camera": [0.0, 0.0],
+    "craft": "none",
+    "craft_with_table": "none",
+    "smelt": "none",
+    "equip": "none",
+    "place": "none",
+}
+
+
 def _map_action(action: Action, keys: tuple[str, ...] | None) -> dict[str, Any]:
-    if not keys:
-        return {}
-    mapped = MineRLEnvironment._to_minerl_action(action, keys)
+    no_op = dict(_NO_OP)
+    if keys:
+        no_op = {key: no_op.get(key, 0) for key in keys}
+        if "camera" in no_op:
+            no_op["camera"] = [0.0, 0.0]
+    mapped = MineDojoEnvironment._to_minedojo_action(action, no_op)
     return {
         "use": int(mapped.get("use", 0) or 0),
         "attack": int(mapped.get("attack", 0) or 0),
@@ -88,9 +110,7 @@ def _map_action(action: Action, keys: tuple[str, ...] | None) -> dict[str, Any]:
         "right": int(mapped.get("right", 0) or 0),
         "camera": list(mapped.get("camera", [0.0, 0.0])),
         "sneak": int(mapped.get("sneak", 0) or 0),
-        "hotbar_pressed": sorted(
-            k for k, v in mapped.items() if str(k).startswith("hotbar.") and int(v or 0)
-        ),
+        "equip": mapped.get("equip", "none"),
     }
 
 
@@ -145,7 +165,7 @@ def analyze_window(trace: list[dict[str, Any]]) -> dict[str, Any]:
         "n_ticks": len(trace),
         "actions": actions,
         "any_use": any(a == "use" for a in actions),
-        "any_forbidden": any(a in {"use", "attack", "move", "hotbar", "camera"} for a in actions),
+        "any_forbidden": any(a in {"use", "attack", "move", "equip", "camera"} for a in actions),
         "minerl_use_max": max(minerl_uses, default=0),
         "done_changed": len({bool(r.get("done")) for r in trace}) > 1,
         "reward_changed": len({str(r.get("reward")) for r in trace}) > 1,
@@ -334,7 +354,7 @@ def run_once(stamp: str, run_index: int) -> dict[str, Any]:
             return report
         _save_frame(os.path.join(frames_dir, "00_reset.png"), reset_obs.frame)
 
-        session.step(Action(type=ActionType.HOTBAR, target="1"), phase="setup")
+        session.step(Action(type=ActionType.EQUIP, target="water_bucket"), phase="setup")
         session.look_down(phase="setup")
         before_pour = dict(env.observe().inventory or {})
         report["inv_before_pour"] = before_pour
@@ -360,7 +380,7 @@ def run_once(stamp: str, run_index: int) -> dict[str, Any]:
         )
         _save_frame(os.path.join(frames_dir, "02_after_pour.png"), env.observe().frame)
 
-        session.step(Action(type=ActionType.HOTBAR, target="2"), phase="recover_setup")
+        session.step(Action(type=ActionType.EQUIP, target="bucket"), phase="recover_setup")
         session.look_down(phase="recover_setup")
         before_recover = dict(env.observe().inventory or {})
         report["inv_before_recover"] = before_recover

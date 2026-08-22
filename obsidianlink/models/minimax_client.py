@@ -10,9 +10,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from obsidianlink.models.base_client import BaseLLMClient
-from obsidianlink.models.frame import frame_to_data_url
 
-DEFAULT_MODEL = "MiniMax-M3"
+# MiniMax's current OpenAI-compatible China endpoint documents the M2.7 family
+# as the supported models.  It accepts text/tool calls, not Minecraft frames.
+DEFAULT_MODEL = "MiniMax-M2.7"
 CHINA_URL = "https://api.minimaxi.com/v1/chat/completions"
 INTERNATIONAL_URL = "https://api.minimax.io/v1/chat/completions"
 DEFAULT_URL = CHINA_URL
@@ -36,7 +37,7 @@ class MiniMaxClient(BaseLLMClient):
     Credentials: ``MINIMAX_API_KEY``. Default endpoint is China
     ``https://api.minimaxi.com/v1/chat/completions``. Optional
     ``MINIMAX_BASE_URL`` (full chat-completions URL) and
-    ``MINIMAX_MODEL`` (default ``MiniMax-M3``). On HTTP 401 the client
+    ``MINIMAX_MODEL`` (default ``MiniMax-M2.7``). On HTTP 401 the client
     retries the other region host.
 
     After each ``generate`` call, ``last_raw_response`` holds the API
@@ -76,6 +77,11 @@ class MiniMaxClient(BaseLLMClient):
         return self._model
 
     @property
+    def supports_vision(self) -> bool:
+        """Whether this endpoint accepts image input (currently it does not)."""
+        return False
+
+    @property
     def url(self) -> str:
         return self._url
 
@@ -83,24 +89,10 @@ class MiniMaxClient(BaseLLMClient):
         return self._complete(_text_payload(self._model, prompt, self._max_tokens))
 
     def generate_with_vision(self, prompt: str, *, frame: Any) -> str:
-        """OpenAI-compatible multimodal Chat Completions for MiniMax-M3."""
-        data_url = frame_to_data_url(frame)
-        payload: dict[str, Any] = {
-            "model": self._model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": data_url}},
-                    ],
-                }
-            ],
-            "max_tokens": self._max_tokens,
-            "max_completion_tokens": self._max_tokens,
-            "thinking": {"type": "disabled"},
-        }
-        return self._complete(payload)
+        del prompt, frame
+        raise ValueError(
+            "the current MiniMax OpenAI-compatible endpoint does not support image input"
+        )
 
     def complete(self, prompt: str) -> str:
         return self.generate(prompt)

@@ -1,4 +1,4 @@
-"""Run the first live GeneralAgent smoke task on real MineRL/Minecraft.
+"""Run the first live GeneralAgent smoke task on real MineDojo/Minecraft.
 
 This runner deliberately uses no Wiki, RAG, vision model, or LLM API.  It
 isolates the natural-language → planner → skill → Minecraft → observation

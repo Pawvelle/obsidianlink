@@ -107,7 +107,17 @@ L1_PORTAL_TASK = Task(
         "a 4x4 lava source pool, and starting tools/buckets. No pre-built "
         "portal frame."
     ),
-    allowed_actions=("move", "camera", "use", "attack", "hotbar", "wait"),
+    allowed_actions=(
+        "move",
+        "camera",
+        "use",
+        "attack",
+        "equip",
+        "place",
+        "craft",
+        "smelt",
+        "wait",
+    ),
     evaluation_condition=(
         "evaluator-only world truth confirms portal activation and a real "
         "Overworld -> Nether dimension transition"

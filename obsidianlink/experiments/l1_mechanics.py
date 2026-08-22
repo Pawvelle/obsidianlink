@@ -17,11 +17,13 @@ ALLOWED_MECHANICS_TYPES = frozenset(
         ActionType.CAMERA,
         ActionType.USE,
         ActionType.ATTACK,
-        ActionType.HOTBAR,
+        ActionType.EQUIP,
+        ActionType.PLACE,
+        ActionType.CRAFT,
         ActionType.WAIT,
     }
 )
-FORBIDDEN_MECHANICS_TYPES = frozenset({ActionType.EQUIP, ActionType.PLACE})
+FORBIDDEN_MECHANICS_TYPES = frozenset({ActionType.HOTBAR, ActionType.INVENTORY})
 
 HOTBAR_WATER = "1"
 HOTBAR_BUCKET = "2"

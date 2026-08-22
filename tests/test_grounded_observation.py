@@ -54,14 +54,17 @@ def test_grounded_observation_includes_goal_last_action_and_feedback() -> None:
     assert view["health"]["status"] == "unknown"
 
 
-def test_grounded_observation_does_not_copy_evaluator_pose() -> None:
+def test_grounded_observation_uses_observation_coordinates() -> None:
     memory = AgentMemory()
     memory.reset("look around")
     view = build_grounded_observation(
         memory,
-        Observation(inventory={}),
-        local_view={"position": {"xpos": 12.0, "relative": "near"}},
+        Observation(inventory={}, x=12.0, y=4.0, z=0.5, yaw=0.0, pitch=25.0),
+        local_view={"position": {"xpos": 99.0, "relative": "near"}},
     ).as_prompt()
 
     assert "xpos" not in view["position"]
+    assert view["position"]["x"] == 12.0
+    assert view["position"]["y"] == 4.0
+    assert view["position"]["z"] == 0.5
     assert view["position"]["relative"] == "near"

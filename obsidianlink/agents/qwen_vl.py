@@ -247,7 +247,7 @@ def _resolve_device(device: str) -> str:
 
 
 def _to_pil(frame: Any) -> Any:
-    """Convert a MineRL-shaped frame (``ndarray shape=(H, W, 3) uint8``)
+    """Convert an RGB HWC frame (``ndarray shape=(H, W, 3) uint8``)
     to a PIL Image. Falls back to a no-op when the frame is already a
     PIL Image (e.g. tests that hand-build one).
     """
@@ -269,7 +269,7 @@ def _to_pil(frame: Any) -> Any:
             f"Frame must have shape (H, W, 3) or (H, W, 4); got {shape!r}"
         )
     # PIL.Image.fromarray accepts a contiguous uint8 array. The
-    # MineRL adapter view is usually already contiguous.
+    # MineDojo adapter view is usually already contiguous.
     return Image.fromarray(frame)
 
 

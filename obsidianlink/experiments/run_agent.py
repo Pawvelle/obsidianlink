@@ -32,7 +32,7 @@ from obsidianlink.tasks.portal import L1_PORTAL_TASK
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
 
-_FORBIDDEN = frozenset({ActionType.EQUIP, ActionType.PLACE})
+_FORBIDDEN = frozenset({ActionType.HOTBAR, ActionType.INVENTORY})
 
 
 def _hidden(env: Environment) -> dict[str, Any]:

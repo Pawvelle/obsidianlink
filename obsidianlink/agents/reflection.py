@@ -14,7 +14,7 @@ from obsidianlink.agents.planner import PlannerDecision
 from obsidianlink.env.environment import Observation
 
 _POSITIONING_SKILLS = frozenset(
-    {"move", "look", "select_hotbar", "wait", "inspect_inventory"}
+    {"move", "look", "equip_item", "wait", "inspect_inventory"}
 )
 _FILLER_ITEMS = frozenset(
     {
@@ -35,12 +35,14 @@ _WOOD_TERMS = frozenset(
 )
 _WOOD_ITEMS = frozenset(
     {
+        "log",
         "oak_log",
         "birch_log",
         "spruce_log",
         "jungle_log",
         "acacia_log",
         "dark_oak_log",
+        "planks",
         "oak_planks",
         "birch_planks",
         "spruce_planks",

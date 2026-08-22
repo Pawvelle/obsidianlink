@@ -49,13 +49,10 @@ class _FakeEnv(Environment):
         self.actions.append(action)
         inv = dict(self._obs.inventory or {})
         selected = self._obs.selected_item
-        if action.type is ActionType.HOTBAR:
-            if action.target == "1":
-                selected = "water_bucket"
-            elif action.target == "2":
-                selected = (
-                    "lava_bucket" if inv.get("lava_bucket", 0) >= 1 else "bucket"
-                )
+        if action.type is ActionType.EQUIP:
+            target = action.target
+            if target and inv.get(target, 0) >= 1:
+                selected = target
         if action.type is ActionType.USE:
             if selected == "bucket" and inv.get("bucket", 0) >= 1:
                 inv["bucket"] = inv.get("bucket", 0) - 1
@@ -93,10 +90,13 @@ def test_base_agent_act_is_not_implemented() -> None:
 
 def test_observation_has_no_hidden_state_fields() -> None:
     obs = Observation(frame=None, inventory={"bucket": 1}, selected_item="bucket")
-    assert observation_field_names() == frozenset({"frame", "inventory", "selected_item"})
+    assert observation_field_names() == frozenset(
+        {"frame", "inventory", "selected_item", "x", "y", "z", "yaw", "pitch"}
+    )
     assert not hasattr(obs, "hidden_state")
     assert not hasattr(obs, "reward")
     assert not hasattr(obs, "biome_id")
+    assert hasattr(obs, "x")
 
 
 def test_random_agent_actions_are_legal() -> None:
@@ -110,16 +110,16 @@ def test_random_agent_actions_are_legal() -> None:
         action = agent.act(obs)
         assert isinstance(action, Action)
         assert action.type in LEGAL_TYPES
-        assert action.type not in {ActionType.EQUIP, ActionType.PLACE}
-        if action.type is ActionType.HOTBAR:
-            assert action.target in {str(i) for i in range(1, 10)}
+        assert action.type not in {ActionType.HOTBAR, ActionType.INVENTORY}
+        if action.type is ActionType.EQUIP:
+            assert action.target in {"bucket", "water_bucket"}
         seen.add(action.type)
     assert ActionType.WAIT in seen or ActionType.MOVE in seen
 
 
-def test_random_agent_refuses_equip_place_in_constructor() -> None:
+def test_random_agent_refuses_hotbar_inventory_in_constructor() -> None:
     with pytest.raises(ValueError):
-        RandomAgent(types=(ActionType.EQUIP, ActionType.WAIT))
+        RandomAgent(types=(ActionType.HOTBAR, ActionType.WAIT))
 
 
 def test_reactive_agent_runs_full_fake_episode() -> None:
@@ -132,10 +132,19 @@ def test_reactive_agent_runs_full_fake_episode() -> None:
     assert report["agent_finished"] is True
     assert env.step_calls == report["steps"]
     assert all(isinstance(a, Action) for a in env.actions)
-    assert all(a.type not in {ActionType.EQUIP, ActionType.PLACE} for a in env.actions)
+    assert all(a.type not in {ActionType.HOTBAR, ActionType.INVENTORY} for a in env.actions)
     # Agent-visible Observation never grew evaluator fields.
     obs = env.observe()
-    assert set(obs.__dataclass_fields__) == {"frame", "inventory", "selected_item"}
+    assert set(obs.__dataclass_fields__) == {
+        "frame",
+        "inventory",
+        "selected_item",
+        "x",
+        "y",
+        "z",
+        "yaw",
+        "pitch",
+    }
 
 
 def test_reactive_agent_uses_only_observation_inventory() -> None:
@@ -144,15 +153,15 @@ def test_reactive_agent_uses_only_observation_inventory() -> None:
     first = agent.act(
         Observation(inventory={"bucket": 1, "water_bucket": 1}, selected_item="water_bucket")
     )
-    assert first.type is ActionType.HOTBAR
-    assert first.target == "2"
+    assert first.type is ActionType.EQUIP
+    assert first.target == "bucket"
     scooped = agent.act(
         Observation(
             inventory={"lava_bucket": 1, "water_bucket": 1},
             selected_item="lava_bucket",
         )
     )
-    assert scooped.type in {ActionType.MOVE, ActionType.CAMERA, ActionType.USE, ActionType.HOTBAR}
+    assert scooped.type in {ActionType.MOVE, ActionType.CAMERA, ActionType.USE, ActionType.EQUIP}
 
 
 def test_run_episode_does_not_pass_hidden_state_to_agent() -> None:
@@ -168,4 +177,4 @@ def test_run_episode_does_not_pass_hidden_state_to_agent() -> None:
     assert seen
     for obs in seen:
         assert not hasattr(obs, "hidden_state")
-        assert not hasattr(obs, "xpos")
+        assert not hasattr(obs, "reward")

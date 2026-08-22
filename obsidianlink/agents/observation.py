@@ -1,9 +1,8 @@
 """Planner-facing grounded observation.
 
-The frozen Environment ``Observation`` contract stays
-``frame`` / ``inventory`` / ``selected_item``. Goal, last action, and
-success feedback are agent state, not world truth. Pose monitors and
-evaluator-only fields never appear here.
+The Environment ``Observation`` contract is
+``frame`` / ``inventory`` / ``selected_item`` / pose. Goal, last action,
+and success feedback are agent state, not evaluator truth.
 """
 
 from __future__ import annotations
@@ -50,7 +49,7 @@ class GroundedObservation:
     extras: dict[str, Any] = field(default_factory=dict)
 
     def as_prompt(self) -> dict[str, Any]:
-        """JSON-safe Planner view. No RGB pixels, no evaluator pose."""
+        """JSON-safe Planner view. No RGB pixels or evaluator truth."""
         return {
             "goal": self.goal,
             "subgoal": self.subgoal,
@@ -106,7 +105,7 @@ def build_grounded_observation(
         goal=memory.goal,
         subgoal=memory.current_subgoal or "",
         next_objective=memory.next_objective,
-        position=_position_view(view),
+        position=_position_view(obs, view),
         inventory=inventory,
         equipment=_equipment_view(obs, inventory, view),
         health=_health_view(view),
@@ -121,16 +120,18 @@ def build_grounded_observation(
     )
 
 
-def _position_view(local_view: dict[str, Any]) -> dict[str, Any]:
+def _position_view(
+    observation: Observation, local_view: dict[str, Any]
+) -> dict[str, Any]:
+    pose = observation.pose()
     raw = local_view.get("position")
-    if isinstance(raw, dict):
-        cleaned = {
-            key: value
-            for key, value in raw.items()
-            if str(key).casefold() not in {"xpos", "ypos", "zpos", "yaw", "pitch"}
-        }
-        if cleaned:
-            return cleaned
+    extras = dict(raw) if isinstance(raw, dict) else {}
+    extras.update(pose)
+    extras.pop("xpos", None)
+    extras.pop("ypos", None)
+    extras.pop("zpos", None)
+    if extras:
+        return extras
     return {"status": "unknown"}
 
 

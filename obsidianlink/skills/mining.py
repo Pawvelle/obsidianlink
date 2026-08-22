@@ -14,11 +14,21 @@ _LOG_NAMES = (
     "jungle_log",
     "oak_log",
     "spruce_log",
+    "log",
+    "wood",
 )
 
 
 def log_count(inventory: dict[str, int]) -> int:
-    return sum(int(inventory.get(name, 0) or 0) for name in _LOG_NAMES)
+    total = 0
+    for name, qty in (inventory or {}).items():
+        key = str(name).strip().lower().split(":", 1)[-1]
+        if key in _LOG_NAMES or key.endswith("_log"):
+            try:
+                total += int(qty)
+            except (TypeError, ValueError):
+                continue
+    return total
 
 
 def _tree_horizontal_offset(frame: object) -> float | None:
@@ -229,8 +239,8 @@ class CollectWoodSkill:
                     alignment_turns += 1
                     controller.step(Action(ActionType.CAMERA, yaw=offset * 35.0))
                     continue
-                # A trunk (preferred) or foliage candidate is centered. MineRL
-                # actions can press forward and attack in the same tick.
+                # A trunk (preferred) or foliage candidate is centered. The
+                # agent can press forward and attack in the same tick.
                 target_acquisitions += 1
                 engaged_ticks = 1
 

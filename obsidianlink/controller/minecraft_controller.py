@@ -13,7 +13,7 @@ class MinecraftController:
     """Small safety boundary around an :class:`Environment`.
 
     Planners never receive this object. Skill implementations use it to turn a
-    bounded primitive capability into MineRL-compatible action ticks.
+    bounded primitive capability into backend-neutral action ticks.
     """
 
     def __init__(self, env: Environment, *, max_steps: int = 2_000) -> None:

@@ -1,16 +1,9 @@
-"""D1 courtyard scene and controlled env.
-
-Malmo 0.37.0 DrawingDecorator constraints (live EnvServer errors):
-
-* only ``DrawBlock`` (not ``DrawCuboid``)
-* only block types ``lava`` / ``obsidian``
-
-Jinja2 autoescape must be disabled for DrawBlock XML (``| safe``).
+"""D1 courtyard scene and controlled env on MineDojo.
 
 Evaluator-only channels on :class:`ControlledSceneEnv`:
 
 * ``target_truths`` — scene-defined presence labels
-* ``hidden_state`` — MineRL location monitors (pose)
+* ``hidden_state`` — location monitors (pose)
 
 Neither is copied onto :class:`Observation`.
 """
@@ -21,19 +14,19 @@ from typing import Any, Mapping
 
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
-from obsidianlink.env.minerl import MineRLEnvironment
+from obsidianlink.env.minedojo import MineDojoEnvironment
 
 PLAYER_X = 0.5
 PLAYER_Y = 101.0
 PLAYER_Z = 0.5
 PLAYER_YAW = 0.0
 PLAYER_PITCH = 25.0
-FLAT_WORLD = "3;7,2*3,2;1;"
-RESOLUTION = (640, 360)
+FLAT_WORLD = "1;7,2x3,2;1"
+RESOLUTION = (360, 640)
 WARMUP_STEPS = 20
 
-POSITIVE_ENV_ID = "MineRLD1LavaPositive-v0"
-NEGATIVE_ENV_ID = "MineRLD1LavaNegative-v0"
+POSITIVE_ENV_ID = "minedojo_d1_lava_positive"
+NEGATIVE_ENV_ID = "minedojo_d1_lava_negative"
 
 PATCH_X1, PATCH_X2 = -1, 1
 PATCH_Y = 100
@@ -95,85 +88,8 @@ def courtyard_xml(*, lava_present: bool) -> str:
     )
 
 
-def register_d1_specs() -> None:
-    """Register D1 lava courtyard env ids. Idempotent. Imports MineRL lazily."""
-    import gym  # type: ignore[import-untyped]
-    from minerl.herobraine.env_specs.treechop_specs import Treechop
-    from minerl.herobraine.hero import handlers
-    from minerl.herobraine.hero.handler import Handler
-
-    class _SafeDrawingDecorator(handlers.DrawingDecorator):
-        def xml_template(self) -> str:
-            return """<DrawingDecorator>{{ to_draw | safe }}</DrawingDecorator>"""
-
-    class _D1LavaSpec(Treechop):
-        _lava_present: bool = False
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            kwargs.setdefault("resolution", RESOLUTION)
-            super().__init__(*args, **kwargs)
-
-        def create_server_world_generators(self) -> list[Handler]:
-            return [
-                handlers.FlatWorldGenerator(
-                    force_reset=True, generatorString=FLAT_WORLD
-                )
-            ]
-
-        def create_server_decorators(self) -> list[Handler]:
-            return [
-                _SafeDrawingDecorator(courtyard_xml(lava_present=self._lava_present))
-            ]
-
-        def create_server_initial_conditions(self) -> list[Handler]:
-            return [
-                handlers.TimeInitialCondition(
-                    allow_passage_of_time=False, start_time=6000
-                ),
-                handlers.SpawningInitialCondition(allow_spawning=False),
-                handlers.WeatherInitialCondition(weather="clear"),
-            ]
-
-        def create_agent_start(self) -> list[Handler]:
-            return [
-                handlers.GuiScale(1.0),
-                handlers.GammaSetting(2.0),
-                handlers.FOVSetting(70.0),
-                handlers.FakeCursorSize(0),
-                handlers.AgentStartPlacement(
-                    x=PLAYER_X,
-                    y=PLAYER_Y,
-                    z=PLAYER_Z,
-                    yaw=PLAYER_YAW,
-                    pitch=PLAYER_PITCH,
-                ),
-            ]
-
-        def create_monitors(self) -> list[Handler]:
-            # Pose for the evaluator. Gym info, not Observation.
-            return [handlers.ObservationFromCurrentLocation()]
-
-    class D1LavaPositiveSpec(_D1LavaSpec):
-        _lava_present = True
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            kwargs.setdefault("name", POSITIVE_ENV_ID)
-            super().__init__(*args, **kwargs)
-
-    class D1LavaNegativeSpec(_D1LavaSpec):
-        _lava_present = False
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            kwargs.setdefault("name", NEGATIVE_ENV_ID)
-            super().__init__(*args, **kwargs)
-
-    for spec in (D1LavaPositiveSpec(), D1LavaNegativeSpec()):
-        if spec.name not in gym.envs.registry.env_specs:
-            spec.register()
-
-
 class ControlledSceneEnv(Environment):
-    """MineRL courtyard with hidden scene labels and pose."""
+    """MineDojo courtyard with hidden scene labels and pose."""
 
     def __init__(
         self,
@@ -181,7 +97,6 @@ class ControlledSceneEnv(Environment):
         target_truths: Mapping[str, bool] | None = None,
         warmup_steps: int = WARMUP_STEPS,
     ) -> None:
-        register_d1_specs()
         self.env_id = env_id
         if target_truths is None:
             target_truths = _ENV_TARGET_TRUTHS.get(env_id, {})
@@ -189,7 +104,25 @@ class ControlledSceneEnv(Environment):
         if warmup_steps < 0:
             raise ValueError("warmup_steps must be >= 0")
         self.warmup_steps = int(warmup_steps)
-        self._env = MineRLEnvironment(env_id=env_id)
+        lava_present = bool(self.target_truths.get("lava"))
+        self._env = MineDojoEnvironment(
+            "open-ended",
+            image_size=RESOLUTION,
+            generate_world_type="flat",
+            flat_world_seed_string=FLAT_WORLD,
+            drawing_str=courtyard_xml(lava_present=lava_present),
+            start_position={
+                "x": PLAYER_X,
+                "y": PLAYER_Y,
+                "z": PLAYER_Z,
+                "yaw": PLAYER_YAW,
+                "pitch": PLAYER_PITCH,
+            },
+            allow_time_passage=False,
+            allow_mob_spawn=False,
+            initial_weather="clear",
+            start_time=6000,
+        )
 
     @property
     def hidden_state(self) -> dict[str, Any]:
@@ -222,5 +155,4 @@ __all__ = [
     "WARMUP_STEPS",
     "ControlledSceneEnv",
     "courtyard_xml",
-    "register_d1_specs",
 ]

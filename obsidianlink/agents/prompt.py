@@ -14,9 +14,11 @@ from obsidianlink.env.environment import Observation, observation_field_names
 from obsidianlink.tasks.portal import L1_PORTAL_TASK
 
 LEGAL_ACTIONS: tuple[str, ...] = tuple(L1_PORTAL_TASK.allowed_actions)
-_FORBIDDEN = frozenset({ActionType.EQUIP, ActionType.PLACE})
-_HOTBAR_SLOTS = frozenset(str(i) for i in range(1, 10))
+_FORBIDDEN = frozenset({ActionType.HOTBAR, ActionType.INVENTORY})
 _MOVE_VALUES = frozenset((-1, 0, 1))
+_NAMED_TYPES = frozenset(
+    {ActionType.EQUIP, ActionType.PLACE, ActionType.CRAFT, ActionType.SMELT}
+)
 
 # Prompt-only task text for vanilla LLMAgent. Not a Task schema change,
 # not a recipe, and not evaluator truth.
@@ -33,32 +35,34 @@ L1_LLM_TASK_GOAL = (
 )
 
 L1_LLM_BEHAVIOR = (
-    "- Do not switch hotbar slots aimlessly or repeatedly.\n"
+    "- Do not switch items aimlessly or repeatedly.\n"
     "- Do not keep repeating actions that have no effect.\n"
     "- Prefer actions that can change the Minecraft world state.\n"
     "- If the current situation is unclear, look around or move to explore first.\n"
-    "- Use USE and ATTACK to interact with the environment.\n"
+    "- Use USE, ATTACK, EQUIP, PLACE, and CRAFT to interact with the environment.\n"
     "- Choose each action from the current observation."
 )
 
 _FORMAT = """Return exactly one JSON object. No markdown fences, no explanation.
-Legal verbs: move, camera, attack, use, hotbar, wait.
-Never emit equip or place.
+Legal verbs: move, camera, attack, use, equip, place, craft, smelt, wait.
+Never emit hotbar or inventory.
 
 Examples:
 {"action": "move", "dx": 1, "dz": 0}
 {"action": "camera", "yaw": 15, "pitch": 0}
 {"action": "use", "sneak": true}
 {"action": "attack"}
-{"action": "hotbar", "target": "2"}
+{"action": "equip", "target": "bucket"}
+{"action": "place", "target": "cobblestone", "sneak": true}
+{"action": "craft", "target": "planks"}
 {"action": "wait"}
 
 Fields:
 - MOVE: dx, dz in {-1, 0, 1}. dx>0 forward, dx<0 back, dz>0 right, dz<0 left.
   Alias: "forward" may be used instead of dx.
 - CAMERA: yaw, pitch in degrees (delta).
-- USE: optional sneak (boolean).
-- HOTBAR: target is slot "1".."9".
+- USE / PLACE: optional sneak (boolean).
+- EQUIP / PLACE / CRAFT / SMELT: target is an item name.
 - ATTACK / WAIT: no extra fields.
 """
 
@@ -121,9 +125,13 @@ def parse_action(text: str) -> tuple[Action, bool]:
     if dx not in _MOVE_VALUES or dz not in _MOVE_VALUES:
         return Action(type=ActionType.WAIT), False
 
-    target = _hotbar_target(data) if action_type is ActionType.HOTBAR else ""
-    if action_type is ActionType.HOTBAR and target not in _HOTBAR_SLOTS:
+    target = _item_target(data) if action_type in _NAMED_TYPES else ""
+    if action_type in _NAMED_TYPES and not target:
         return Action(type=ActionType.WAIT), False
+
+    sneak = False
+    if action_type in {ActionType.USE, ActionType.PLACE}:
+        sneak = _bool(data.get("sneak", False))
 
     return (
         Action(
@@ -132,8 +140,8 @@ def parse_action(text: str) -> tuple[Action, bool]:
             dz=dz if action_type is ActionType.MOVE else 0,
             yaw=_float(data.get("yaw", 0.0)) if action_type is ActionType.CAMERA else 0.0,
             pitch=_float(data.get("pitch", 0.0)) if action_type is ActionType.CAMERA else 0.0,
-            target=target if action_type is ActionType.HOTBAR else "",
-            sneak=_bool(data.get("sneak", False)) if action_type is ActionType.USE else False,
+            target=target,
+            sneak=sneak,
         ),
         True,
     )
@@ -193,29 +201,34 @@ def _observation_block(
         shape = getattr(frame, "shape", None)
         dtype = getattr(frame, "dtype", None)
         frame_line = f"frame: present shape={shape} dtype={dtype} (pixels not sent)"
+    pose = observation.pose()
+    if pose:
+        pose_line = "position: " + ", ".join(
+            f"{name}={pose[name]:.3f}" for name in ("x", "y", "z", "yaw", "pitch") if name in pose
+        )
+    else:
+        pose_line = "position: unknown"
     lines = [
         inv_line,
         f"selected_item: {observation.selected_item!r}",
+        pose_line,
         frame_line,
         "visible_fields: " + ", ".join(sorted(observation_field_names())),
     ]
     extra = sorted(
         name
         for name in (f.name for f in fields(observation))
-        if name not in {"frame", "inventory", "selected_item"}
+        if name not in {"frame", "inventory", "selected_item", "x", "y", "z", "yaw", "pitch"}
     )
-    # Pose lives in evaluator-only hidden_state, not Observation.
     if extra:
         lines.append("extra_visible: " + ", ".join(extra))
-    else:
-        lines.append("position: not in Observation")
     return "\n".join(lines)
 
 
 def _action_space_block() -> str:
     return (
         "Legal actions: " + ", ".join(LEGAL_ACTIONS) + ".\n"
-        "Illegal on this stack: equip, place."
+        "Illegal on this stack: hotbar, inventory."
     )
 
 
@@ -235,12 +248,9 @@ def _move_axis(
     return 0
 
 
-def _hotbar_target(data: dict[str, Any]) -> str:
-    raw = data.get("target", data.get("slot", ""))
-    text = str(raw or "").strip()
-    if text.lower().startswith("hotbar."):
-        text = text.split(".", 1)[1]
-    return text
+def _item_target(data: dict[str, Any]) -> str:
+    raw = data.get("target", data.get("item", data.get("slot", "")))
+    return str(raw or "").strip().lower().replace(" ", "_")
 
 
 def _int(value: Any) -> int:

@@ -1,1 +1,1 @@
-"""Offline tests. Live MineRL evidence is produced by ``main.py``, not pytest."""
+"""Offline tests. Live MineDojo evidence is produced by experiment runners, not pytest."""

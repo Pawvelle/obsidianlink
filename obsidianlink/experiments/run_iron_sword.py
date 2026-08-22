@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -25,7 +24,7 @@ from obsidianlink.agents.planner import LLMSkillPlanner, PlannerDecision
 from obsidianlink.controller.minecraft_controller import MinecraftController
 from obsidianlink.env.environment import Observation
 from obsidianlink.env.live_view import LiveDesktopView
-from obsidianlink.env.survival import SurvivalIronSwordEnv, iron_sword_count
+from obsidianlink.env.survival import SurvivalEnv, IRON_SWORD_TASK_ID, iron_sword_count
 from obsidianlink.models.minimax_client import MiniMaxClient
 
 DEFAULT_TASK = (
@@ -86,14 +85,6 @@ class LoggingPlanner:
         return decision
 
 
-def _ensure_runtime_env() -> None:
-    os.environ.setdefault("JAVA_HOME", "/opt/anaconda3/envs/mc-agent")
-    conda_bin = "/opt/anaconda3/envs/mc-agent/bin"
-    path = os.environ.get("PATH", "")
-    if conda_bin not in path.split(":"):
-        os.environ["PATH"] = f"{conda_bin}:{path}"
-
-
 def run_iron_sword(
     task: str,
     *,
@@ -102,9 +93,8 @@ def run_iron_sword(
     output_dir: Path,
     use_vision: bool,
 ) -> dict[str, Any]:
-    _ensure_runtime_env()
     output_dir.mkdir(parents=True, exist_ok=True)
-    live_env = SurvivalIronSwordEnv()
+    live_env = SurvivalEnv(IRON_SWORD_TASK_ID)
     view = LiveDesktopView(live_env)
     view.set_hud(task="craft 1 iron_sword", status="starting Minecraft")
     controller = MinecraftController(view, max_steps=max_steps)

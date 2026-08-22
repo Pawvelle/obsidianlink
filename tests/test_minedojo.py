@@ -21,7 +21,11 @@ class FakeActionSpace:
             "sneak": 0,
             "attack": 0,
             "use": 0,
+            "drop": 0,
             "camera": [0.0, 0.0],
+            "craft": "none",
+            "craft_with_table": "none",
+            "smelt": "none",
             "equip": "none",
             "place": "none",
         }
@@ -88,6 +92,8 @@ def test_minedojo_adapter_converts_agent_visible_observation_and_actions(monkeyp
     ]
     assert observation.inventory == {"oak_log": 3}
     assert observation.selected_item == "iron_axe"
+    assert observation.x == 99.0
+    assert observation.pose() == {"x": 99.0}
     assert observation.frame.tolist() == [
         [[9, 5, 1], [10, 6, 2]],
         [[11, 7, 3], [12, 8, 4]],
@@ -95,7 +101,9 @@ def test_minedojo_adapter_converts_agent_visible_observation_and_actions(monkeyp
 
     env.step(Action(ActionType.CAMERA, pitch=-3, yaw=8))
     assert task.actions[-1]["camera"] == [-3.0, 8.0]
-    assert env.hidden_state == {"reward": 0.5, "done": False}
+    assert env.hidden_state["reward"] == 0.5
+    assert env.hidden_state["done"] is False
+    assert env.hidden_state["xpos"] == 99.0
     assert env.last_info == {"task_success": False}
 
 
@@ -111,7 +119,13 @@ def test_minedojo_adapter_maps_event_actions_and_rejects_unavailable_ones(monkey
     assert task.actions[-1]["jump"] == 1
     env.step(Action(ActionType.EQUIP, target="oak_log"))
     assert task.actions[-1]["equip"] == "oak_log"
-    with pytest.raises(ValueError, match="hotbar is unavailable"):
+    env.step(Action(ActionType.CRAFT, target="planks"))
+    assert task.actions[-1]["craft"] == "planks"
+    env.step(Action(ActionType.CRAFT, target="wooden_sword"))
+    assert task.actions[-1]["craft_with_table"] == "wooden_sword"
+    env.step(Action(ActionType.SMELT, target="iron_ingot"))
+    assert task.actions[-1]["smelt"] == "iron_ingot"
+    with pytest.raises(ValueError, match="archived MineRL-only"):
         env.step(Action(ActionType.HOTBAR, target="3"))
 
 
@@ -128,5 +142,6 @@ def _install_fake_minedojo(monkeypatch, make) -> None:
     package.__path__ = []
     tasks = ModuleType("minedojo.tasks")
     tasks._specific_task_make = lambda task_id, **kwargs: make(task_id=task_id, **kwargs)
+    tasks._meta_task_make = lambda task_id, **kwargs: make(task_id=task_id, **kwargs)
     monkeypatch.setitem(sys.modules, "minedojo", package)
     monkeypatch.setitem(sys.modules, "minedojo.tasks", tasks)

@@ -57,13 +57,13 @@ class RuleBasedPortalAgent(BaseAgent):
 
         if self.state is PortalState.FIND_RESOURCE:
             self.state = PortalState.COLLECT
-            return Action(type=ActionType.HOTBAR, target="2")
+            return Action(type=ActionType.EQUIP, target="bucket")
         if self.state is PortalState.COLLECT:
             if lava:
                 self.state = PortalState.BUILD
                 return Action(type=ActionType.CAMERA, pitch=35.0)
             if selected != "bucket":
-                return Action(type=ActionType.HOTBAR, target="2")
+                return Action(type=ActionType.EQUIP, target="bucket")
             phase = self._ticks % 6
             if phase in (1, 2, 3):
                 return Action(type=ActionType.MOVE, dx=1)
@@ -73,11 +73,11 @@ class RuleBasedPortalAgent(BaseAgent):
         if self.state is PortalState.BUILD:
             if lava:
                 if selected != "lava_bucket":
-                    return Action(type=ActionType.HOTBAR, target="2")
+                    return Action(type=ActionType.EQUIP, target="lava_bucket")
                 return Action(type=ActionType.USE, sneak=True)
             if water:
                 if selected != "water_bucket":
-                    return Action(type=ActionType.HOTBAR, target="1")
+                    return Action(type=ActionType.EQUIP, target="water_bucket")
                 self._casts += 1
                 return Action(type=ActionType.USE, sneak=True)
             # A real completion is never inferred from inventory.  The FSM
@@ -89,7 +89,7 @@ class RuleBasedPortalAgent(BaseAgent):
             return Action(type=ActionType.WAIT)
         if self.state is PortalState.ACTIVATE:
             if selected != "flint_and_steel":
-                return Action(type=ActionType.HOTBAR, target="5")
+                return Action(type=ActionType.EQUIP, target="flint_and_steel")
             self.state = PortalState.COMPLETE
             self.finished = True
             return Action(type=ActionType.USE)
@@ -136,9 +136,9 @@ def _gate_one_program() -> list[Action]:
     Keeping the trace as compact runs avoids speculative navigation and avoids
     all repeated fluid placement.  Each bucket interaction is exactly one
     ``USE``; additional USE ticks can undo a filled/placed bucket on this
-    MineRL/MCP-Reborn stack.
+    MineDojo event-level stack.
     """
-    out = [Action(ActionType.HOTBAR, target="2"), Action(ActionType.WAIT)]
+    out = [Action(ActionType.EQUIP, target="bucket"), Action(ActionType.WAIT)]
     out += [Action(ActionType.MOVE, dx=1) for _ in range(19)]
     out += [Action(ActionType.CAMERA, pitch=20.0), Action(ActionType.USE)]
     out += [Action(ActionType.MOVE, dx=-1) for _ in range(8)]
@@ -146,7 +146,7 @@ def _gate_one_program() -> list[Action]:
     out += [Action(ActionType.MOVE, dx=1) for _ in range(6)]
     out += [Action(ActionType.CAMERA, pitch=13.0), Action(ActionType.USE, sneak=True)]
     out += [Action(ActionType.WAIT) for _ in range(8)]
-    out += [Action(ActionType.HOTBAR, target="1"), Action(ActionType.WAIT)]
+    out += [Action(ActionType.EQUIP, target="water_bucket"), Action(ActionType.WAIT)]
     out += [Action(ActionType.CAMERA, yaw=12.0), Action(ActionType.USE, sneak=True)]
     out += [Action(ActionType.CAMERA, pitch=-30.0), Action(ActionType.CAMERA, pitch=-10.0)]
     out += [Action(ActionType.WAIT) for _ in range(2)]

@@ -6,10 +6,12 @@ from obsidianlink.agents.memory import AgentMemory
 from obsidianlink.env.live_view import annotate_frame
 from obsidianlink.env.live_view import format_process_event
 from obsidianlink.env.survival import (
+    IRON_SWORD_TASK_ID,
     SURVIVAL_IRON_SWORD_ENV_ID,
+    SurvivalEnv,
     SurvivalIronSwordEnv,
+    WOODEN_SWORD_TASK_ID,
     iron_sword_count,
-    register_survival_iron_sword_spec,
     wooden_sword_count,
 )
 from obsidianlink.experiments.run_iron_sword import iron_sword_goal_verified
@@ -19,33 +21,14 @@ from obsidianlink.experiments.run_wooden_sword import wooden_sword_goal_verified
 def test_survival_env_is_lazy() -> None:
     env = SurvivalIronSwordEnv()
     assert env.env_id == SURVIVAL_IRON_SWORD_ENV_ID
+    assert env.task_id == IRON_SWORD_TASK_ID
     assert env._env._env is None  # noqa: SLF001
 
 
-def test_survival_spec_is_empty_inventory_with_crafting_controls() -> None:
-    import gym
-
-    env_id = register_survival_iron_sword_spec()
-    spec = gym.spec(env_id).kwargs["env_spec"]
-    keys = set(spec.action_space.spaces)
-    assert {"inventory", "use", "attack", "camera", "hotbar.1"} <= keys
-    assert "craft" not in keys
-    assert "nearbyCraft" not in keys
-    assert "equip" not in keys
-    assert "place" not in keys
-    start = spec.create_agent_start()
-    assert not any("Inventory" in type(handler).__name__ for handler in start)
-    world = spec.create_server_world_generators()[0]
-    assert '"fixedBiome":29' in world.generator_options
-    assert '"useCaves":true' in world.generator_options
-    names = []
-    for handler in spec.create_observables():
-        items = getattr(handler, "items", None)
-        if items:
-            names.extend(str(item) for item in items)
-    assert "iron_sword" in names
-    assert "iron_ore" in names
-    assert "oak_log" in names
+def test_survival_env_can_target_wooden_sword_task() -> None:
+    env = SurvivalEnv(WOODEN_SWORD_TASK_ID)
+    assert env.task_id == WOODEN_SWORD_TASK_ID
+    assert env._env._env is None  # noqa: SLF001
 
 
 def test_iron_sword_goal_reads_inventory_only() -> None:
@@ -101,6 +84,4 @@ def test_annotate_frame_draws_hud() -> None:
     assert annotated.shape[0] == 40
     assert annotated.shape[1] == 60
     assert annotated.shape[2] == 3
-    # HUD bar is darker than the original black-only bottom pixels would imply
-    # after overlay; just check the function returns a writable copy.
     assert not np.shares_memory(annotated, frame)

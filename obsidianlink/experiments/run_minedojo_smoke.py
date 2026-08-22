@@ -3,14 +3,25 @@
 Use this only after MineDojo's Minecraft backend has completed its local
 first-start preparation.  It is intentionally not a task-capability run.
 
-    /opt/anaconda3/bin/conda run -n mc-agent python \
-        obsidianlink/experiments/run_minedojo_smoke.py --task-id harvest_milk
+    # On macOS, start this from Terminal.app so MineDojo can keep its Python
+    # parent alive while it creates the Minecraft window:
+    open scripts/run_minedojo_smoke_macos.command
+
+    # Or, from an already-open normal terminal:
+    /opt/anaconda3/bin/conda run --no-capture-output -n mc-agent python -m \
+        obsidianlink.experiments.run_minedojo_smoke --task-id harvest_1_log
+
+MineDojo's own macOS launcher starts Minecraft in a separate Terminal.app
+window and its watchdog deliberately terminates that child when this Python
+process exits.  A short-lived IDE or automation command therefore is not a
+valid GUI smoke-test host.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from typing import Any
 
 from obsidianlink.controller.minecraft_controller import MinecraftController
@@ -41,19 +52,40 @@ def run_smoke(task_id: str, *, height: int, width: int, steps: int) -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="MineDojo platform smoke")
-    parser.add_argument("--task-id", default="harvest_milk")
+    parser.add_argument("--task-id", default="harvest_1_log")
     parser.add_argument("--height", type=int, default=64)
     parser.add_argument("--width", type=int, default=64)
     parser.add_argument("--steps", type=int, default=1)
-    args = parser.parse_args()
-    summary = run_smoke(
-        args.task_id,
-        height=max(1, args.height),
-        width=max(1, args.width),
-        steps=max(1, args.steps),
+    parser.add_argument(
+        "--summary-path",
+        type=Path,
+        help="write a small success/error summary here; useful for Terminal.app smoke runs",
     )
+    args = parser.parse_args()
+    exit_code = 0
+    try:
+        summary = run_smoke(
+            args.task_id,
+            height=max(1, args.height),
+            width=max(1, args.width),
+            steps=max(1, args.steps),
+        )
+        summary["status"] = "ok"
+    except Exception as exc:
+        exit_code = 1
+        summary = {
+            "status": "error",
+            "task_id": args.task_id,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+    if args.summary_path is not None:
+        args.summary_path.parent.mkdir(parents=True, exist_ok=True)
+        args.summary_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -88,14 +88,14 @@ def test_l1_prompt_uses_portal_goal_not_smoke() -> None:
 
 def test_action_distribution_counts_legal_verbs() -> None:
     dist = action_distribution(
-        ["hotbar", "hotbar", "wait", "camera", "move", "use", "attack", "hotbar"]
+        ["equip", "equip", "wait", "camera", "move", "use", "attack", "equip"]
     )
     assert dist == {
         "move": 1,
         "camera": 1,
         "use": 1,
         "attack": 1,
-        "hotbar": 3,
+        "equip": 3,
         "wait": 1,
     }
     assert DEFAULT_MAX_STEPS == 500
@@ -136,7 +136,7 @@ def test_run_l1_llm_episode_writes_evaluator_metrics(tmp_path) -> None:
         "camera": 0,
         "use": 0,
         "attack": 0,
-        "hotbar": 0,
+        "equip": 0,
         "wait": 3,
     }
     assert report["experiment_name"] == EXPERIMENT_NAME

@@ -7,13 +7,14 @@ from obsidianlink.skills.mining import CollectWoodSkill, MineBlockSkill
 from obsidianlink.skills.movement import ExploreAreaSkill, MoveForwardSkill
 from obsidianlink.skills.primitive import (
     AttackSkill,
-    CraftingActionSkill,
+    CraftSkill,
+    EquipItemSkill,
     InspectInventorySkill,
     InteractSkill,
     LookSkill,
     MoveSkill,
     PlaceBlockSkill,
-    SelectHotbarSkill,
+    SmeltSkill,
     WaitSkill,
 )
 
@@ -25,10 +26,11 @@ def default_skill_library() -> SkillLibrary:
             LookSkill(),
             AttackSkill(),
             InteractSkill(),
-            SelectHotbarSkill(),
+            EquipItemSkill(),
             InspectInventorySkill(),
             PlaceBlockSkill(),
-            CraftingActionSkill(),
+            CraftSkill(),
+            SmeltSkill(),
             WaitSkill(),
         ]
     )
@@ -53,11 +55,12 @@ def legacy_workflow_skill_library() -> SkillLibrary:
 
 
 __all__ = [
-    "BuildStructureSkill",
     "AttackSkill",
+    "BuildStructureSkill",
     "CollectWoodSkill",
     "CraftItemSkill",
-    "CraftingActionSkill",
+    "CraftSkill",
+    "EquipItemSkill",
     "ExploreAreaSkill",
     "InspectInventorySkill",
     "InteractSkill",
@@ -66,7 +69,7 @@ __all__ = [
     "MoveForwardSkill",
     "MoveSkill",
     "PlaceBlockSkill",
-    "SelectHotbarSkill",
+    "SmeltSkill",
     "SkillLibrary",
     "SkillResult",
     "WaitSkill",

@@ -25,7 +25,7 @@ class _Scripted(BaseLLMClient):
         sequence = (
             '{"action": "camera", "yaw": 15, "pitch": 0}',
             '{"action": "move", "dx": 1, "dz": 0}',
-            '{"action": "hotbar", "target": "2"}',
+            '{"action": "equip", "target": "bucket"}',
             '{"action": "wait"}',
         )
         text = sequence[self._i % len(sequence)]
@@ -57,7 +57,7 @@ class _FakeEnv(Environment):
 
     def step(self, action: Action) -> Observation:
         self.actions.append(action)
-        if action.type is ActionType.HOTBAR and action.target == "2":
+        if action.type is ActionType.EQUIP and action.target == "bucket":
             self._obs = Observation(
                 frame=None,
                 inventory=dict(self._obs.inventory or {}),
@@ -84,7 +84,7 @@ def test_smoke_writes_trace_files(tmp_path) -> None:
     assert [a.type for a in env.actions] == [
         ActionType.CAMERA,
         ActionType.MOVE,
-        ActionType.HOTBAR,
+        ActionType.EQUIP,
         ActionType.WAIT,
     ]
-    assert report["verbs"] == ["camera", "move", "hotbar", "wait"]
+    assert report["verbs"] == ["camera", "move", "equip", "wait"]

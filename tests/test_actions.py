@@ -18,5 +18,8 @@ def test_action_type_values_are_stable() -> None:
     assert ActionType.USE.value == "use"
     assert ActionType.PLACE.value == "place"
     assert ActionType.EQUIP.value == "equip"
+    assert ActionType.CRAFT.value == "craft"
+    assert ActionType.SMELT.value == "smelt"
+    assert ActionType.DROP.value == "drop"
     assert ActionType.HOTBAR.value == "hotbar"
     assert ActionType.WAIT.value == "wait"

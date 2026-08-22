@@ -3,19 +3,16 @@
 Judges only from evaluator-only truth: never ``ObservationFromGrid``,
 never Agent-visible ``Observation`` fields, never Agent/Oracle self-report.
 
-Truth channels (live-verified on MineRL 1.0.2 / MCP-Reborn, Malmo 0.37.0,
-see ``obsidianlink/env/l1_scene.py`` and the 2026-08-19 feasibility spike):
+Truth channels on the MineDojo 1.11.2 stack
+(see ``obsidianlink/env/l1_scene.py``):
 
-* ``reward`` from ``RewardForTouchingBlockType(nether_portal)`` — gym
-  step() reward, captured into ``Environment.hidden_state`` by
-  :class:`obsidianlink.env.minerl.MineRLEnvironment`. A real
-  ``nether_portal`` block only exists once a frame has been correctly
-  ignited, so touching it is *portal_activated* / *portal_contacted*
-  evidence.
-* ``biome_id`` from ``ObservationFromCurrentLocation`` (``location_stats``
-  / gym ``info``). Minecraft 1.16.5's legacy biome id for the Nether is
-  ``8`` ("hell"). A confirmed ``biome_id == 8`` sample *after* portal
-  activation is the primary *nether_entered* truth.
+* ``reward`` captured into ``Environment.hidden_state`` by
+  :class:`obsidianlink.env.minedojo.MineDojoEnvironment`. Open-ended
+  worlds do not currently wire a portal-touch reward, so activation
+  evidence is weaker than a dedicated task reward.
+* ``biome_id`` from MineDojo ``location_stats``. Minecraft 1.11.2's
+  Nether biome id is ``8`` ("hell"). A confirmed ``biome_id == 8``
+  sample after portal activation is the primary *nether_entered* truth.
 
 ``portal_constructed`` (frame-complete-before-ignition) has no cheap,
 reliable non-``ObservationFromGrid`` truth on this stack, so it is left
@@ -43,11 +40,6 @@ _LEAKED_FIELD_NAMES = (
     "portal_activated",
     "nether_entered",
     "success",
-    "xpos",
-    "ypos",
-    "zpos",
-    "yaw",
-    "pitch",
 )
 
 

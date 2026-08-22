@@ -31,7 +31,7 @@ MineDojo 的 MixinGradle 兼容修复与 Java 选择由 `obsidianlink.env.minedo
 ```bash
 /opt/anaconda3/bin/conda run -n mc-agent python --version
 /opt/anaconda3/bin/conda run -n mc-agent python -c "import minedojo; print('minedojo import ok')"
-PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest tests/test_minedojo.py
+PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest
 ```
 
 不要仅为常规检查启动 Minecraft。真实 smoke 或可视化试验使用 `obsidianlink.experiments.run_minedojo_smoke` 与 `run_minedojo_harvest_log`。
@@ -39,13 +39,14 @@ PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest tests/tes
 ## 3. 平台与代码规则
 
 - 新环境、runner、测试和 Agent 能力必须使用 `MineDojoEnvironment`。
-- 保留 `obsidianlink/env/minerl.py`、Portal benchmark 与历史 runner，但不为它们加功能、不把它们重新接入默认 API。
+- 默认 skill 只发 MineDojo event-level 动词：移动/转向/攻击/交互/equip/place/craft/smelt/wait。
+- L1 / D1 / Portal runner 走 MineDojo open-ended 或内置任务。`obsidianlink/env/minerl.py` 仅闲置归档，禁止被新代码 import。
 - 默认 Agent skill surface 保持 primitive-only；复杂任务由 Planner 组合原子动作。
-- Agent 只能读取 `Observation` 的 agent-visible 字段；reward、done、任务内部 metadata 和 evaluator truth 不可泄露给 Agent。
+- Agent 可读取 `Observation` 的画面、背包、手上物品和坐标朝向（x/y/z/yaw/pitch）；reward、done、任务内部 metadata 和 evaluator truth 不可泄露给 Agent。
 - 先跑通最小真实实验，再增加框架；当前实验不需要的基础设施不创建。
 - 原始视频帧、trace、运行日志不提交 Git；提交脚本、测试、小型 summary 与文档即可。
 
 ## 4. 文档状态
 
-当前不维护仓库内路线图或长期计划文档。MineRL 历史边界见
+当前不维护仓库内路线图或长期计划文档。闲置 MineRL adapter 说明见
 `docs/LEGACY_MINERL_ARCHIVE.md`。

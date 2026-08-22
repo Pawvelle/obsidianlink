@@ -1,4 +1,4 @@
-"""Convert MineRL RGB frames into API image payloads.
+"""Convert RGB frames into API image payloads.
 
 Does not change Observation. The environment already stores POV as
 ``Observation.frame`` (typically ``(H, W, 3) uint8``).
@@ -23,7 +23,7 @@ def frame_to_data_url(frame: Any, *, quality: int = 75) -> str:
 
 
 def frame_to_pil(frame: Any) -> Any:
-    """MineRL POV ``ndarray (H, W, 3) uint8`` or an existing PIL image."""
+    """RGB POV ``ndarray (H, W, 3) uint8`` or an existing PIL image."""
     from PIL import Image
 
     if isinstance(frame, Image.Image):

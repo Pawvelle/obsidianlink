@@ -1,18 +1,8 @@
-"""Formal L1 controlled construction environment v0.1.
+"""Formal L1 controlled construction environment on MineDojo.
 
 Fixed Overworld grass superflat: spawn, construction floor, and a 4×4
-lava source pool. No pre-built portal frame. Inventory is given with
-``InventoryAgentStart``. Item select is ``hotbar.1-9`` only.
-
-Malmo 0.37.0 DrawingDecorator can only ``DrawBlock`` ``lava`` /
-``obsidian``. An obsidian floor would let an Agent treat the ground as
-portal material, so L1 does **not** draw a floor or walls. The walking
-surface is the already-verified superflat grass
-(``FLAT_WORLD = 3;7,2*3,2;1;``: bedrock, dirt, grass). DrawBlock only
-places the lava pool into that grass.
-
-This module is the environment. It is not a Scripted Oracle, L1
-evaluator, or ReactiveAgent task.
+lava source pool. No pre-built portal frame. Starting tools are given
+through MineDojo ``initial_inventory``. Item select is ``equip`` by name.
 """
 
 from __future__ import annotations
@@ -21,7 +11,7 @@ from typing import Any
 
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Environment, Observation
-from obsidianlink.env.minerl import MineRLEnvironment
+from obsidianlink.env.minedojo import MineDojoEnvironment
 from obsidianlink.env.scene import (
     FLAT_WORLD,
     PLAYER_PITCH,
@@ -32,31 +22,34 @@ from obsidianlink.env.scene import (
     WARMUP_STEPS,
 )
 
-L1_ENV_ID = "MineRLL1Controlled-v0"
-
-# Superflat grass is y=3; feet stand at y=4. Do not reuse D1's y=101 platform.
+L1_ENV_ID = "minedojo_l1_portal"
 PLAYER_Y = 4.0
 FLOOR_Y = 3
 FLOOR_SURFACE = "grass"
 
-# 4×4 lava source pool in front of spawn, replacing grass blocks.
 LAVA_X1, LAVA_X2 = -1, 2
 LAVA_Y = FLOOR_Y
 LAVA_Z1, LAVA_Z2 = 5, 8
 LAVA_SOURCE_COUNT = 16
 
-# Open grass between spawn and the pool. Not a portal frame.
 CONSTRUCTION_X1, CONSTRUCTION_X2 = -4, 4
 CONSTRUCTION_Y = FLOOR_Y
 CONSTRUCTION_Z1, CONSTRUCTION_Z2 = 1, 4
 
-# Hotbar 1–5. No lava_bucket. Slot numbers are Minecraft/Malmo 0-based.
 L1_INVENTORY: dict[int, dict[str, Any]] = {
     0: {"type": "water_bucket", "quantity": 1},
     1: {"type": "bucket", "quantity": 1},
     2: {"type": "cobblestone", "quantity": 64},
     3: {"type": "iron_pickaxe", "quantity": 1},
     4: {"type": "flint_and_steel", "quantity": 1},
+}
+
+L1_SLOT_ITEMS: dict[str, str] = {
+    "1": "water_bucket",
+    "2": "bucket",
+    "3": "cobblestone",
+    "4": "iron_pickaxe",
+    "5": "flint_and_steel",
 }
 
 L1_INV_ITEMS = (
@@ -140,146 +133,59 @@ def l1_scene_xml() -> str:
     return _draw_filled(LAVA_X1, LAVA_Y, LAVA_Z1, LAVA_X2, LAVA_Y, LAVA_Z2, "lava")
 
 
-_REGISTERED_SPECS: dict[str, Any] = {}
+def l1_equip_target(slot_or_item: str, inventory: dict[str, int] | None = None) -> str:
+    """Map a legacy L1 slot or item name onto a MineDojo equip target."""
+    raw = str(slot_or_item).strip()
+    if raw.startswith("hotbar."):
+        raw = raw.split(".", 1)[1]
+    if raw in L1_SLOT_ITEMS:
+        if raw == "2" and inventory and int(inventory.get("lava_bucket") or 0) >= 1:
+            return "lava_bucket"
+        return L1_SLOT_ITEMS[raw]
+    return raw.replace(" ", "_")
 
 
-def register_l1_spec(*, name: str = L1_ENV_ID) -> str:
-    """Register the L1 env id. Idempotent. Imports MineRL lazily."""
-    import gym  # type: ignore[import-untyped]
-    from minerl.herobraine.env_specs.treechop_specs import Treechop
-    from minerl.herobraine.hero import handlers
-    from minerl.herobraine.hero.handler import Handler
-    from minerl.herobraine.hero.mc import INVERSE_KEYMAP
-
-    cached = _REGISTERED_SPECS.get(name)
-    if cached is not None and name in gym.envs.registry.env_specs:
-        return name
-
-    class _SafeDrawingDecorator(handlers.DrawingDecorator):
-        def xml_template(self) -> str:
-            return """<DrawingDecorator>{{ to_draw | safe }}</DrawingDecorator>"""
-
-    class L1ControlledSpec(Treechop):
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            kwargs.setdefault("name", name)
-            kwargs.setdefault("resolution", RESOLUTION)
-            super().__init__(*args, **kwargs)
-
-        def create_server_world_generators(self) -> list[Handler]:
-            return [
-                handlers.FlatWorldGenerator(
-                    force_reset=True, generatorString=FLAT_WORLD
-                )
-            ]
-
-        def create_server_decorators(self) -> list[Handler]:
-            return [_SafeDrawingDecorator(l1_scene_xml())]
-
-        def create_server_initial_conditions(self) -> list[Handler]:
-            return [
-                handlers.TimeInitialCondition(
-                    allow_passage_of_time=False, start_time=6000
-                ),
-                handlers.SpawningInitialCondition(allow_spawning=False),
-                handlers.WeatherInitialCondition(weather="clear"),
-            ]
-
-        def create_agent_start(self) -> list[Handler]:
-            return [
-                handlers.GuiScale(1.0),
-                handlers.GammaSetting(2.0),
-                handlers.FOVSetting(70.0),
-                handlers.FakeCursorSize(0),
-                handlers.AgentStartPlacement(
-                    x=PLAYER_X,
-                    y=PLAYER_Y,
-                    z=PLAYER_Z,
-                    yaw=PLAYER_YAW,
-                    pitch=PLAYER_PITCH,
-                ),
-                handlers.InventoryAgentStart(dict(L1_INVENTORY)),
-            ]
-
-        def create_observables(self) -> list[Handler]:
-            # No ObservationFromGrid. RGB + inventory + main-hand only.
-            return [
-                handlers.POVObservation(self.resolution),
-                handlers.FlatInventoryObservation(list(L1_INV_ITEMS)),
-                handlers.EquippedItemObservation(
-                    list(L1_EQUIP_ITEMS), mainhand=True
-                ),
-            ]
-
-        def create_actionables(self) -> list[Handler]:
-            # EquipAction is unusable on this MineRL 1.0.2 / MCP-Reborn stack.
-            acts = super().create_actionables()
-            names = {a.to_string() for a in acts}
-            if "use" not in names:
-                acts.append(
-                    handlers.KeybasedCommandAction("use", INVERSE_KEYMAP["use"])
-                )
-            for i in range(1, 10):
-                key = f"hotbar.{i}"
-                if key not in names:
-                    acts.append(handlers.KeybasedCommandAction(key, str(i)))
-            return [a for a in acts if a.to_string() not in {"equip", "place"}]
-
-        def create_monitors(self) -> list[Handler]:
-            return [handlers.ObservationFromCurrentLocation()]
-
-        def create_rewardables(self) -> list[Handler]:
-            # Evaluator-only reward channel. ``reward`` is gym step() return
-            # value, never copied onto Observation (see MineRLEnvironment).
-            # A per-tick reward while touching ``nether_portal`` is
-            # portal-activation evidence: the block only exists if ignition
-            # created a real, functioning portal.
-            return [
-                handlers.RewardForTouchingBlockType(
-                    [
-                        {
-                            "type": "nether_portal",
-                            "behaviour": "onceOnly",
-                            "reward": 1.0,
-                        }
-                    ]
-                )
-            ]
-
-        def create_agent_handlers(self) -> list[Handler]:
-            return []
-
-        def create_server_quit_producers(self) -> list[Handler]:
-            return [
-                handlers.ServerQuitFromTimeUp(400000),
-                handlers.ServerQuitWhenAnyAgentFinishes(),
-            ]
-
-    spec = L1ControlledSpec()
-    _REGISTERED_SPECS[spec.name] = spec
-    if spec.name not in gym.envs.registry.env_specs:
-        spec.register()
-    return spec.name
+def _l1_inventory_items() -> list[dict[str, Any]]:
+    return [
+        {"slot": slot, "name": item["type"], "quantity": int(item["quantity"])}
+        for slot, item in L1_INVENTORY.items()
+    ]
 
 
 class L1ControlledEnv(Environment):
-    """Fixed L1 grass superflat. Hidden layout is evaluator-only."""
+    """Fixed L1 grass superflat on MineDojo. Hidden layout is evaluator-only."""
 
     def __init__(self, warmup_steps: int = WARMUP_STEPS) -> None:
-        register_l1_spec()
-        self.env_id = L1_ENV_ID
         if warmup_steps < 0:
             raise ValueError("warmup_steps must be >= 0")
+        self.env_id = L1_ENV_ID
+        self.task_id = L1_ENV_ID
         self.warmup_steps = int(warmup_steps)
-        self._env = MineRLEnvironment(env_id=L1_ENV_ID)
+        self._env = MineDojoEnvironment(
+            "open-ended",
+            image_size=RESOLUTION,
+            generate_world_type="flat",
+            flat_world_seed_string=FLAT_WORLD,
+            drawing_str=l1_scene_xml(),
+            initial_inventory=_l1_inventory_items(),
+            start_position={
+                "x": PLAYER_X,
+                "y": PLAYER_Y,
+                "z": PLAYER_Z,
+                "yaw": PLAYER_YAW,
+                "pitch": PLAYER_PITCH,
+            },
+            allow_time_passage=False,
+            allow_mob_spawn=False,
+            initial_weather="clear",
+            start_time=6000,
+        )
 
     @property
     def hidden_state(self) -> dict[str, Any]:
         hidden = dict(self._env.hidden_state)
         hidden["l1_layout"] = dict(L1_LAYOUT)
-        hidden["target_truths"] = {
-            "lava": True,
-            "prebuilt_portal": False,
-        }
+        hidden["target_truths"] = {"lava": True, "prebuilt_portal": False}
         return hidden
 
     @property
@@ -288,7 +194,14 @@ class L1ControlledEnv(Environment):
 
     @property
     def action_space_keys(self) -> tuple[str, ...] | None:
-        return self._env.action_space_keys
+        raw = getattr(self._env, "_env", None)
+        space = getattr(raw, "action_space", None)
+        if space is None or not hasattr(space, "no_op"):
+            return None
+        no_op = space.no_op()
+        if isinstance(no_op, dict):
+            return tuple(no_op)
+        return None
 
     def reset(self) -> Observation:
         observation = self._env.reset()
@@ -302,6 +215,11 @@ class L1ControlledEnv(Environment):
         return self._env.observe()
 
     def step(self, action: Action) -> Observation:
+        if action.type is ActionType.HOTBAR:
+            action = Action(
+                ActionType.EQUIP,
+                target=l1_equip_target(action.target, self.observe().inventory),
+            )
         return self._env.step(action)
 
     def close(self) -> None:
@@ -321,6 +239,7 @@ __all__ = [
     "L1_INVENTORY",
     "L1_INV_ITEMS",
     "L1_LAYOUT",
+    "L1_SLOT_ITEMS",
     "LAVA_SOURCE_COUNT",
     "LAVA_X1",
     "LAVA_X2",
@@ -329,7 +248,7 @@ __all__ = [
     "LAVA_Z2",
     "PLAYER_Y",
     "L1ControlledEnv",
+    "l1_equip_target",
     "l1_scene_xml",
     "lava_pool_coords",
-    "register_l1_spec",
 ]

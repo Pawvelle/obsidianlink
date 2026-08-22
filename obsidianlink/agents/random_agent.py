@@ -9,22 +9,21 @@ from obsidianlink.agents.base_agent import BaseAgent
 from obsidianlink.env.actions import Action, ActionType
 from obsidianlink.env.environment import Observation
 
-# L1-legal verbs. EQUIP / PLACE are declared on ActionType but must not be
-# sampled: EquipAction crashes this MineRL stack; PlaceBlock has crashed
-# the Malmo server.
 LEGAL_TYPES: tuple[ActionType, ...] = (
     ActionType.MOVE,
     ActionType.CAMERA,
     ActionType.ATTACK,
     ActionType.USE,
-    ActionType.HOTBAR,
+    ActionType.EQUIP,
+    ActionType.PLACE,
+    ActionType.CRAFT,
     ActionType.WAIT,
 )
-HOTBAR_SLOTS: tuple[str, ...] = tuple(str(i) for i in range(1, 10))
+_ARCHIVED_TYPES = frozenset({ActionType.HOTBAR, ActionType.INVENTORY})
 
 
 class RandomAgent(BaseAgent):
-    """Uniform sample over the legal action surface."""
+    """Uniform sample over the MineDojo event-level action surface."""
 
     def __init__(
         self,
@@ -34,12 +33,16 @@ class RandomAgent(BaseAgent):
     ) -> None:
         self._rng = rng if rng is not None else random.Random()
         self._types = tuple(types)
-        if ActionType.EQUIP in self._types or ActionType.PLACE in self._types:
-            raise ValueError("RandomAgent must not emit EQUIP or PLACE")
+        if any(kind in _ARCHIVED_TYPES for kind in self._types):
+            raise ValueError("RandomAgent must not emit archived HOTBAR/INVENTORY")
 
     def act(self, observation: Observation) -> Action:
-        del observation
         kind = self._rng.choice(self._types)
+        items = [
+            name
+            for name, qty in dict(observation.inventory or {}).items()
+            if int(qty or 0) > 0
+        ]
         if kind is ActionType.MOVE:
             return Action(
                 type=ActionType.MOVE,
@@ -52,11 +55,20 @@ class RandomAgent(BaseAgent):
                 yaw=float(self._rng.choice((-15, 0, 15))),
                 pitch=float(self._rng.choice((-15, 0, 15))),
             )
-        if kind is ActionType.HOTBAR:
+        if kind is ActionType.EQUIP:
+            if not items:
+                return Action(type=ActionType.WAIT)
+            return Action(type=ActionType.EQUIP, target=self._rng.choice(items))
+        if kind is ActionType.PLACE:
+            if not items:
+                return Action(type=ActionType.WAIT)
             return Action(
-                type=ActionType.HOTBAR,
-                target=self._rng.choice(HOTBAR_SLOTS),
+                type=ActionType.PLACE,
+                target=self._rng.choice(items),
+                sneak=self._rng.choice((False, True)),
             )
+        if kind is ActionType.CRAFT:
+            return Action(type=ActionType.CRAFT, target="stick")
         if kind is ActionType.USE:
             return Action(type=ActionType.USE, sneak=self._rng.choice((False, True)))
         if kind is ActionType.ATTACK:
@@ -64,4 +76,4 @@ class RandomAgent(BaseAgent):
         return Action(type=ActionType.WAIT)
 
 
-__all__ = ["HOTBAR_SLOTS", "LEGAL_TYPES", "RandomAgent"]
+__all__ = ["LEGAL_TYPES", "RandomAgent"]

@@ -199,11 +199,6 @@ def _leaked_evaluator_fields(observation: Any) -> list[str]:
         "hidden_state",
         "success",
         "l1_grid",
-        "xpos",
-        "ypos",
-        "zpos",
-        "yaw",
-        "pitch",
     )
     leaked = [name for name in banned if hasattr(observation, name)]
     extra = [

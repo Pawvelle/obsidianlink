@@ -6,7 +6,7 @@ ObsidianLink 是一个基于 **MineDojo** 的 Minecraft 具身 Agent Benchmark �
 
 MineDojo 是唯一的主动开发与研究环境，也是后续 Benchmark 的运行底座。所有新的环境适配、Agent 能力、实验与评测都必须建立在 `MineDojoEnvironment` 上。
 
-历史 MineRL adapter、旧 Portal benchmark runner 与旧测试仍保留在仓库中，用于阅读和复现过去证据；它们已归档，不是可运行主线，也不应成为新代码的依赖。**地狱门 Benchmark 目标本身没有归档**：它将在 MineDojo 上重新实现。详情见 [历史归档说明](docs/LEGACY_MINERL_ARCHIVE.md)。
+L1 / D1 / Portal 场景、Agent 动作面和默认测试都已接到 MineDojo。`obsidianlink/env/minerl.py` 仅作为闲置归档保留，不再被默认 API 或 runner 引用。详情见 [历史归档说明](docs/LEGACY_MINERL_ARCHIVE.md)。
 
 当前 Agent 闭环：
 
@@ -20,7 +20,7 @@ Natural-language task
   → Reflection / next decision
 ```
 
-默认只暴露原子动作（移动、转向、攻击、交互、热键、等待等）。复杂目标应由 Planner 组合这些动作，不新增“砍树”“合成整套工具”等工作流黑箱 skill。
+默认只暴露原子动作（移动、转向、攻击、交互、equip、place、craft、smelt、等待等）。复杂目标应由 Planner 组合这些动作，不新增“砍树”“合成整套工具”等工作流黑箱 skill。
 
 Benchmark 的最终成功定义为：在预算内，任务指定的单个 Agent 或协作团队通过合法 Minecraft 行为构造/完成地狱门、激活它，并实际从主世界进入下界。短任务（例如获得原木）是构建该 Benchmark 所需 Agent 能力的阶段性验证，不是研究终点。
 
@@ -56,11 +56,10 @@ PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
 ## 测试
 
 ```bash
-PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest \
-  tests/test_minedojo.py tests/test_general_agent.py
+PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest
 ```
 
-完整测试集中仍有 MineRL 历史测试；在 MineRL 已按项目决策卸载的环境中，这些归档测试预期不能作为当前平台回归标准。
+默认 pytest 覆盖 MineDojo 主线，以及已迁入的 L1 / D1 / Portal / Agent 合同测试。不要仅为常规检查启动 Minecraft。
 
 ## 文档
 

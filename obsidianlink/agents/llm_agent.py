@@ -63,6 +63,7 @@ class LLMAgent(BaseAgent):
 
     def _generate(self, prompt: str, observation: Observation) -> str:
         vision_fn = getattr(self._client, "generate_with_vision", None)
+        supports_vision = getattr(self._client, "supports_vision", True)
         if not self.use_vision:
             self.last_used_vision = False
             self.last_fallback_reason = None
@@ -71,7 +72,7 @@ class LLMAgent(BaseAgent):
             self.last_used_vision = False
             self.last_fallback_reason = "no_frame"
             return self._client.generate(prompt)
-        if not callable(vision_fn):
+        if not supports_vision or not callable(vision_fn):
             self.last_used_vision = False
             self.last_fallback_reason = "text_only_model"
             return self._client.generate(prompt)

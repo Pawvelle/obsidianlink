@@ -52,7 +52,14 @@ class TaskPlanner(Protocol):
 
 
 class LLMSkillPlanner:
-    """One decision per call; the model sees named capabilities, not MineRL."""
+    """One decision per call; the model sees named capabilities, not backend keys."""
+
+    # Relative camera deltas used only when the model tries to retrieve empty
+    # memory instead of inspecting an available visual observation.  They form
+    # a small, deterministic sweep around the initial heading and keep a cold
+    # start from consuming the entire planning budget without touching the
+    # environment.
+    _EMPTY_MEMORY_SCAN_YAWS = (45.0, -90.0, 135.0, -180.0)
 
     def __init__(
         self,
@@ -67,6 +74,8 @@ class LLMSkillPlanner:
         self.model_calls = 0
         self.last_prompt: str | None = None
         self.last_response: str | None = None
+        self._empty_memory_scan_count = 0
+        self._empty_memory_scan_goal = ""
 
     def plan(
         self,
@@ -83,7 +92,7 @@ class LLMSkillPlanner:
         self.last_prompt = prompt
         response = self._complete(prompt, observation)
         try:
-            return parse_planner_decision(
+            decision = parse_planner_decision(
                 response,
                 frozenset(skill_descriptions),
                 allow_wiki=self.allow_wiki,
@@ -97,15 +106,65 @@ class LLMSkillPlanner:
                 f"Invalid output:\n{str(response)[:800]}"
             )
             response = self._complete(repair, observation)
-            return parse_planner_decision(
+            decision = parse_planner_decision(
                 response,
                 frozenset(skill_descriptions),
                 allow_wiki=self.allow_wiki,
             )
+        return self._avoid_empty_memory_visual_stall(
+            decision, memory, observation, skill_descriptions
+        )
+
+    def _avoid_empty_memory_visual_stall(
+        self,
+        decision: PlannerDecision,
+        memory: AgentMemory,
+        observation: Observation,
+        skill_descriptions: dict[str, str],
+    ) -> PlannerDecision:
+        """Replace an empty-memory stall with one bounded visual sweep tick.
+
+        This deliberately does not claim that a tree was detected.  Its only
+        purpose is to obtain a different agent-visible frame when the planner
+        has already established that memory contains no location information.
+        """
+        if memory.goal != self._empty_memory_scan_goal:
+            self._empty_memory_scan_goal = memory.goal
+            self._empty_memory_scan_count = 0
+        retrieval = memory.last_retrieval
+        should_scan = (
+            decision.type == "memory"
+            and observation.frame is not None
+            and "look" in skill_descriptions
+            and retrieval is not None
+            and not retrieval.items
+            and self._empty_memory_scan_count < len(self._EMPTY_MEMORY_SCAN_YAWS)
+        )
+        if not should_scan:
+            return decision
+        yaw = self._EMPTY_MEMORY_SCAN_YAWS[self._empty_memory_scan_count]
+        self._empty_memory_scan_count += 1
+        return PlannerDecision(
+            type="skill",
+            name="look",
+            arguments={"yaw": yaw, "pitch": 0.0},
+            subgoal="visually scan the nearby scene for the current objective",
+            reason=(
+                "empty memory cannot locate an object visible from the current "
+                "POV; perform a bounded camera sweep before another retrieval"
+            ),
+            plan_revision_reason="replaced empty-memory retrieval with visual scan",
+        )
 
     def _complete(self, prompt: str, observation: Observation) -> str:
         vision_fn = getattr(self.client, "generate_with_vision", None)
-        if self.use_vision and observation.frame is not None and callable(vision_fn):
+        supports_vision = getattr(self.client, "supports_vision", True)
+        if (
+            self.use_vision
+            and supports_vision
+            and observation.frame is not None
+            and callable(vision_fn)
+        ):
             response = vision_fn(prompt, frame=observation.frame)
         else:
             response = self.client.generate(prompt)
@@ -180,7 +239,13 @@ def _build_planner_prompt(
         "Do not emit a primitive that cannot help the current subgoal "
         "(for example mining dirt while collecting wood).\n"
         "Compose complex tasks from the named primitive skills; never invent "
-        "MineRL actions or unavailable skills.\n"
+        "backend-specific action keys or unavailable skills.\n"
+        "When has_visual_frame is true, the current Minecraft POV is attached to this "
+        "request. Inspect it directly for goal-relevant objects. Do not ask memory for "
+        "the location of an object that may be visible in this POV: choose a bounded "
+        "look action to scan, a move action to approach, or attack only when the target "
+        "is under the crosshair. Memory is for previous observations and Minecraft "
+        "knowledge, not a substitute for looking at the image.\n"
         "Use retrieved memory, not a full memory dump:\n"
         "- working_memory: current goal, subgoal, next_objective, and plan progress\n"
         "- last_reflection: expected vs observed outcome and goal-progress note\n"

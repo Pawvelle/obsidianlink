@@ -1,8 +1,8 @@
-"""Deterministic MineRL-free world for Agent reasoning tests.
+"""Deterministic Minecraft-free world for Agent reasoning tests.
 
-Primitive skills still emit the same ``Action`` objects. This environment only
-updates agent-visible inventory and selected_item. Distance, facing, GUI, and
-remaining resources stay internal and never appear on ``Observation``.
+Primitive skills still emit the same ``Action`` objects. This environment
+updates agent-visible inventory, selected item, and a simulated pose.
+Remaining resource counts stay internal.
 """
 
 from __future__ import annotations
@@ -23,15 +23,24 @@ _PLACEABLE = frozenset(
         "furnace",
     }
 )
-_INVENTORY_RECIPES: tuple[tuple[str, dict[str, int], dict[str, int]], ...] = (
-    ("oak_planks", {"oak_log": 1}, {"oak_planks": 4}),
-    ("stick", {"oak_planks": 2}, {"stick": 4}),
-    ("crafting_table", {"oak_planks": 4}, {"crafting_table": 1}),
-)
-_TABLE_RECIPES: tuple[tuple[str, dict[str, int], dict[str, int]], ...] = _INVENTORY_RECIPES + (
-    ("wooden_pickaxe", {"oak_planks": 3, "stick": 2}, {"wooden_pickaxe": 1}),
-    ("furnace", {"cobblestone": 8}, {"furnace": 1}),
-)
+_INVENTORY_RECIPES: dict[str, tuple[dict[str, int], dict[str, int]]] = {
+    "oak_planks": ({"oak_log": 1}, {"oak_planks": 4}),
+    "planks": ({"oak_log": 1}, {"oak_planks": 4}),
+    "stick": ({"oak_planks": 2}, {"stick": 4}),
+    "crafting_table": ({"oak_planks": 4}, {"crafting_table": 1}),
+}
+_TABLE_RECIPES: dict[str, tuple[dict[str, int], dict[str, int]]] = {
+    **_INVENTORY_RECIPES,
+    "wooden_pickaxe": ({"oak_planks": 3, "stick": 2}, {"wooden_pickaxe": 1}),
+    "wooden_sword": ({"oak_planks": 2, "stick": 1}, {"wooden_sword": 1}),
+    "furnace": ({"cobblestone": 8}, {"furnace": 1}),
+    "iron_sword": ({"iron_ingot": 2, "stick": 1}, {"iron_sword": 1}),
+}
+_ITEM_ALIASES = {
+    "log": "oak_log",
+    "planks": "oak_planks",
+    "wood": "oak_log",
+}
 _DROPS = {
     "stone": "cobblestone",
     "oak_log": "oak_log",
@@ -87,6 +96,11 @@ class FakeMinecraftEnv(Environment):
         self.mine_progress = 0
         self.gui_open = False
         self.table_placed = False
+        self.x = 0.5
+        self.y = 4.0
+        self.z = 0.5
+        self.yaw = 0.0
+        self.pitch = 0.0
         self._last = Observation(inventory={})
         self.reset()
 
@@ -103,6 +117,11 @@ class FakeMinecraftEnv(Environment):
         self.mine_progress = 0
         self.gui_open = False
         self.table_placed = False
+        self.x = 0.5
+        self.y = 4.0
+        self.z = 0.5
+        self.yaw = 0.0
+        self.pitch = 0.0
         self._last = self._observation()
         return self._last
 
@@ -117,21 +136,21 @@ class FakeMinecraftEnv(Environment):
         elif action.type is ActionType.CAMERA:
             self._look(action)
         elif action.type is ActionType.ATTACK:
-            if self.gui_open:
-                self._craft()
-            else:
-                self._mine()
+            self._mine()
         elif action.type is ActionType.USE:
-            if self.gui_open:
-                self._craft()
-            else:
-                self._use()
+            self._use()
         elif action.type is ActionType.PLACE:
-            self._place_selected()
-        elif action.type is ActionType.HOTBAR:
-            self._select_hotbar(action.target)
-        elif action.type is ActionType.INVENTORY:
-            self.gui_open = not self.gui_open
+            self._place_named(action.target)
+        elif action.type is ActionType.EQUIP:
+            self._equip(action.target)
+        elif action.type is ActionType.CRAFT:
+            self._craft_named(action.target)
+        elif action.type is ActionType.SMELT:
+            self._smelt(action.target)
+        elif action.type is ActionType.DROP:
+            selected = self._selected_item()
+            if selected:
+                self._consume(selected, 1)
         elif action.type is ActionType.WAIT:
             pass
         self._last = self._observation()
@@ -177,6 +196,11 @@ class FakeMinecraftEnv(Environment):
             "position": {
                 "relative": relative,
                 "facing_target": self.facing_target,
+                "x": self.x,
+                "y": self.y,
+                "z": self.z,
+                "yaw": self.yaw,
+                "pitch": self.pitch,
             },
             "nearby_blocks": nearby,
             "visible_resources": resources,
@@ -189,6 +213,11 @@ class FakeMinecraftEnv(Environment):
             frame=None,
             inventory=dict(self.inventory),
             selected_item=self._selected_item(),
+            x=self.x,
+            y=self.y,
+            z=self.z,
+            yaw=self.yaw,
+            pitch=self.pitch,
         )
 
     def _selected_item(self) -> str | None:
@@ -202,10 +231,14 @@ class FakeMinecraftEnv(Environment):
             self.distance = max(0, self.distance - 1)
         elif action.dx < 0:
             self.distance += 1
+        self.z += float(action.dx)
+        self.x += float(action.dz)
 
     def _look(self, action: Action) -> None:
         if self.gui_open:
             return
+        self.yaw += float(action.yaw)
+        self.pitch += float(action.pitch)
         if abs(float(action.yaw)) >= 90.0 or abs(float(action.pitch)) >= 60.0:
             self.facing_target = False
         else:
@@ -222,41 +255,55 @@ class FakeMinecraftEnv(Environment):
         self._add(_drop_for(self.target), 1)
 
     def _use(self) -> None:
-        selected = self._selected_item()
-        if selected == "crafting_table":
-            if self._consume("crafting_table", 1):
+        self._place_named(self._selected_item() or "")
+
+    def _place_named(self, target: str) -> None:
+        selected = _canonical_item(target) or self._selected_item()
+        if selected in _PLACEABLE and self._consume(selected, 1):
+            if selected == "crafting_table":
                 self.table_placed = True
-            return
-        if self.table_placed and selected is None:
-            self.gui_open = True
-            return
-        self._place_selected()
+            elif selected == "furnace":
+                self.table_placed = True
 
-    def _place_selected(self) -> None:
-        selected = self._selected_item()
-        if selected in _PLACEABLE:
-            self._consume(selected, 1)
-
-    def _select_hotbar(self, target: str) -> None:
-        raw = str(target).strip().lower()
-        if raw.startswith("hotbar."):
-            raw = raw.split(".", 1)[1]
-        try:
-            slot = int(raw)
-        except (TypeError, ValueError):
+    def _equip(self, target: str) -> None:
+        name = _canonical_item(target)
+        if not name or int(self.inventory.get(name, 0) or 0) <= 0:
             return
-        if 1 <= slot <= 9:
-            self.selected_slot = slot
+        if name not in self.hotbar:
+            for index, slot in enumerate(self.hotbar):
+                if slot is None:
+                    self.hotbar[index] = name
+                    break
+            else:
+                self.hotbar[0] = name
+        self.selected_slot = self.hotbar.index(name) + 1
 
-    def _craft(self) -> None:
-        recipes = _TABLE_RECIPES if self.table_placed else _INVENTORY_RECIPES
-        for _name, inputs, outputs in recipes:
-            if all(int(self.inventory.get(item, 0) or 0) >= count for item, count in inputs.items()):
-                for item, count in inputs.items():
-                    self._consume(item, count)
-                for item, count in outputs.items():
-                    self._add(item, count)
-                return
+    def _craft_named(self, target: str) -> None:
+        raw = str(target).strip().lower().replace(" ", "_")
+        use_table = raw.startswith("table:") or raw.startswith("nearby:")
+        if use_table:
+            raw = raw.split(":", 1)[1]
+        name = _canonical_item(raw) or raw
+        recipe = _TABLE_RECIPES.get(raw) or _TABLE_RECIPES.get(name)
+        if recipe is None:
+            return
+        table_only = raw not in _INVENTORY_RECIPES and name not in _INVENTORY_RECIPES
+        if table_only and not self.table_placed and not use_table:
+            return
+        inputs, outputs = recipe
+        if not all(int(self.inventory.get(item, 0) or 0) >= count for item, count in inputs.items()):
+            return
+        for item, count in inputs.items():
+            self._consume(item, count)
+        for item, count in outputs.items():
+            self._add(item, count)
+
+    def _smelt(self, target: str) -> None:
+        if not self.table_placed:
+            return
+        name = _canonical_item(target)
+        if name in {"iron_ingot", "iron_ore"} and self._consume("iron_ore", 1):
+            self._add("iron_ingot", 1)
 
     def _add(self, name: str, count: int) -> None:
         if count <= 0:
@@ -296,6 +343,13 @@ def _hotbar_slots(
             break
         slots[index] = name
     return slots
+
+
+def _canonical_item(name: str | None) -> str | None:
+    raw = str(name or "").strip().lower().replace(" ", "_").split(":", 1)[-1]
+    if not raw:
+        return None
+    return _ITEM_ALIASES.get(raw, raw)
 
 
 def _drop_for(target: str) -> str:

@@ -40,15 +40,16 @@ def test_build_prompt_includes_goal_observation_and_action_space() -> None:
     assert "bucket casting" not in task_section
     assert "lava" not in task_section
     assert "obsidian" not in task_section
-    assert "do not switch hotbar slots aimlessly" in lower
-    assert "use use and attack" in lower
+    assert "do not switch items aimlessly" in lower
+    assert "use, attack, equip, place, and craft" in lower
     assert "bucket=1" in prompt
     assert "water_bucket=1" in prompt
     assert "selected_item: 'bucket'" in prompt
     assert "frame: none" in prompt
     assert "move" in lower
-    assert "hotbar" in lower
+    assert "equip" in lower
     assert '"action": "wait"' in prompt
+    assert '"action": "equip"' in prompt
     assert "hidden_state" not in lower
     assert "biome_id" not in lower
     assert "equip" in lower
@@ -57,9 +58,15 @@ def test_build_prompt_includes_goal_observation_and_action_space() -> None:
 
 def test_build_prompt_does_not_invent_position() -> None:
     prompt = build_prompt(Observation())
-    assert "position: not in Observation" in prompt
+    assert "position: unknown" in prompt
     assert "xpos" not in prompt
     assert "nether_entered" not in prompt
+
+
+def test_build_prompt_includes_coordinates() -> None:
+    prompt = build_prompt(Observation(x=1.25, y=4.0, z=-3.5, yaw=90.0, pitch=10.0))
+    assert "position: x=1.250, y=4.000, z=-3.500, yaw=90.000, pitch=10.000" in prompt
+    assert "xpos" not in prompt
 
 
 def test_parse_action_plain_json_move() -> None:
@@ -99,11 +106,11 @@ def test_parse_action_uppercase_and_forward_alias() -> None:
     assert action.sneak is False
 
 
-def test_parse_action_hotbar_and_use() -> None:
-    hotbar, ok_h = parse_action('{"action": "HOTBAR", "target": "2"}')
-    assert ok_h is True
-    assert hotbar.type is ActionType.HOTBAR
-    assert hotbar.target == "2"
+def test_parse_action_equip_and_use() -> None:
+    equip, ok_e = parse_action('{"action": "EQUIP", "target": "bucket"}')
+    assert ok_e is True
+    assert equip.type is ActionType.EQUIP
+    assert equip.target == "bucket"
     use, ok_u = parse_action('{"action": "use", "sneak": true}')
     assert ok_u is True
     assert use.type is ActionType.USE
@@ -117,11 +124,11 @@ def test_parse_action_invalid_fallback_wait() -> None:
         assert action.type is ActionType.WAIT
 
 
-def test_parse_action_rejects_equip_place_and_bad_hotbar() -> None:
+def test_parse_action_rejects_hotbar_and_bad_named_targets() -> None:
     for raw in (
-        '{"action": "equip", "target": "bucket"}',
-        '{"action": "place", "target": "cobblestone"}',
-        '{"action": "hotbar", "target": "99"}',
+        '{"action": "hotbar", "target": "2"}',
+        '{"action": "inventory"}',
+        '{"action": "equip", "target": ""}',
         '{"action": "move", "dx": 2}',
     ):
         action, ok = parse_action(raw)

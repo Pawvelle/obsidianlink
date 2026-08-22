@@ -53,40 +53,29 @@ class FakeWoodEnv(Environment):
             self.attacks += 1
             if self.attacks % 2 == 0 and self.inventory.get("oak_log", 0) < 3:
                 self.inventory["oak_log"] = self.inventory.get("oak_log", 0) + 1
-        elif action.type is ActionType.HOTBAR:
-            slot_items = {
-                "1": "iron_axe",
-                "2": "oak_log",
-                "3": "oak_planks",
-                "4": "crafting_table",
-                "5": "stick",
-                "6": "wooden_pickaxe",
-            }
-            candidate = slot_items.get(action.target)
+        elif action.type is ActionType.EQUIP:
+            candidate = action.target
             self.selected = candidate if candidate and self.inventory.get(candidate, 0) else None
-        elif action.type is ActionType.INVENTORY and self.table_gui:
-            self.inventory["oak_planks"] -= 3
-            self.inventory["stick"] -= 2
-            self.inventory["wooden_pickaxe"] = 1
-            self.table_gui = False
-        elif action.type is ActionType.INVENTORY and self.gui_open:
-            self.inventory["oak_log"] = 0
-            self.inventory["oak_planks"] = 6
-            self.inventory["stick"] = 4
-            self.inventory["crafting_table"] = 1
-            self.gui_open = False
-        elif action.type is ActionType.INVENTORY:
-            self.gui_open = True
-        elif (
-            action.type is ActionType.USE
-            and self.selected == "crafting_table"
-            and not self.table_placed
-        ):
-            self.inventory["crafting_table"] = 0
-            self.table_placed = True
-            self.selected = None
-        elif action.type is ActionType.USE and self.table_placed:
-            self.table_gui = True
+        elif action.type is ActionType.CRAFT:
+            target = str(action.target or "")
+            if target in {"planks", "oak_planks"} and self.inventory.get("oak_log", 0) >= 1:
+                logs = self.inventory.pop("oak_log", 0)
+                self.inventory["oak_planks"] = self.inventory.get("oak_planks", 0) + logs * 4
+            elif target == "stick" and self.inventory.get("oak_planks", 0) >= 2:
+                self.inventory["oak_planks"] -= 2
+                self.inventory["stick"] = self.inventory.get("stick", 0) + 4
+            elif target == "crafting_table" and self.inventory.get("oak_planks", 0) >= 4:
+                self.inventory["oak_planks"] -= 4
+                self.inventory["crafting_table"] = self.inventory.get("crafting_table", 0) + 1
+            elif "wooden_pickaxe" in target and self.inventory.get("oak_planks", 0) >= 3 and self.inventory.get("stick", 0) >= 2:
+                self.inventory["oak_planks"] -= 3
+                self.inventory["stick"] -= 2
+                self.inventory["wooden_pickaxe"] = 1
+        elif action.type is ActionType.PLACE and action.target == "crafting_table":
+            if self.inventory.get("crafting_table", 0) >= 1:
+                self.inventory["crafting_table"] = 0
+                self.table_placed = True
+                self.selected = None
         return self._obs()
 
     def close(self) -> None:

@@ -40,7 +40,7 @@ _DISTRIBUTION_VERBS: tuple[str, ...] = (
     ActionType.CAMERA.value,
     ActionType.USE.value,
     ActionType.ATTACK.value,
-    ActionType.HOTBAR.value,
+    ActionType.EQUIP.value,
     ActionType.WAIT.value,
 )
 

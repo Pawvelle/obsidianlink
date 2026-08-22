@@ -89,10 +89,20 @@ def test_task_goal_is_method_agnostic() -> None:
 
 
 def test_task_allowed_actions_are_legal_minecraft_interface_only() -> None:
-    forbidden = {"equip", "place", "drawblock", "teleport", "command", "give"}
+    forbidden = {"hotbar", "inventory", "drawblock", "teleport", "command", "give"}
     allowed = set(L1_PORTAL_TASK.allowed_actions)
     assert allowed.isdisjoint(forbidden)
-    assert allowed == {"move", "camera", "use", "attack", "hotbar", "wait"}
+    assert allowed == {
+        "move",
+        "camera",
+        "use",
+        "attack",
+        "equip",
+        "place",
+        "craft",
+        "smelt",
+        "wait",
+    }
 
 
 def test_task_has_no_hardcoded_ground_truth_label() -> None:

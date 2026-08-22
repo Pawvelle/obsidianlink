@@ -69,9 +69,9 @@ def test_forbidden_action_types_never_reach_env_step() -> None:
     env = _FakeEnv()
     session = OracleSession(env, "/tmp/l1_oracle_test_frames")
     with pytest.raises(RuntimeError):
-        session.step(Action(type=ActionType.EQUIP, target="bucket"))
+        session.step(Action(type=ActionType.HOTBAR, target="2"))
     with pytest.raises(RuntimeError):
-        session.step(Action(type=ActionType.PLACE, target="cobblestone"))
+        session.step(Action(type=ActionType.INVENTORY, target="open"))
     assert env.step_calls == 0
 
 

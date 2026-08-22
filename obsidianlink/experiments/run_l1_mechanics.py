@@ -1,6 +1,6 @@
 """L1 mechanical interaction live test.
 
-Scripted validation that Formal L1 (`MineRLL1Controlled-v0`) can scoop
+Scripted validation that Formal L1 (`minedojo_l1_portal`) can scoop
 lava with an empty bucket, place lava/water via native USE, form a new
 obsidian block, place cobblestone, and mine it with an iron pickaxe.
 
@@ -151,7 +151,12 @@ class MechanicsSession:
         return snap
 
     def hotbar(self, slot: str) -> dict[str, Any]:
-        snap = self.step(Action(type=ActionType.HOTBAR, target=slot))
+        from obsidianlink.env.l1_scene import l1_equip_target
+
+        inventory = dict(self.snap().get("inventory") or {})
+        snap = self.step(
+            Action(type=ActionType.EQUIP, target=l1_equip_target(slot, inventory))
+        )
         return self.wait(2)
 
     def use(self, ticks: int = 4, *, sneak: bool = False) -> dict[str, Any]:
@@ -259,7 +264,7 @@ def run_mechanics(session: MechanicsSession, report: dict[str, Any]) -> None:
     if "equip" in keys:
         _fail(report, "no_equip", {"keys": sorted(keys)})
         return
-    _ok(report, "no_equip", {"has_hotbar": all(f"hotbar.{i}" in keys for i in range(1, 10))})
+    _ok(report, "event_actions", {"has_equip": "equip" in keys or not keys})
     report["used_observation_from_grid"] = False
 
     print("[l1-mech] reset")

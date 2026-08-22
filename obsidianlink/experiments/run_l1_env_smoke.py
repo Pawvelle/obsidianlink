@@ -1,6 +1,6 @@
 """L1 controlled environment v0.1 live smoke test.
 
-Validates reset, spawn, lava pool visibility, inventory, hotbar select,
+Validates reset, spawn, lava pool visibility, inventory, equip-by-name,
 RGB/inventory/selected_item, close, and a fresh reset.
 
 This is not a portal solver, Oracle, or ReactiveAgent run.
@@ -34,13 +34,13 @@ _RUNS_DIR = os.path.join(os.path.dirname(__file__), "runs")
 REQUIRED_INVENTORY = {
     item["type"]: int(item["quantity"]) for item in L1_INVENTORY.values()
 }
-HOTBAR_EXPECT = {
-    1: "water_bucket",
-    2: "bucket",
-    3: "cobblestone",
-    4: "iron_pickaxe",
-    5: "flint_and_steel",
-}
+EQUIP_EXPECT = (
+    "water_bucket",
+    "bucket",
+    "cobblestone",
+    "iron_pickaxe",
+    "flint_and_steel",
+)
 
 
 def _jsonish(value: Any) -> Any:
@@ -216,9 +216,9 @@ def main() -> int:
             "ok": bool(rgb_ok),
             "visual": snap["visual"],
         }
-        report["checks"]["no_equip_in_action_space"] = {
-            "ok": "equip" not in keys,
-            "has_hotbar": all(f"hotbar.{i}" in keys for i in range(1, 10)),
+        report["checks"]["event_level_actions"] = {
+            "ok": not keys or {"equip", "place", "craft"} <= set(keys),
+            "keys": keys,
         }
         report["checks"]["no_prebuilt_portal_visual"] = {
             "ok": portal_frac < 0.01,
@@ -249,18 +249,18 @@ def main() -> int:
             "floor_surface": "grass",
         }
 
-        print("[l1-smoke] hotbar select")
+        print("[l1-smoke] equip by name")
         sys.stdout.flush()
         hotbar_results: dict[str, Any] = {}
         hotbar_ok = True
-        for slot, expected in HOTBAR_EXPECT.items():
-            env.step(Action(type=ActionType.HOTBAR, target=str(slot)))
+        for expected in EQUIP_EXPECT:
+            env.step(Action(type=ActionType.EQUIP, target=expected))
             env.step(Action(type=ActionType.WAIT))
             env.step(Action(type=ActionType.WAIT))
             cur = env.observe()
             selected = cur.selected_item
             matched = selected == expected
-            hotbar_results[f"hotbar.{slot}"] = {
+            hotbar_results[expected] = {
                 "expected": expected,
                 "selected_item": selected,
                 "ok": matched,
@@ -268,13 +268,13 @@ def main() -> int:
             if not matched:
                 hotbar_ok = False
             _save_frame(
-                os.path.join(frames_dir, f"hotbar_{slot}_{expected}.png"),
+                os.path.join(frames_dir, f"equip_{expected}.png"),
                 cur.frame,
             )
-        report["checks"]["E_hotbar"] = {"ok": hotbar_ok, "slots": hotbar_results}
+        report["checks"]["E_equip"] = {"ok": hotbar_ok, "items": hotbar_results}
         report["checks"]["F_selected_item"] = {
             "ok": hotbar_ok,
-            "note": "selected_item tracked EquippedItemObservation after hotbar keys",
+            "note": "selected_item tracked after MineDojo equip-by-name",
         }
 
         print("[l1-smoke] small move")

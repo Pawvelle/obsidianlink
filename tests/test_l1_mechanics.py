@@ -28,14 +28,14 @@ def test_scene_does_not_drawblock_obsidian() -> None:
     assert scene_xml_draws_no_obsidian() is True
 
 
-def test_mechanics_actions_forbid_equip_and_place() -> None:
-    assert ActionType.EQUIP in FORBIDDEN_MECHANICS_TYPES
-    assert ActionType.PLACE in FORBIDDEN_MECHANICS_TYPES
-    assert ActionType.EQUIP not in ALLOWED_MECHANICS_TYPES
+def test_mechanics_actions_forbid_hotbar_and_inventory() -> None:
+    assert ActionType.HOTBAR in FORBIDDEN_MECHANICS_TYPES
+    assert ActionType.INVENTORY in FORBIDDEN_MECHANICS_TYPES
+    assert ActionType.EQUIP in ALLOWED_MECHANICS_TYPES
     assert action_is_mechanics_legal(Action(type=ActionType.USE)) is True
-    assert action_is_mechanics_legal(Action(type=ActionType.HOTBAR, target="2")) is True
-    assert action_is_mechanics_legal(Action(type=ActionType.EQUIP, target="bucket")) is False
-    assert action_is_mechanics_legal(Action(type=ActionType.PLACE, target="cobblestone")) is False
+    assert action_is_mechanics_legal(Action(type=ActionType.EQUIP, target="bucket")) is True
+    assert action_is_mechanics_legal(Action(type=ActionType.PLACE, target="cobblestone")) is True
+    assert action_is_mechanics_legal(Action(type=ActionType.HOTBAR, target="2")) is False
 
 
 def test_scooped_lava_requires_empty_bucket_conversion() -> None:
@@ -90,34 +90,34 @@ def test_new_obsidian_gate_needs_chain_and_visual() -> None:
     assert no_scoop["ok"] is False
 
 
-def test_sneak_use_is_legal_and_does_not_emit_equip() -> None:
-    from obsidianlink.env.minerl import MineRLEnvironment
+def test_sneak_use_is_legal_and_maps_to_minedojo() -> None:
+    from obsidianlink.env.minedojo import MineDojoEnvironment
 
-    keys = (
-        "attack",
-        "back",
-        "camera",
-        "forward",
-        "jump",
-        "left",
-        "right",
-        "sneak",
-        "sprint",
-        "use",
-        "hotbar.1",
-    )
-    translated = MineRLEnvironment._to_minerl_action(
-        Action(type=ActionType.USE, sneak=True), keys
+    no_op = {
+        "attack": 0,
+        "back": 0,
+        "camera": [0.0, 0.0],
+        "forward": 0,
+        "jump": 0,
+        "left": 0,
+        "right": 0,
+        "sneak": 0,
+        "use": 0,
+        "equip": "none",
+        "place": "none",
+    }
+    translated = MineDojoEnvironment._to_minedojo_action(
+        Action(type=ActionType.USE, sneak=True), no_op
     )
     assert translated["use"] == 1
     assert translated["sneak"] == 1
-    assert "equip" not in translated
-    wait = MineRLEnvironment._to_minerl_action(Action(type=ActionType.WAIT), keys)
+    assert translated["equip"] == "none"
+    wait = MineDojoEnvironment._to_minedojo_action(Action(type=ActionType.WAIT), no_op)
     assert wait["sneak"] == 0
-    attack = MineRLEnvironment._to_minerl_action(
-        Action(type=ActionType.ATTACK, sneak=True), keys
+    attack = MineDojoEnvironment._to_minedojo_action(
+        Action(type=ActionType.ATTACK, sneak=True), no_op
     )
     assert attack["attack"] == 1
     assert attack["sneak"] == 1
     assert attack["use"] == 0
-    assert "equip" not in attack
+    assert attack["equip"] == "none"

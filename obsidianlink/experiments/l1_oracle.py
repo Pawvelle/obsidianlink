@@ -5,7 +5,7 @@ evaluator-only ``location_stats`` for scripted navigation/aiming, and a
 hard-coded reference portal geometry (``obsidianlink.tasks.portal``).
 It must still change the world only through the same legal Minecraft
 action interface a future Agent can use: MOVE / CAMERA / USE / ATTACK /
-HOTBAR / WAIT (+ sneak). No DrawBlock portal, world editing, command,
+EQUIP / WAIT (+ sneak). No DrawBlock portal, world editing, command,
 teleport, or inventory injection.
 
 Builds on the mechanics already proven live in
@@ -187,7 +187,7 @@ class OracleSession:
         _save_frame(os.path.join(self.frames_dir, name), self.env.observe().frame)
 
     def step(self, action: Action) -> dict[str, Any]:
-        if action.type in (ActionType.EQUIP, ActionType.PLACE):
+        if action.type in (ActionType.HOTBAR, ActionType.INVENTORY):
             raise RuntimeError(f"{action.type} is forbidden for the Oracle")
         if self.aborted:
             # Never re-enter env.step() on a finished/broken episode: that
@@ -263,7 +263,10 @@ class OracleSession:
         return snap
 
     def hotbar(self, slot: str) -> dict[str, Any]:
-        self.step(Action(type=ActionType.HOTBAR, target=slot))
+        from obsidianlink.env.l1_scene import l1_equip_target
+
+        inventory = dict(self.snap().get("inventory") or {})
+        self.step(Action(type=ActionType.EQUIP, target=l1_equip_target(slot, inventory)))
         return self.wait(1)
 
     def use(self, ticks: int = 3, *, sneak: bool = False) -> dict[str, Any]:

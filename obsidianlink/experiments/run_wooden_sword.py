@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -26,7 +25,7 @@ from obsidianlink.agents.planner import LLMSkillPlanner, PlannerDecision
 from obsidianlink.controller.minecraft_controller import MinecraftController
 from obsidianlink.env.environment import Observation
 from obsidianlink.env.live_view import DisplayEpisodeLogger, LiveDesktopView, LiveProcessBoard
-from obsidianlink.env.survival import SurvivalIronSwordEnv, wooden_sword_count
+from obsidianlink.env.survival import SurvivalEnv, WOODEN_SWORD_TASK_ID, wooden_sword_count
 from obsidianlink.models.minimax_client import MiniMaxClient
 from obsidianlink.models.qwen_client import QwenLLMClient, default_qwen_model_path
 
@@ -108,14 +107,6 @@ class VisiblePlanner:
         return decision
 
 
-def _ensure_runtime_env() -> None:
-    os.environ.setdefault("JAVA_HOME", "/opt/anaconda3/envs/mc-agent")
-    conda_bin = "/opt/anaconda3/envs/mc-agent/bin"
-    path = os.environ.get("PATH", "")
-    if conda_bin not in path.split(":"):
-        os.environ["PATH"] = f"{conda_bin}:{path}"
-
-
 def _make_client(backend: str, model_path: Path):
     if backend == "minimax":
         return MiniMaxClient(timeout_s=120.0, max_tokens=1024)
@@ -134,9 +125,8 @@ def run_wooden_sword(
     backend: str,
     model_path: Path,
 ) -> dict[str, Any]:
-    _ensure_runtime_env()
     output_dir.mkdir(parents=True, exist_ok=True)
-    live_env = SurvivalIronSwordEnv()
+    live_env = SurvivalEnv(WOODEN_SWORD_TASK_ID)
     view = LiveDesktopView(live_env)
     board = LiveProcessBoard(view=view)
     client = _make_client(backend, model_path)

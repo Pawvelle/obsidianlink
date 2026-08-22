@@ -39,12 +39,14 @@ _FILLER_ITEMS = _DIRT_ITEMS | frozenset({"sand", "red_sand", "gravel", "clay"})
 _IRON_TERMS = frozenset({"iron", "sword", "ingot", "ore"})
 _IRON_PATH_ITEMS = frozenset(
     {
+        "log",
         "oak_log",
         "birch_log",
         "spruce_log",
         "jungle_log",
         "acacia_log",
         "dark_oak_log",
+        "planks",
         "oak_planks",
         "birch_planks",
         "spruce_planks",
@@ -124,19 +126,20 @@ def _missing_prerequisite(
         selected = observation.selected_item
     if selected is None:
         selected = memory.selected_item
-    if decision.name == "place_block" and not selected:
+    place_item = str(decision.arguments.get("item") or decision.arguments.get("target") or "").strip()
+    if decision.name == "place_block" and not selected and not place_item:
         return ValidationResult(
             False,
             "place_block is missing a selected item",
             "missing_prerequisite",
         )
     inventory = dict((observation.inventory if observation is not None else None) or memory.inventory)
-    if decision.name == "crafting_action" and not inventory:
+    if decision.name == "craft" and not inventory:
         subgoal = (decision.subgoal or memory.current_subgoal or "").casefold()
         if any(term in subgoal for term in _WOOD_TERMS | _IRON_TERMS | {"collect", "mine", "find"}):
             return ValidationResult(
                 False,
-                "crafting_action has no inventory materials for the current gather subgoal",
+                "craft has no inventory materials for the current gather subgoal",
                 "missing_prerequisite",
             )
     return None

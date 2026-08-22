@@ -42,20 +42,19 @@ def test_fake_env_attack_does_nothing_until_agent_approaches() -> None:
     assert env.observe().inventory == {"cobblestone": 1}
 
 
-def test_fake_env_hotbar_select_place_and_inventory_craft() -> None:
+def test_fake_env_equip_place_and_named_craft() -> None:
     env = FakeMinecraftEnv(
         inventory={"oak_log": 1, "cobblestone": 1},
         hotbar=["oak_log", "cobblestone"],
         remaining=0,
     )
     env.reset()
-    env.step(Action(ActionType.HOTBAR, target="2"))
+    env.step(Action(ActionType.EQUIP, target="cobblestone"))
     assert env.observe().selected_item == "cobblestone"
-    env.step(Action(ActionType.USE, sneak=True))
+    env.step(Action(ActionType.PLACE, target="cobblestone", sneak=True))
     assert env.observe().inventory == {"oak_log": 1}
 
-    env.step(Action(ActionType.INVENTORY))
-    env.step(Action(ActionType.ATTACK))
+    env.step(Action(ActionType.CRAFT, target="planks"))
     assert env.observe().inventory.get("oak_planks") == 4
     assert "oak_log" not in (env.observe().inventory or {})
 

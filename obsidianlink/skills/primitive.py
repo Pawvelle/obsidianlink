@@ -118,22 +118,29 @@ class InteractSkill:
         return _finish(controller, memory, start, "used selected item once")
 
 
-class SelectHotbarSkill:
-    name = "select_hotbar"
-    description = "Select one hotbar slot. arguments: slot=1..9."
+class EquipItemSkill:
+    name = "equip_item"
+    description = (
+        "Equip one inventory item by name. arguments: item=<inventory item>, "
+        "for example wooden_sword or crafting_table."
+    )
 
     def execute(self, controller, memory, arguments):
-        slot = bounded_int(arguments.get("slot"), default=1, minimum=1, maximum=9)
+        item = str(arguments.get("item") or arguments.get("target") or "").strip()
         start = controller.steps
+        if not item:
+            return SkillResult(False, "equip_item requires item", 0)
         if controller.exhausted:
             return _finish(controller, memory, start, "controller step budget exhausted", success=False)
-        controller.step(Action(ActionType.HOTBAR, target=str(slot)))
+        controller.step(Action(ActionType.EQUIP, target=item))
+        selected = controller.observe().selected_item
         return _finish(
             controller,
             memory,
             start,
-            f"selected hotbar slot {slot}",
-            metadata={"slot": slot, "selected_item": controller.observe().selected_item},
+            f"equipped {item}",
+            success=selected == item,
+            metadata={"item": item, "selected_item": selected},
         )
 
 
@@ -159,76 +166,85 @@ class InspectInventorySkill:
 class PlaceBlockSkill:
     name = "place_block"
     description = (
-        "Place/use the currently selected block once against the crosshair target. "
-        "arguments: sneak=true|false. Select the hotbar item separately."
+        "Place one named inventory block at the crosshair. arguments: "
+        "item=<block name>, sneak=true|false. If item is omitted, uses the equipped item."
     )
 
     def execute(self, controller, memory, arguments):
         start = controller.steps
+        item = str(arguments.get("item") or arguments.get("target") or "").strip()
         selected = controller.observe().selected_item
-        if not selected:
-            return _finish(controller, memory, start, "no selected item to place", success=False)
+        target = item or selected
+        if not target:
+            return _finish(controller, memory, start, "no item to place", success=False)
         if controller.exhausted:
             return _finish(controller, memory, start, "controller step budget exhausted", success=False)
-        controller.step(Action(ActionType.USE, sneak=bool(arguments.get("sneak", True))))
+        controller.step(
+            Action(
+                ActionType.PLACE,
+                target=target,
+                sneak=bool(arguments.get("sneak", True)),
+            )
+        )
         return _finish(
             controller,
             memory,
             start,
-            f"attempted one placement with {selected}",
-            metadata={"selected_item": selected},
+            f"attempted one placement with {target}",
+            metadata={"item": target},
         )
 
 
-class CraftingActionSkill:
-    name = "crafting_action"
+class CraftSkill:
+    name = "craft"
     description = (
-        "One primitive inventory/crafting GUI action. arguments: "
-        "operation=toggle|left_click|right_click; x=0..639 and y=0..359 for clicks."
+        "Craft one named item through MineDojo's recipe command. arguments: "
+        "item=<recipe output>, table=true when a placed crafting table is required."
     )
 
-    def __init__(self) -> None:
-        self._cursor = (320, 180)
-
     def execute(self, controller, memory, arguments):
-        operation = str(arguments.get("operation", "toggle")).strip().lower()
+        item = str(arguments.get("item") or arguments.get("target") or "").strip()
         start = controller.steps
+        if not item:
+            return SkillResult(False, "craft requires item", 0)
         if controller.exhausted:
             return _finish(controller, memory, start, "controller step budget exhausted", success=False)
-        if operation == "toggle":
-            controller.step(Action(ActionType.INVENTORY))
-            self._cursor = (320, 180)
-        elif operation in {"left_click", "right_click"}:
-            x = bounded_int(arguments.get("x"), default=320, minimum=0, maximum=639)
-            y = bounded_int(arguments.get("y"), default=180, minimum=0, maximum=359)
-            old_x, old_y = self._cursor
-            controller.step(
-                Action(
-                    ActionType.CAMERA,
-                    yaw=(x - old_x) / (2400.0 / 360.0),
-                    pitch=(y - old_y) / (2400.0 / 360.0),
-                )
-            )
-            if controller.exhausted:
-                return _finish(
-                    controller,
-                    memory,
-                    start,
-                    "controller budget ended before crafting click",
-                    success=False,
-                    metadata={"operation": operation, "cursor": (x, y)},
-                )
-            click = ActionType.ATTACK if operation == "left_click" else ActionType.USE
-            controller.step(Action(click))
-            self._cursor = (x, y)
-        else:
-            return SkillResult(False, f"invalid crafting operation: {operation}", 0)
+        target = f"table:{item}" if arguments.get("table") else item
+        before = dict(controller.observe().inventory or {})
+        controller.step(Action(ActionType.CRAFT, target=target))
+        after = dict(controller.observe().inventory or {})
+        gained = int(after.get(item, 0) or 0) > int(before.get(item, 0) or 0)
         return _finish(
             controller,
             memory,
             start,
-            f"crafting GUI action executed: {operation}",
-            metadata={"operation": operation, "cursor": self._cursor},
+            f"crafted {item}" if gained else f"crafted {item} but inventory unchanged",
+            success=gained,
+            metadata={"item": item, "inventory_before": before, "inventory_after": after},
+        )
+
+
+class SmeltSkill:
+    name = "smelt"
+    description = (
+        "Smelt one named item at a placed furnace. arguments: item=<input or output>, "
+        "for example iron_ingot."
+    )
+
+    def execute(self, controller, memory, arguments):
+        item = str(arguments.get("item") or arguments.get("target") or "").strip()
+        start = controller.steps
+        if not item:
+            return SkillResult(False, "smelt requires item", 0)
+        if controller.exhausted:
+            return _finish(controller, memory, start, "controller step budget exhausted", success=False)
+        controller.step(Action(ActionType.SMELT, target=item))
+        return _finish(
+            controller,
+            memory,
+            start,
+            f"attempted smelt {item}",
+            metadata={"item": item},
         )
 
 
@@ -249,12 +265,13 @@ class WaitSkill:
 
 __all__ = [
     "AttackSkill",
-    "CraftingActionSkill",
+    "CraftSkill",
+    "EquipItemSkill",
     "InspectInventorySkill",
     "InteractSkill",
     "LookSkill",
     "MoveSkill",
     "PlaceBlockSkill",
-    "SelectHotbarSkill",
+    "SmeltSkill",
     "WaitSkill",
 ]

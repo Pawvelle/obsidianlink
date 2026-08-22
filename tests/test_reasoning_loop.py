@@ -1,4 +1,4 @@
-"""Offline GeneralAgent reasoning loop on FakeMinecraftEnv. No MineRL."""
+"""Offline GeneralAgent reasoning loop on FakeMinecraftEnv. No Minecraft process."""
 
 from __future__ import annotations
 

@@ -55,6 +55,7 @@ def test_planner_prompt_exposes_observation_memory_and_subgoal_loop() -> None:
     assert "recent_failures" in prompt
     assert "wiki_knowledge" in prompt
     assert "Current grounded observation" in prompt
+    assert "Inspect it directly for goal-relevant objects" in prompt
     assert '"has_visual_frame": true' in prompt
     assert '"dirt": 1' in prompt
     assert "secret" not in prompt
@@ -127,3 +128,50 @@ def test_planner_retries_once_when_first_response_is_not_json() -> None:
     assert decision.name == "wait"
     assert planner.model_calls == 2
     assert "not a valid planner JSON" in client.prompts[1]
+
+
+class _VisionMemoryClient(BaseLLMClient):
+    def __init__(self) -> None:
+        self.frames: list[object] = []
+
+    def generate(self, prompt: str) -> str:
+        raise AssertionError("a frame should use the vision path")
+
+    def generate_with_vision(self, prompt: str, *, frame: object) -> str:
+        self.frames.append(frame)
+        return '{"type":"memory","query":"where is a tree"}'
+
+
+def test_planner_scans_when_visual_cold_start_requests_empty_memory() -> None:
+    client = _VisionMemoryClient()
+    planner = LLMSkillPlanner(client, use_vision=True, allow_wiki=False)
+    memory = AgentMemory()
+    memory.reset("Find a tree and obtain one log")
+    memory.retrieve_for_decision()
+    frame = object()
+
+    decision = planner.plan(
+        memory,
+        Observation(frame=frame),
+        {"look": "Primitive camera turn."},
+    )
+
+    assert client.frames == [frame]
+    assert decision.type == "skill"
+    assert decision.name == "look"
+    assert decision.arguments == {"yaw": 45.0, "pitch": 0.0}
+    assert "empty memory" in decision.reason
+
+
+def test_planner_restarts_visual_scan_for_a_new_task() -> None:
+    client = _VisionMemoryClient()
+    planner = LLMSkillPlanner(client, use_vision=True, allow_wiki=False)
+    frame = object()
+    for goal in ("Find a tree", "Find stone"):
+        memory = AgentMemory()
+        memory.reset(goal)
+        memory.retrieve_for_decision()
+        decision = planner.plan(
+            memory, Observation(frame=frame), {"look": "Primitive camera turn."}
+        )
+        assert decision.arguments["yaw"] == 45.0

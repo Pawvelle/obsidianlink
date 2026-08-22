@@ -53,11 +53,11 @@ def test_generate_stores_raw_response() -> None:
     assert client.last_raw_response == payload
     assert client.last_text == text
     assert client.last_error is None
-    assert client.model == "MiniMax-M3"
+    assert client.model == "MiniMax-M2.7"
     assert client.url == CHINA_URL
     assert seen["url"] == CHINA_URL
     assert seen["headers"]["Authorization"] == "Bearer sk-test-not-real"
-    assert seen["body"]["model"] == "MiniMax-M3"
+    assert seen["body"]["model"] == "MiniMax-M2.7"
     assert seen["body"]["messages"] == [{"role": "user", "content": "hello"}]
     assert seen["body"]["max_tokens"] == 256
 
@@ -160,25 +160,11 @@ def test_redact() -> None:
     assert redact("token sk-abc used", "sk-abc") == "token <redacted> used"
 
 
-def test_generate_with_vision_sends_image_url() -> None:
-    from PIL import Image
-
-    seen: dict[str, object] = {}
-    frame = Image.new("RGB", (12, 8), color=(10, 20, 30))
-
-    def transport(url, headers, body, timeout_s):
-        seen["url"] = url
-        seen["body"] = dict(body)
-        del headers, timeout_s
-        return {"choices": [{"message": {"content": '{"action": "wait"}'}}]}
-
-    client = MiniMaxClient(api_key="sk-test-not-real", transport=transport)
-    text = client.generate_with_vision("look", frame=frame)
-    assert text == '{"action": "wait"}'
-    content = seen["body"]["messages"][0]["content"]
-    assert content[0] == {"type": "text", "text": "look"}
-    assert content[1]["type"] == "image_url"
-    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+def test_generate_with_vision_is_rejected_for_text_only_endpoint() -> None:
+    client = MiniMaxClient(api_key="sk-test-not-real")
+    assert client.supports_vision is False
+    with pytest.raises(ValueError, match="does not support image input"):
+        client.generate_with_vision("look", frame=object())
 
 
 def test_api_error_object_in_200_body() -> None:

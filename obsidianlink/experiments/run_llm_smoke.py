@@ -1,7 +1,7 @@
 """First live LLM embodied-control smoke.
 
 Not a Nether Portal attempt. The prompt only asks the model to look,
-move, select a hotbar slot, and optionally USE or WAIT.
+move, equip one inventory item, and optionally USE or WAIT.
 
 Does not modify Environment / Evaluator / Oracle / Task.
 
@@ -26,13 +26,13 @@ from obsidianlink.env.environment import Environment, Observation
 from obsidianlink.models.minimax_client import MiniMaxClient, redact
 
 _RUNS_DIR = os.path.join(os.path.dirname(__file__), "runs")
-_FORBIDDEN = frozenset({ActionType.EQUIP, ActionType.PLACE})
+_FORBIDDEN = frozenset({ActionType.HOTBAR, ActionType.INVENTORY})
 
 SMOKE_GOAL = (
     "This is an interface smoke test, NOT a Nether Portal task. "
     "Do not build a portal and do not try to enter the Nether. "
     "Over a few steps: (1) look around with camera, (2) move a little, "
-    "(3) select a hotbar slot from 1 to 5, (4) optionally USE once or WAIT. "
+    "(3) equip one inventory item by name, (4) optionally USE once or WAIT. "
     "Prefer simple legal JSON. One action per response."
 )
 

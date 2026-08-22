@@ -1,9 +1,7 @@
 """L1 Evaluator handler-wiring smoke test.
 
-Confirms, on live MineRL 1.0.2 / MCP-Reborn, that the evaluator-only
-truth channels wired into ``MineRLL1Controlled-v0``
-(``RewardForTouchingBlockType(nether_portal)`` reward and
-``biome_id``/``can_see_sky`` from ``ObservationFromCurrentLocation``) are
+Confirms, on live MineDojo, that evaluator-only location channels
+(``xpos``/``ypos``/``zpos``/``biome_id`` from ``location_stats``) are
 present in ``hidden_state`` without changing the Agent-visible
 Observation contract. This is not an Oracle or L1 Agent run.
 

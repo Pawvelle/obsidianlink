@@ -21,8 +21,16 @@ class RecordingEnv(Environment):
 
     def step(self, action: Action) -> Observation:
         self.actions.append(action)
-        if action.type is ActionType.HOTBAR:
-            self.last = Observation(inventory={"cobblestone": 2}, selected_item="stick")
+        if action.type is ActionType.EQUIP:
+            self.last = Observation(
+                inventory={"cobblestone": 2, "stick": 1},
+                selected_item=action.target or "stick",
+            )
+        elif action.type is ActionType.CRAFT:
+            item = action.target.split(":", 1)[-1]
+            inventory = dict(self.last.inventory or {})
+            inventory[item] = inventory.get(item, 0) + 1
+            self.last = Observation(inventory=inventory, selected_item=self.last.selected_item)
         return self.last
 
     def close(self) -> None:
@@ -45,10 +53,11 @@ def test_default_library_contains_only_primitive_capabilities() -> None:
         "look",
         "attack",
         "interact",
-        "select_hotbar",
+        "equip_item",
         "inspect_inventory",
         "place_block",
-        "crafting_action",
+        "craft",
+        "smelt",
         "wait",
     }
     assert names.isdisjoint({"collect_wood", "craft_item", "explore_area", "build_structure"})
@@ -87,34 +96,26 @@ def test_inventory_inspection_has_no_environment_side_effect() -> None:
     assert env.actions == []
 
 
-def test_select_then_place_uses_two_separate_primitives() -> None:
+def test_equip_then_place_uses_named_item_commands() -> None:
     controller, env, memory = _controller()
     skills = default_skill_library()
 
-    skills.execute("select_hotbar", controller, memory, {"slot": 4})
+    skills.execute("equip_item", controller, memory, {"item": "cobblestone"})
     result = skills.execute("place_block", controller, memory, {"sneak": True})
 
     assert result.success is True
-    assert [a.type for a in env.actions] == [ActionType.HOTBAR, ActionType.USE]
+    assert [a.type for a in env.actions] == [ActionType.EQUIP, ActionType.PLACE]
+    assert env.actions[0].target == "cobblestone"
+    assert env.actions[-1].target == "cobblestone"
     assert env.actions[-1].sneak is True
 
 
-def test_crafting_action_performs_only_one_gui_operation() -> None:
+def test_craft_emits_one_named_recipe_command() -> None:
     controller, env, memory = _controller()
     skills = default_skill_library()
 
-    opened = skills.execute("crafting_action", controller, memory, {"operation": "toggle"})
-    clicked = skills.execute(
-        "crafting_action",
-        controller,
-        memory,
-        {"operation": "left_click", "x": 330, "y": 116},
-    )
+    result = skills.execute("craft", controller, memory, {"item": "stick"})
 
-    assert opened.steps == 1
-    assert clicked.steps == 2
-    assert [a.type for a in env.actions] == [
-        ActionType.INVENTORY,
-        ActionType.CAMERA,
-        ActionType.ATTACK,
-    ]
+    assert result.success is True
+    assert [a.type for a in env.actions] == [ActionType.CRAFT]
+    assert env.actions[0].target == "stick"

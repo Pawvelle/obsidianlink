@@ -140,11 +140,11 @@ def test_move_forward_skill_executes_bounded_minecraft_actions() -> None:
 
 
 def test_attack_action_can_approach_and_interact_in_same_tick() -> None:
-    from obsidianlink.env.minerl import MineRLEnvironment
+    from obsidianlink.env.minedojo import MineDojoEnvironment
 
-    translated = MineRLEnvironment._to_minerl_action(
+    translated = MineDojoEnvironment._to_minedojo_action(
         Action(ActionType.ATTACK, dx=1, jump=True),
-        ("attack", "forward", "back", "jump"),
+        {"attack": 0, "forward": 0, "back": 0, "jump": 0},
     )
     assert translated["attack"] == 1
     assert translated["forward"] == 1

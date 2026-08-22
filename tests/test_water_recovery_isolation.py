@@ -5,7 +5,7 @@ Does not start Minecraft. Live evidence is
 """
 
 from obsidianlink.env.actions import Action, ActionType
-from obsidianlink.env.minerl import MineRLEnvironment
+from obsidianlink.env.minedojo import MineDojoEnvironment
 from obsidianlink.experiments.run_water_recovery_isolation import (
     analyze_window,
     consecutive_water_bucket_run,
@@ -13,24 +13,22 @@ from obsidianlink.experiments.run_water_recovery_isolation import (
 )
 
 
-_L1_KEYS = (
-    "attack",
-    "back",
-    "camera",
-    "forward",
-    "jump",
-    "left",
-    "right",
-    "sneak",
-    "sprint",
-    "use",
-    "hotbar.1",
-    "hotbar.2",
-)
+_NO_OP = {
+    "attack": 0,
+    "back": 0,
+    "camera": [0.0, 0.0],
+    "forward": 0,
+    "jump": 0,
+    "left": 0,
+    "right": 0,
+    "sneak": 0,
+    "use": 0,
+    "equip": "none",
+}
 
 
-def test_wait_maps_use_zero_on_l1_keys() -> None:
-    mapped = MineRLEnvironment._to_minerl_action(Action(type=ActionType.WAIT), _L1_KEYS)
+def test_wait_maps_use_zero_on_minedojo_keys() -> None:
+    mapped = MineDojoEnvironment._to_minedojo_action(Action(type=ActionType.WAIT), _NO_OP)
     assert mapped["use"] == 0
     assert mapped["attack"] == 0
     assert mapped["forward"] == 0

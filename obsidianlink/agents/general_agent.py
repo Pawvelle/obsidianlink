@@ -109,7 +109,7 @@ class GeneralAgent:
         self._consecutive_execution_failures = 0
         self._failure_subgoal = ""
 
-    def run(self, task: str) -> GeneralAgentResult:
+    def run(self, task: str, *, reset_environment: bool = True) -> GeneralAgentResult:
         """Run Task → Plan → Subgoal → Memory/Wiki/Skill → Observation updates."""
         task = task.strip()
         if not task:
@@ -121,9 +121,12 @@ class GeneralAgent:
         self._consecutive_execution_failures = 0
         self._failure_subgoal = ""
         try:
-            observation = self.controller.reset()
+            observation = (
+                self.controller.reset() if reset_environment else self.controller.observe()
+            )
         except Exception as exc:
-            reason = f"environment reset failed: {type(exc).__name__}: {exc}"
+            operation = "reset" if reset_environment else "observe existing environment"
+            reason = f"environment {operation} failed: {type(exc).__name__}: {exc}"
             self.memory.record_failure(source="environment", message=reason)
             return self._result(task, False, reason, 0)
         self.memory.update_state(observation, local_view=self.controller.local_view())

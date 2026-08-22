@@ -82,7 +82,7 @@ def test_l1_equip_items_include_lava_bucket_for_selected_item() -> None:
 
 
 def test_l1_env_id_is_stable() -> None:
-    assert L1_ENV_ID == "MineRLL1Controlled-v0"
+    assert L1_ENV_ID == "minedojo_l1_portal"
 
 
 def test_l1_env_instantiation_does_not_start_jvm() -> None:
@@ -93,46 +93,19 @@ def test_l1_env_instantiation_does_not_start_jvm() -> None:
     assert env._env._env is None  # noqa: SLF001
 
 
-def test_register_l1_spec_is_idempotent() -> None:
-    from obsidianlink.env.l1_scene import register_l1_spec
+def test_l1_equip_target_maps_legacy_slots() -> None:
+    from obsidianlink.env.l1_scene import l1_equip_target
 
-    first = register_l1_spec()
-    second = register_l1_spec()
-    assert first == second == L1_ENV_ID
-
-
-def test_l1_spec_has_hotbar_and_no_equip() -> None:
-    from obsidianlink.env.l1_scene import _REGISTERED_SPECS, register_l1_spec
-
-    register_l1_spec()
-    spec = _REGISTERED_SPECS[L1_ENV_ID]
-    names = {h.to_string() for h in spec.actionables}
-    assert "equip" not in names
-    assert "place" not in names
-    assert "use" in names
-    for i in range(1, 10):
-        assert f"hotbar.{i}" in names
-    obs_names = {h.to_string() for h in spec.observables}
-    assert "pov" in obs_names
-    assert "inventory" in obs_names
-    assert "equipped_items" in obs_names
-    assert not any("grid" in n.lower() for n in obs_names)
-    equipped = [h for h in spec.observables if h.to_string() == "equipped_items"][0]
-    assert "lava_bucket" in equipped._items
+    assert l1_equip_target("1") == "water_bucket"
+    assert l1_equip_target("2") == "bucket"
+    assert l1_equip_target("2", {"lava_bucket": 1}) == "lava_bucket"
+    assert l1_equip_target("hotbar.4") == "iron_pickaxe"
+    assert l1_equip_target("flint_and_steel") == "flint_and_steel"
 
 
-def test_l1_spec_has_evaluator_only_portal_touch_reward() -> None:
-    from obsidianlink.env.l1_scene import _REGISTERED_SPECS, register_l1_spec
+def test_l1_observation_contract_excludes_reward() -> None:
+    from obsidianlink.env.environment import observation_field_names
 
-    register_l1_spec()
-    spec = _REGISTERED_SPECS[L1_ENV_ID]
-    names = {h.to_string() for h in spec.rewardables}
-    assert names == {"reward_for_touching_block_type"}
-    handler = next(iter(spec.rewardables))
-    assert handler.blocks == [
-        {"type": "nether_portal", "behaviour": "onceOnly", "reward": 1.0}
-    ]
-    # Reward is a gym step() return value, not an observable: it must
-    # never appear alongside RGB/inventory/selected_item.
-    obs_names = {h.to_string() for h in spec.observables}
-    assert "reward" not in obs_names
+    assert "x" in observation_field_names()
+    assert "reward" not in observation_field_names()
+    assert "biome_id" not in observation_field_names()

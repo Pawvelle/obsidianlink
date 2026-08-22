@@ -1,7 +1,8 @@
 """Minimal Agent interface: Observation in, Action out.
 
-Evaluator-only truth (hidden_state, pose, reward, biome) must never be
-an argument here. Keep this module small — no planner, no framework.
+Evaluator-only truth (hidden_state, reward, biome) must never be an
+argument here. Pose is already on ``Observation``. Keep this module
+small — no planner, no framework.
 """
 
 from __future__ import annotations

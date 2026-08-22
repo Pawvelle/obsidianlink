@@ -40,7 +40,7 @@ from obsidianlink.env.scene import (
     courtyard_xml,
 )
 
-ENV_ID = "MineRLL1Spike-v0"
+ENV_ID = "minedojo_l1_spike"
 N_LAVA = 14
 INV_ITEMS = [
     "air",
@@ -62,127 +62,51 @@ EQUIP_ITEMS = [
 _RUNS_DIR = os.path.join(os.path.dirname(__file__), "runs")
 
 
-def register_spike_spec(*, name: str = ENV_ID, portal_reward: bool = True) -> str:
-    import gym  # type: ignore[import-untyped]
-    from minerl.herobraine.env_specs.treechop_specs import Treechop
-    from minerl.herobraine.hero import handlers
-    from minerl.herobraine.hero.handler import Handler
-    from minerl.herobraine.hero.mc import INVERSE_KEYMAP
+_SPIKE_SLOT_ITEMS = {
+    1: "water_bucket",
+    2: "lava_bucket",
+    3: "lava_bucket",
+    4: "lava_bucket",
+    5: "lava_bucket",
+    6: "lava_bucket",
+    7: "lava_bucket",
+    8: "lava_bucket",
+    9: "flint_and_steel",
+}
 
-    class _SafeDrawingDecorator(handlers.DrawingDecorator):
-        def xml_template(self) -> str:
-            return """<DrawingDecorator>{{ to_draw | safe }}</DrawingDecorator>"""
 
-    class L1SpikeSpec(Treechop):
-        _portal_reward = portal_reward
+def _spike_inventory() -> list[dict[str, Any]]:
+    items = [{"slot": 0, "name": "water_bucket", "quantity": 1}]
+    for index in range(7):
+        items.append({"slot": index + 1, "name": "lava_bucket", "quantity": 1})
+    items.append({"slot": 8, "name": "flint_and_steel", "quantity": 1})
+    for index in range(7):
+        items.append({"slot": 9 + index, "name": "lava_bucket", "quantity": 1})
+    return items
 
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            kwargs.setdefault("name", name)
-            kwargs.setdefault("resolution", RESOLUTION)
-            super().__init__(*args, **kwargs)
 
-        def create_server_world_generators(self) -> list:
-            return [
-                handlers.FlatWorldGenerator(
-                    force_reset=True, generatorString=FLAT_WORLD
-                )
-            ]
+def make_spike_env() -> Any:
+    from obsidianlink.env.minedojo import MineDojoEnvironment
 
-        def create_server_decorators(self) -> list:
-            # Obsidian courtyard only. lava_present=False → no lava patch,
-            # and courtyard_xml never draws a portal frame.
-            return [_SafeDrawingDecorator(courtyard_xml(lava_present=False))]
-
-        def create_server_initial_conditions(self) -> list:
-            return [
-                handlers.TimeInitialCondition(
-                    allow_passage_of_time=False, start_time=6000
-                ),
-                handlers.SpawningInitialCondition(allow_spawning=False),
-                handlers.WeatherInitialCondition(weather="clear"),
-            ]
-
-        def create_agent_start(self) -> list:
-            # Hotbar 1=water, 2-8=lava, 9=flint. Remaining lava is off-hotbar.
-            # EquipAction cannot be used on this stack (see create_actionables).
-            inventory: dict[int, dict[str, Any]] = {
-                0: {"type": "water_bucket", "quantity": 1},
-            }
-            for i in range(7):
-                inventory[i + 1] = {"type": "lava_bucket", "quantity": 1}
-            inventory[8] = {"type": "flint_and_steel", "quantity": 1}
-            for i in range(7):
-                inventory[9 + i] = {"type": "lava_bucket", "quantity": 1}
-            return [
-                handlers.GuiScale(1.0),
-                handlers.GammaSetting(2.0),
-                handlers.FOVSetting(70.0),
-                handlers.FakeCursorSize(0),
-                handlers.AgentStartPlacement(
-                    x=PLAYER_X,
-                    y=PLAYER_Y,
-                    z=PLAYER_Z,
-                    yaw=PLAYER_YAW,
-                    pitch=PLAYER_PITCH,
-                ),
-                handlers.InventoryAgentStart(inventory),
-            ]
-
-        def create_observables(self) -> list:
-            return [
-                handlers.POVObservation(self.resolution),
-                handlers.FlatInventoryObservation(list(INV_ITEMS)),
-                handlers.EquippedItemObservation(list(EQUIP_ITEMS), mainhand=True),
-            ]
-
-        def create_actionables(self) -> list:
-            # EquipAction cannot be used on this MineRL 1.0.2 / MCP-Reborn stack.
-            # no_op sends ``equip none``; constructKeyboardState does
-            # Integer.parseInt("none") and kills the episode.
-            acts = super().create_actionables()
-            names = {a.to_string() for a in acts}
-            if "use" not in names:
-                acts.append(
-                    handlers.KeybasedCommandAction("use", INVERSE_KEYMAP["use"])
-                )
-            for i in range(1, 10):
-                key = f"hotbar.{i}"
-                if key not in names:
-                    acts.append(handlers.KeybasedCommandAction(key, str(i)))
-            return acts
-
-        def create_monitors(self) -> list:
-            return [handlers.ObservationFromCurrentLocation()]
-
-        def create_rewardables(self) -> list:
-            if not self._portal_reward:
-                return []
-            # Evaluator-side candidate. Isolated from NavigationDecorator.
-            return [
-                handlers.RewardForTouchingBlockType(
-                    [
-                        {
-                            "type": "nether_portal",
-                            "behaviour": "onceOnly",
-                            "reward": 10.0,
-                        }
-                    ]
-                )
-            ]
-
-        def create_agent_handlers(self) -> list:
-            return []
-
-        def create_server_quit_producers(self) -> list[Handler]:
-            return [
-                handlers.ServerQuitFromTimeUp(400000),
-                handlers.ServerQuitWhenAnyAgentFinishes(),
-            ]
-
-    spec = L1SpikeSpec()
-    if spec.name not in gym.envs.registry.env_specs:
-        spec.register()
-    return spec.name
+    return MineDojoEnvironment(
+        "open-ended",
+        image_size=RESOLUTION,
+        generate_world_type="flat",
+        flat_world_seed_string=FLAT_WORLD,
+        drawing_str=courtyard_xml(lava_present=False),
+        initial_inventory=_spike_inventory(),
+        start_position={
+            "x": PLAYER_X,
+            "y": PLAYER_Y,
+            "z": PLAYER_Z,
+            "yaw": PLAYER_YAW,
+            "pitch": PLAYER_PITCH,
+        },
+        allow_time_passage=False,
+        allow_mob_spawn=False,
+        initial_weather="clear",
+        start_time=6000,
+    )
 
 
 def _scalar(value: Any) -> float | None:
@@ -225,6 +149,8 @@ def _inventory_sane(inv: dict[str, int]) -> bool:
 
 
 def _inventory_counts(obs: Any) -> dict[str, int]:
+    if hasattr(obs, "inventory"):
+        return {str(name): int(qty) for name, qty in dict(obs.inventory or {}).items()}
     inv = obs.get("inventory") if isinstance(obs, dict) else None
     if not isinstance(inv, dict):
         return {}
@@ -240,6 +166,8 @@ def _inventory_counts(obs: Any) -> dict[str, int]:
 
 
 def _equipped_mainhand(obs: Any) -> str | None:
+    if hasattr(obs, "selected_item"):
+        return obs.selected_item
     if not isinstance(obs, dict):
         return None
     eq = obs.get("equipped_items")
@@ -309,13 +237,15 @@ def _region_scores(frame: Any) -> dict[str, float]:
 
 
 def snapshot(obs: Any, info: Any, reward: float | None = None) -> dict[str, Any]:
-    frame = obs.get("pov") if isinstance(obs, dict) else None
+    frame = getattr(obs, "frame", None)
+    if frame is None and isinstance(obs, dict):
+        frame = obs.get("pov")
     out: dict[str, Any] = {
-        "obs_keys": sorted(obs.keys()) if isinstance(obs, dict) else [],
+        "obs_keys": ["frame", "inventory", "selected_item"],
         "info_keys": sorted(info.keys()) if isinstance(info, dict) else [],
         "inventory": _inventory_counts(obs),
         "equipped": _equipped_mainhand(obs),
-        "location": _location(obs, info),
+        "location": _location(info, info),
         "visual": _region_scores(frame),
     }
     if reward is not None:
@@ -324,7 +254,9 @@ def snapshot(obs: Any, info: Any, reward: float | None = None) -> dict[str, Any]
 
 
 def save_frame(path: str, obs: Any) -> None:
-    frame = obs.get("pov") if isinstance(obs, dict) else None
+    frame = getattr(obs, "frame", None)
+    if frame is None and isinstance(obs, dict):
+        frame = obs.get("pov")
     if frame is None:
         return
     from PIL import Image
@@ -350,23 +282,46 @@ class SpikeSession:
         self.phases: dict[str, Any] = {}
         self.action_log: list[dict[str, Any]] = []
 
-    def _noop(self) -> dict[str, Any]:
-        return self.env.action_space.no_op()
+    def _action_from_overrides(self, overrides: dict[str, Any]) -> Any:
+        from obsidianlink.env.actions import Action, ActionType
+
+        if "use" in overrides:
+            return Action(type=ActionType.USE)
+        if "attack" in overrides:
+            return Action(type=ActionType.ATTACK)
+        if "camera" in overrides:
+            camera = np.asarray(overrides["camera"]).reshape(-1)
+            return Action(
+                type=ActionType.CAMERA,
+                pitch=float(camera[0]) if camera.size else 0.0,
+                yaw=float(camera[1]) if camera.size > 1 else 0.0,
+            )
+        for key, value in overrides.items():
+            if str(key).startswith("hotbar.") and int(value or 0):
+                slot = int(str(key).split(".", 1)[1])
+                return Action(
+                    type=ActionType.EQUIP,
+                    target=_SPIKE_SLOT_ITEMS.get(slot, "lava_bucket"),
+                )
+        if "forward" in overrides:
+            return Action(type=ActionType.MOVE, dx=1 if int(overrides.get("forward") or 0) else 0)
+        return Action(type=ActionType.WAIT)
 
     def step(self, **overrides: Any) -> dict[str, Any]:
-        action = self._noop()
-        for key, value in overrides.items():
-            action[key] = value
+        action = self._action_from_overrides(overrides)
         try:
-            self.obs, reward, done, info = self.env.step(action)
+            self.obs = self.env.step(action)
         except RuntimeError as exc:
             self.done = True
             self.limitations.append(f"{type(exc).__name__}: {exc}")
             return snapshot(self.obs, self.info, self.reward)
-        self.reward = float(reward or 0.0)
+        hidden = dict(getattr(self.env, "hidden_state", {}) or {})
+        self.reward = float(hidden.get("reward") or 0.0)
         self.total_reward += self.reward
-        self.done = bool(done)
-        self.info = info if isinstance(info, dict) else {}
+        self.done = bool(hidden.get("done"))
+        info = dict(getattr(self.env, "last_info", {}) or {})
+        info.update(hidden)
+        self.info = info
         self.steps += 1
         err = self.info.get("error")
         if err:
@@ -406,7 +361,18 @@ class SpikeSession:
         return snap
 
     def select_hotbar(self, slot: int) -> dict[str, Any]:
-        snap = self.step(**{f"hotbar.{slot}": 1})
+        from obsidianlink.env.actions import Action, ActionType
+
+        self.obs = self.env.step(
+            Action(
+                type=ActionType.EQUIP,
+                target=_SPIKE_SLOT_ITEMS.get(int(slot), "lava_bucket"),
+            )
+        )
+        hidden = dict(getattr(self.env, "hidden_state", {}) or {})
+        self.info = dict(getattr(self.env, "last_info", {}) or {})
+        self.info.update(hidden)
+        self.steps += 1
         snap = self.wait(2)
         return snap
 
@@ -438,9 +404,8 @@ def run_oracle(session: SpikeSession) -> str:
     last_effect = "reset"
 
     session.limitations.append(
-        "EquipAction is unusable on MineRL 1.0.2 MCP-Reborn: no_op emits "
-        "'equip none' and constructKeyboardState Integer.parseInt crashes the episode. "
-        "Spike uses hotbar.1-9 instead."
+        "Spike now uses MineDojo event-level equip-by-name on an open-ended "
+        "courtyard world. Portal-touch reward is not wired into open-ended."
     )
     session.wait(WARMUP_STEPS)
     save_frame(os.path.join(session.frames_dir, "00_reset.png"), session.obs)
@@ -716,63 +681,25 @@ def main(argv: list[str] | None = None) -> int:
     session: SpikeSession | None = None
     t0 = time.perf_counter()
     try:
-        import gym  # type: ignore[import-untyped]
-        import minerl  # type: ignore[import-untyped]  # noqa: F401
-
-        last_make_error: Exception | None = None
-        obs = None
-        for portal_reward, env_id in (
-            (True, args.env_id),
-            (False, args.env_id.replace("-v0", "NoReward-v0")),
-        ):
-            print("[spike] registering", env_id, "portal_reward=", portal_reward)
-            sys.stdout.flush()
-            register_spike_spec(name=env_id, portal_reward=portal_reward)
-            try:
-                print("[spike] gym.make")
-                sys.stdout.flush()
-                env = gym.make(env_id)
-                print("[spike] reset")
-                sys.stdout.flush()
-                obs = env.reset()
-                report["env_id"] = env_id
-                report["portal_touch_reward_enabled"] = portal_reward
-                last_make_error = None
-                break
-            except Exception as exc:
-                last_make_error = exc
-                report.setdefault("reset_attempts", []).append(
-                    {
-                        "env_id": env_id,
-                        "portal_reward": portal_reward,
-                        "error": f"{type(exc).__name__}: {exc}",
-                    }
-                )
-                if env is not None:
-                    try:
-                        env.close()
-                    except Exception:
-                        pass
-                    env = None
-                if portal_reward:
-                    print("[spike] reset failed with portal reward; retrying without")
-                    sys.stdout.flush()
-                    continue
-                raise
-        if env is None or obs is None:
-            raise last_make_error or RuntimeError("gym.make/reset failed")
+        print("[spike] make MineDojo open-ended courtyard")
+        sys.stdout.flush()
+        env = make_spike_env()
+        print("[spike] reset")
+        sys.stdout.flush()
+        obs = env.reset()
+        report["env_id"] = ENV_ID
+        report["portal_touch_reward_enabled"] = False
         session = SpikeSession(env, frames_dir)
         session.obs = obs
-        if not report.get("portal_touch_reward_enabled", True):
-            session.limitations.append(
-                "RewardForTouchingBlockType(nether_portal) failed at reset; retried without it"
-            )
-        report["action_space_keys"] = sorted(env.action_space.spaces.keys())
-        report["obs_space_keys"] = (
-            sorted(env.observation_space.spaces.keys())
-            if hasattr(env.observation_space, "spaces")
-            else []
+        session.info = dict(getattr(env, "hidden_state", {}) or {})
+        session.limitations.append(
+            "open-ended MineDojo worlds do not expose RewardForTouchingBlockType"
         )
+        raw = getattr(env, "_env", None)
+        space = getattr(raw, "action_space", None)
+        no_op = space.no_op() if space is not None and hasattr(space, "no_op") else {}
+        report["action_space_keys"] = sorted(no_op) if isinstance(no_op, dict) else []
+        report["obs_space_keys"] = ["frame", "inventory", "selected_item"]
         last = run_oracle(session)
         report["oracle_last_effect"] = last
         report["phases"] = session.phases
