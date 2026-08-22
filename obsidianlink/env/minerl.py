@@ -1,4 +1,8 @@
-"""MineRL adapter. ``gym.make`` happens in ``reset()``, never at import."""
+"""Archived MineRL adapter.
+
+This module is retained for historical experiment reproducibility only. New
+runtime code must use ``obsidianlink.env.MineDojoEnvironment``.
+"""
 
 from __future__ import annotations
 

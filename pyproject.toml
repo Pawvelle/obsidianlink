@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "obsidianlink"
 version = "0.1.0"
-description = "A Minecraft benchmark for studying long-horizon AI agents through Nether Portal construction."
+description = "A MineDojo-based Minecraft embodied-agent research project."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Private research project"}

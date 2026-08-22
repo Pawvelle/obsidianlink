@@ -1,4 +1,8 @@
-# Experiment records
+# Historical experiment records (MineRL / Portal archive)
+
+> This file records the retired MineRL/Portal research track. It is retained
+> for reproducibility and must not be treated as the current MineDojo plan or
+> evaluation evidence. See `docs/LEGACY_MINERL_ARCHIVE.md`.
 
 Git tracks this HISTORY, experiment scripts, and small evidence
 summaries under `evidence/`. Live raw JSON / PNG under `runs/` stay

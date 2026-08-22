@@ -1,99 +1,68 @@
 # ObsidianLink
 
-一个通过 Nether Portal construction 研究 long-horizon AI Agent 的 Minecraft Benchmark。
+ObsidianLink 是一个基于 **MineDojo** 的 Minecraft 具身 Agent Benchmark 项目。最终目标是在统一、可审计的 Minecraft 环境中，评测单智能体与多智能体协作构造、激活并进入地狱门的能力。
 
-## 研究
+## 当前平台与边界
 
-ObsidianLink 用一个统一核心任务评测 Agent：使用 Minecraft 原版机制构造、激活并进入 Nether Portal。
+MineDojo 是唯一的主动开发与研究环境，也是后续 Benchmark 的运行底座。所有新的环境适配、Agent 能力、实验与评测都必须建立在 `MineDojoEnvironment` 上。
 
-Formal End-to-End objective：
+历史 MineRL adapter、旧 Portal benchmark runner 与旧测试仍保留在仓库中，用于阅读和复现过去证据；它们已归档，不是可运行主线，也不应成为新代码的依赖。**地狱门 Benchmark 目标本身没有归档**：它将在 MineDojo 上重新实现。详情见 [历史归档说明](docs/LEGACY_MINERL_ARCHIVE.md)。
+
+当前 Agent 闭环：
 
 ```text
-Construct / complete a Nether Portal
-→ Activate it
-→ Enter the Nether
+Natural-language task
+  → GeneralAgent
+  → Planner + Memory + Validator
+  → primitive action
+  → MineDojoEnvironment
+  → agent-visible Observation
+  → Reflection / next decision
 ```
 
-Success 与具体 solver 无关，由独立 evaluator 依据当前 episode 的真实 Minecraft world truth 判断。Bucket Casting 是第一版受控评测的 **primary reference strategy**，不是 mandatory solver。
+默认只暴露原子动作（移动、转向、攻击、交互、热键、等待等）。复杂目标应由 Planner 组合这些动作，不新增“砍树”“合成整套工具”等工作流黑箱 skill。
 
-Agent 可通过 live Minecraft Wiki 查询任务相关的原版规则、配方和机制；Benchmark prompt 不提供 portal construction recipe。
+Benchmark 的最终成功定义为：在预算内，任务指定的单个 Agent 或协作团队通过合法 Minecraft 行为构造/完成地狱门、激活它，并实际从主世界进入下界。短任务（例如获得原木）是构建该 Benchmark 所需 Agent 能力的阶段性验证，不是研究终点。
 
-研究方向：
+## 本地运行环境
 
-- Diagnostic
-- End-to-End Portal Construction
-- Single-Agent
-- Multi-Agent
-- Generalization & Recovery
-
-该 Benchmark 不是 Minecraft 自动化脚本，也不绑定任何特定模型厂商。
-
-冻结研究与工程规范：
-
-- `docs/plans/ObsidianLink_Research_First_Master_Plan.md`
-- `docs/plans/ObsidianLink_Development_Plan.md`
-
-> Current implementation status is maintained in `ROADMAP.md`.
-
-## 运行
-
-Phase 1 live smoke（真实 MineRL）：
+统一使用 Conda 环境 `mc-agent`，不要使用系统 Python：
 
 ```bash
-PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python main.py
+/opt/anaconda3/bin/conda run -n mc-agent python --version
+/opt/anaconda3/bin/conda run -n mc-agent python -c "import minedojo; print('MineDojo import ok')"
 ```
 
-Phase 2 representative diagnostic（D1 Lava Presence + Qwen3-VL）：
+MineDojo 在 Apple Silicon 上由项目运行时兼容层选择 Rosetta x86_64 Java 8；不要手动替换 Java 或升级 Gym/NumPy 来“现代化”该运行时。
 
-```bash
-PYTHONPATH=. OBSIDIANLINK_PHASE=2 \
-  /opt/anaconda3/bin/conda run -n mc-agent python main.py
-```
+## 入口
 
-离线 stub：
-
-```bash
-OBSIDIANLINK_OFFLINE=1 /opt/anaconda3/bin/conda run -n mc-agent python main.py
-```
-
-测试：
-
-```bash
-PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest tests/
-```
-
-GeneralAgent 真实 Minecraft smoke（自然语言 → Planner → Skill → MineRL → inventory Observation）：
+MineDojo 最小真实 smoke（启动、reset、no-op、close）：
 
 ```bash
 PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
-    obsidianlink/experiments/run_general_agent.py \
-    --task "Mine 1 obsidian block"
+  -m obsidianlink.experiments.run_minedojo_smoke
 ```
 
-随机自然森林中的 `collect_wood` 诊断可加 `--natural-world`；该路径当前仍不稳定。
-
-LLM smoke（不是 Nether Portal 评测；只验证 MiniMax → JSON action → Minecraft `env.step`）：
+可视化本地 Qwen + MineDojo 砍树试验（显示 Minecraft、Agent POV 与过程面板）：
 
 ```bash
-export MINIMAX_API_KEY=your_key
 PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
-    obsidianlink/experiments/run_llm_smoke.py --agent llm --max-steps 8
+  -m obsidianlink.experiments.run_minedojo_harvest_log
 ```
 
-L1 Portal Benchmark（正式 `MineRLL1Controlled-v0` + `L1_PORTAL_TASK` + `L1Evaluator` + `LLMAgent`；默认 500 steps）：
+可用 `--model-path` 切换本地 Qwen checkpoint，`--max-steps` 和 `--max-planning-cycles` 收紧预算。原始 episode trace 与截图只保存在本机，Git 仅跟踪脚本和小型摘要。
+
+## 测试
 
 ```bash
-export MINIMAX_API_KEY=your_key
-PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
-    obsidianlink/experiments/run_l1_llm_agent.py
+PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python -m pytest \
+  tests/test_minedojo.py tests/test_general_agent.py
 ```
 
-Vision Baseline v3（把 `Observation.frame` RGB 发给 MiniMax-M3）：
+完整测试集中仍有 MineRL 历史测试；在 MineRL 已按项目决策卸载的环境中，这些归档测试预期不能作为当前平台回归标准。
 
-```bash
-export MINIMAX_API_KEY=your_key
-PYTHONPATH=. /opt/anaconda3/bin/conda run -n mc-agent python \
-    obsidianlink/experiments/run_l1_llm_agent.py --vision
-```
+## 文档
 
-`MINIMAX_API_KEY` 只从环境变量读取，不要写入代码。默认 endpoint 为 `https://api.minimaxi.com/v1/chat/completions`。当前实现进度见 `ROADMAP.md`。
+- [本地开发环境约束](AGENTS.md)
+- [MineRL 历史归档](docs/LEGACY_MINERL_ARCHIVE.md)
