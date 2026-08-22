@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from obsidianlink.agents.memory import AgentMemory
+from obsidianlink.agents.observation import build_grounded_observation
 from obsidianlink.agents.reactive import extract_json_object
 from obsidianlink.env.environment import Observation
 from obsidianlink.models.base_client import BaseLLMClient
@@ -80,6 +81,29 @@ class LLMSkillPlanner:
             allow_wiki=self.allow_wiki,
         )
         self.last_prompt = prompt
+        response = self._complete(prompt, observation)
+        try:
+            return parse_planner_decision(
+                response,
+                frozenset(skill_descriptions),
+                allow_wiki=self.allow_wiki,
+            )
+        except ValueError as exc:
+            repair = (
+                "Your previous output was not a valid planner JSON object. "
+                f"Parser error: {exc}. "
+                "Return exactly one JSON object in the required schema. "
+                "No markdown, no extra text.\n"
+                f"Invalid output:\n{str(response)[:800]}"
+            )
+            response = self._complete(repair, observation)
+            return parse_planner_decision(
+                response,
+                frozenset(skill_descriptions),
+                allow_wiki=self.allow_wiki,
+            )
+
+    def _complete(self, prompt: str, observation: Observation) -> str:
         vision_fn = getattr(self.client, "generate_with_vision", None)
         if self.use_vision and observation.frame is not None and callable(vision_fn):
             response = vision_fn(prompt, frame=observation.frame)
@@ -87,11 +111,7 @@ class LLMSkillPlanner:
             response = self.client.generate(prompt)
         self.model_calls += 1
         self.last_response = response
-        return parse_planner_decision(
-            response,
-            frozenset(skill_descriptions),
-            allow_wiki=self.allow_wiki,
-        )
+        return response
 
 
 def _build_planner_prompt(
@@ -104,12 +124,13 @@ def _build_planner_prompt(
     skills = "\n".join(
         f"- {name}: {description}" for name, description in skill_descriptions.items()
     )
+    grounded = build_grounded_observation(memory, observation)
     observation_state = json.dumps(
-        observation.agent_view() if observation is not None else {},
+        grounded.as_prompt(),
         ensure_ascii=False,
         sort_keys=True,
     )
-    memory_state = json.dumps(memory.prompt_state(), ensure_ascii=False, sort_keys=True)
+    memory_state = json.dumps(memory.decision_context(), ensure_ascii=False, sort_keys=True)
     operation_instructions = (
         "You may request current game knowledge with search_wiki when a rule is unknown.\n"
         "Return exactly one JSON object in one of these forms:\n"
@@ -141,8 +162,10 @@ def _build_planner_prompt(
     )
     return (
         "You are the planner of one autonomous Minecraft agent.\n"
-        "Maintain a hierarchical Goal → Subgoal → Primitive Skill plan before acting. "
-        "Use stable subgoal IDs and dependencies so progress survives replanning.\n"
+        "Maintain a hierarchical Goal → Plan → Subgoal → Primitive Action → Observation "
+        "Update loop. Do not restart the plan from scratch after every step. Resume "
+        "current_goal, current_subgoal, completed_subgoals, failed_attempts, and "
+        "next_objective.\n"
         "Reason from remaining subgoals → current subgoal → one primitive operation.\n"
         "Include plan as an ordered list of {id, description, status, parent_id, depends_on}; "
         "status is pending|in_progress|completed|failed|blocked|skipped. Set exactly one "
@@ -151,16 +174,19 @@ def _build_planner_prompt(
         "After every observation, preserve verified completed nodes, update the active node, "
         "and revise downstream nodes when memory shows a failed assumption. Explain changes "
         "in plan_revision_reason.\n"
+        "The grounded observation tells you the last action, its result, and whether that "
+        "result advanced the goal. If feedback.advanced_goal is false, change target, "
+        "position, or plan before repeating a similar primitive.\n"
+        "Do not emit a primitive that cannot help the current subgoal "
+        "(for example mining dirt while collecting wood).\n"
         "Compose complex tasks from the named primitive skills; never invent "
         "MineRL actions or unavailable skills.\n"
-        "Use memory to adjust the plan:\n"
-        "- working_memory/subgoal_progress: node status, dependencies, attempts, and progress\n"
-        "- last_reflection: expected vs observed outcome of the previous skill\n"
-        "- episodic_memory/relevant_failure_experience: avoid repeating failed approaches\n"
-        "- semantic_memory/knowledge_usage: apply structured recipe, item, mechanic, and spatial facts\n"
-        "- spatial_memory: reuse known resource and landmark locations\n"
-        "- retrieved_memory: the bounded memories most relevant to the latest retrieval query\n"
-        "- environment.inventory / selected_item / inventory_delta: ground the next skill\n"
+        "Use retrieved memory, not a full memory dump:\n"
+        "- working_memory: current goal, subgoal, next_objective, and plan progress\n"
+        "- last_reflection: expected vs observed outcome and goal-progress note\n"
+        "- retrieved_memory: only the memories ranked for the current subgoal\n"
+        "- episodic failures: avoid repeating failed approaches\n"
+        "- semantic/spatial slices: recipe, item, mechanic, and known locations\n"
         "When a subgoal should change the world, set expected.inventory_min or "
         "expected.inventory_delta so a mismatch can be reflected.\n"
         "Treat a failed expected outcome as an execution failure, not a success. "
@@ -174,7 +200,7 @@ def _build_planner_prompt(
         "Finish only when the current observation already satisfies the task.\n"
         f"Available skills:\n{skills}\n"
         f"{operation_instructions}"
-        f"Current observation: {observation_state}\n"
+        f"Current grounded observation: {observation_state}\n"
         f"Agent memory: {memory_state}"
     )
 

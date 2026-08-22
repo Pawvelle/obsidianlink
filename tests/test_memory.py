@@ -205,6 +205,25 @@ def test_memory_retrieval_ranks_relevant_semantic_episodic_and_spatial_records()
     assert memory.subgoal_states["mine"].failures == 1
 
 
+def test_memory_exposes_next_objective_and_decision_retrieval() -> None:
+    memory = AgentMemory()
+    memory.reset("craft iron sword")
+    memory.apply_plan(
+        "collect wood",
+        ("craft basic tools", "find iron"),
+    )
+    memory.remember_knowledge("oak logs", "Punch a tree to get logs.")
+    memory.record_failure(source="attack", message="mined dirt instead of wood")
+
+    retrieval = memory.retrieve_for_decision(limit=4)
+    state = memory.prompt_state()
+
+    assert memory.next_objective == "craft basic tools"
+    assert state["working_memory"]["current_goal"] == "craft iron sword"
+    assert "collect wood" in retrieval.query
+    assert any(item.memory_type == "episodic" for item in retrieval.items)
+
+
 def test_memory_retrieval_can_limit_memory_types() -> None:
     memory = AgentMemory()
     memory.reset("Find oak logs")

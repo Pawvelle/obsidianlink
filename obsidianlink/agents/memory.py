@@ -150,6 +150,8 @@ class ReflectionRecord:
     reason: str
     expected: dict[str, Any] = field(default_factory=dict)
     observed: dict[str, Any] = field(default_factory=dict)
+    advanced_goal: bool | None = None
+    progress_note: str = ""
 
 
 @dataclass
@@ -176,6 +178,7 @@ class AgentMemory:
     selected_item: str | None = None
     last_error: str | None = None
     last_observation: Observation | None = field(default=None, repr=False)
+    local_view: dict[str, Any] = field(default_factory=dict)
 
     # Compatibility views plus durable memory stores.
     known_knowledge: dict[str, str] = field(default_factory=dict)
@@ -208,6 +211,7 @@ class AgentMemory:
         self.selected_item = None
         self.last_error = None
         self.last_observation = None
+        self.local_view.clear()
         self.last_retrieval = None
         self._state_initialized = False
         if clear_long_term:
@@ -221,6 +225,7 @@ class AgentMemory:
         observation: Observation,
         *,
         baseline: dict[str, int] | None = None,
+        local_view: dict[str, Any] | None = None,
     ) -> None:
         new_inventory = dict(observation.inventory or {})
         if baseline is not None:
@@ -234,8 +239,20 @@ class AgentMemory:
         self.last_observation = observation
         self.inventory = new_inventory
         self.selected_item = observation.selected_item
+        if local_view is not None:
+            self.local_view = dict(local_view)
         if self.task_status == _TASK_IDLE and self.goal:
             self.task_status = _TASK_IN_PROGRESS
+
+    @property
+    def next_objective(self) -> str:
+        """Upcoming work: first pending node, else the active subgoal or goal."""
+        if self.pending_subgoals:
+            return self.pending_subgoals[0]
+        for node in self.subgoal_states.values():
+            if node.status == "pending":
+                return node.description
+        return self.current_subgoal or self.goal
 
     def begin_subgoal(self, description: str, *, subgoal_id: str = "") -> None:
         description = description.strip()
@@ -483,6 +500,13 @@ class AgentMemory:
         self.last_retrieval = result
         return result
 
+    def retrieve_for_decision(self, *, limit: int = 6) -> MemoryRetrieval:
+        """Fetch memories relevant to the current goal and active subgoal."""
+        query = " ".join(
+            part for part in (self.goal, self.current_subgoal or "") if str(part).strip()
+        ).strip() or self.goal
+        return self.retrieve(query, limit=limit)
+
     def remember_knowledge(
         self,
         query: str,
@@ -638,12 +662,22 @@ class AgentMemory:
                 "skill": self.last_reflection.skill,
                 "subgoal": self.last_reflection.subgoal,
                 "matched": self.last_reflection.matched,
+                "advanced_goal": self.last_reflection.advanced_goal,
                 "reason": self.last_reflection.reason,
+                "progress_note": self.last_reflection.progress_note,
             }
         plan_nodes = [asdict(node) for node in self.subgoal_states.values()]
+        last_action = (
+            _compact_step(self.completed_steps[-1]) if self.completed_steps else None
+        )
         working = {
             "task": self.goal,
             "status": self.task_status,
+            "current_goal": self.goal,
+            "current_subgoal": self.current_subgoal,
+            "completed_subgoals": list(self.completed_subgoals[-8:]),
+            "failed_attempts": [asdict(item) for item in self.failed_attempts[-6:]],
+            "next_objective": self.next_objective,
             "active_subgoal_id": self.active_subgoal_id,
             "plan_revision": self.plan_revision,
             "plan_revision_reason": self.plan_revision_reason,
@@ -654,6 +688,8 @@ class AgentMemory:
             "inventory": dict(self.inventory),
             "selected_item": self.selected_item,
             "inventory_delta": dict(self.inventory_delta),
+            "last_action": last_action,
+            "feedback": reflection,
         }
         semantic = [asdict(item) for item in self.semantic_memory.values()]
         spatial = [asdict(item) for item in self.spatial_memory.values()]
@@ -706,6 +742,31 @@ class AgentMemory:
             "recent_skills": [_compact_step(step) for step in self.completed_steps[-6:]],
             "last_reflection": reflection,
             "last_error": self.last_error,
+            "next_objective": self.next_objective,
+        }
+
+    def decision_context(self) -> dict[str, Any]:
+        """Bounded Planner context: working + retrieved memory, not a full dump."""
+        state = self.prompt_state()
+        retrieved = state["retrieved_memory"]
+        retrieved_by_type = {"semantic": [], "episodic": [], "spatial": []}
+        for item in retrieved.get("items", []):
+            kind = str(item.get("memory_type", ""))
+            if kind in retrieved_by_type:
+                retrieved_by_type[kind].append(item)
+        return {
+            "working_memory": state["working_memory"],
+            "subgoal_progress": state["subgoal_progress"],
+            "retrieved_memory": retrieved,
+            "semantic_memory": retrieved_by_type["semantic"] or state["semantic_memory"][-3:],
+            "episodic_memory": retrieved_by_type["episodic"] or state["relevant_failure_experience"][-4:],
+            "spatial_memory": retrieved_by_type["spatial"] or state["spatial_memory"][-3:],
+            "last_reflection": state["last_reflection"],
+            "recent_failures": state["recent_failures"][-4:],
+            "knowledge_usage": state["knowledge_usage"],
+            "wiki_knowledge": state["wiki_knowledge"],
+            "memory_index": state["memory_index"],
+            "next_objective": state["next_objective"],
         }
 
     def _merge_plan(self, plan: tuple[Any, ...]) -> None:

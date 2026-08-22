@@ -438,3 +438,41 @@ def test_general_agent_records_subgoals_failures_and_inventory_delta() -> None:
     assert [item.subgoal for item in agent.memory.failed_attempts] == ["find cobblestone"]
     assert agent.memory.inventory_delta == {"cobblestone": 2}
     assert agent.memory.prompt_state()["environment"]["inventory"] == {"cobblestone": 2}
+
+
+def test_general_agent_rejects_unrelated_dirt_mining_and_replans() -> None:
+    planner = SequencePlanner(
+        [
+            PlannerDecision(
+                "skill",
+                name="attack",
+                arguments={"target": "dirt", "ticks": 8},
+                subgoal="collect wood",
+                expected={"inventory_min": {"dirt": 1}},
+                reason="mine dirt",
+            ),
+            PlannerDecision(
+                "skill",
+                name="collect_cobblestone",
+                arguments={"quantity": 2},
+                subgoal="collect cobblestone",
+            ),
+        ]
+    )
+    agent = GeneralAgent(
+        planner,
+        MinecraftController(ResourceEnv(), max_steps=10),
+        skills=SkillLibrary([UnverifiedAttackSkill(), CollectCobblestoneSkill()]),
+        goal_verifier=_cobblestone_goal,
+    )
+
+    result = agent.run("make iron sword then collect cobblestone")
+
+    assert result.success is True
+    assert result.environment_steps == 2
+    assert [step.skill for step in result.completed_steps] == ["collect_cobblestone"]
+    assert agent.memory.failed_attempts[0].source == "validator"
+    assert any(
+        item.skill == "attack" and item.advanced_goal is False
+        for item in agent.memory.reflections
+    )

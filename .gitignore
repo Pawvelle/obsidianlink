@@ -28,3 +28,5 @@ obsidianlink/logs/
 # summaries — not JSON traces or PNG frames.
 obsidianlink/experiments/runs/*
 !obsidianlink/experiments/runs/.gitkeep
+obsidianlink/experiments/episodes/*
+!obsidianlink/experiments/episodes/.gitkeep

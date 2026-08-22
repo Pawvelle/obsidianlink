@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from typing import Any
 
 from obsidianlink.env.actions import Action
 from obsidianlink.env.environment import Environment, Observation
@@ -43,6 +44,20 @@ class MinecraftController:
         if self._observation is None:
             self._observation = self.env.observe()
         return self._observation
+
+    def local_view(self) -> dict[str, Any]:
+        """Optional coarse surroundings from the env or a wrapping env."""
+        env: Any = self.env
+        seen: set[int] = set()
+        while env is not None and id(env) not in seen:
+            seen.add(id(env))
+            getter = getattr(env, "local_view", None)
+            if callable(getter):
+                view = getter()
+                if isinstance(view, dict) and view:
+                    return dict(view)
+            env = getattr(env, "env", None)
+        return {}
 
     def step(self, action: Action) -> Observation:
         if self.exhausted:

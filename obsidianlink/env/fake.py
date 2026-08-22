@@ -154,6 +154,36 @@ class FakeMinecraftEnv(Environment):
             "hotbar": list(self.hotbar),
         }
 
+    def local_view(self) -> dict[str, object]:
+        """Coarse agent-visible surroundings. No world coordinates or remaining count."""
+        nearby: list[dict[str, object]] = []
+        resources: list[str] = []
+        if self.remaining > 0:
+            nearby.append(
+                {
+                    "name": self.target,
+                    "reachable": self.distance <= 0,
+                    "facing": self.facing_target,
+                }
+            )
+            resources.append(self.target)
+        if self.distance <= 0:
+            relative = "adjacent"
+        elif self.distance <= 2:
+            relative = "near"
+        else:
+            relative = "far"
+        return {
+            "position": {
+                "relative": relative,
+                "facing_target": self.facing_target,
+            },
+            "nearby_blocks": nearby,
+            "visible_resources": resources,
+            "nearby_entities": [],
+            "equipment": {"mainhand": self._selected_item()},
+        }
+
     def _observation(self) -> Observation:
         return Observation(
             frame=None,

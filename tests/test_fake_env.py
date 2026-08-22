@@ -6,6 +6,19 @@ from obsidianlink.env.fake import FakeMinecraftEnv
 from obsidianlink.skills import default_skill_library
 
 
+def test_fake_env_local_view_stays_off_observation() -> None:
+    env = FakeMinecraftEnv(target="oak_log", distance=2, remaining=3)
+    observation = env.reset()
+    view = env.local_view()
+
+    assert view["nearby_blocks"][0]["name"] == "oak_log"
+    assert view["nearby_blocks"][0]["reachable"] is False
+    assert view["position"]["relative"] == "near"
+    assert observation.inventory == {}
+    assert not hasattr(observation, "nearby_blocks")
+    assert not hasattr(observation, "distance")
+
+
 def test_fake_env_keeps_hidden_world_state_off_observation() -> None:
     env = FakeMinecraftEnv(target="stone", distance=3, remaining=2)
     observation = env.reset()

@@ -1,6 +1,11 @@
 from obsidianlink.agents.memory import AgentMemory, StepRecord
-from obsidianlink.agents.planner import _build_planner_prompt, parse_planner_decision
+from obsidianlink.agents.planner import (
+    LLMSkillPlanner,
+    _build_planner_prompt,
+    parse_planner_decision,
+)
 from obsidianlink.env.environment import Observation
+from obsidianlink.models.base_client import BaseLLMClient
 
 
 def test_planner_parser_accepts_optional_subgoal() -> None:
@@ -42,11 +47,14 @@ def test_planner_prompt_exposes_observation_memory_and_subgoal_loop() -> None:
     )
 
     assert "remaining subgoals → current subgoal" in prompt
+    assert "Do not restart the plan" in prompt
+    assert "next_objective" in prompt
     assert "subgoal_progress" in prompt
     assert "last_reflection" in prompt
     assert "knowledge_usage" in prompt
     assert "recent_failures" in prompt
     assert "wiki_knowledge" in prompt
+    assert "Current grounded observation" in prompt
     assert '"has_visual_frame": true' in prompt
     assert '"dirt": 1' in prompt
     assert "secret" not in prompt
@@ -91,3 +99,31 @@ def test_planner_parser_accepts_bounded_memory_retrieval() -> None:
     assert decision.type == "memory"
     assert decision.memory_types == ("episodic", "semantic")
     assert decision.retrieval_limit == 12
+
+
+class _RepairClient(BaseLLMClient):
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    def generate(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        if len(self.prompts) == 1:
+            return "not json at all"
+        return '{"type":"skill","name":"wait","arguments":{"ticks":1},"reason":"retry"}'
+
+
+def test_planner_retries_once_when_first_response_is_not_json() -> None:
+    client = _RepairClient()
+    planner = LLMSkillPlanner(client, use_vision=False, allow_wiki=False)
+    memory = AgentMemory()
+    memory.reset("wait briefly")
+
+    decision = planner.plan(
+        memory,
+        Observation(inventory={}),
+        {"wait": "Wait without interacting."},
+    )
+
+    assert decision.name == "wait"
+    assert planner.model_calls == 2
+    assert "not a valid planner JSON" in client.prompts[1]

@@ -40,12 +40,14 @@ class QwenVLModelClient(VisionModelClient):
         model_path: str,
         device: str = "auto",
         dtype: str = "auto",
+        max_new_tokens: int = _MAX_NEW_TOKENS,
     ) -> None:
         if not model_path:
             raise ValueError("QwenVLModelClient requires a non-empty model_path")
         self._model_path = model_path
         self._device = _resolve_device(device)
         self._dtype = dtype
+        self._max_new_tokens = max(16, int(max_new_tokens))
         # Lazy-loaded handles; populated on first vision call.
         self._model: Any = None
         self._processor: Any = None
@@ -194,7 +196,7 @@ class QwenVLModelClient(VisionModelClient):
         # a no-op when the input is already there, so this is safe for
         # both MPS and CPU.
         inputs = inputs.to(self._device)
-        gen_kwargs: dict[str, Any] = dict(max_new_tokens=_MAX_NEW_TOKENS)
+        gen_kwargs: dict[str, Any] = dict(max_new_tokens=self._max_new_tokens)
         # ``use_cache=True`` is the transformers default; explicit for
         # clarity and to keep the MPS path fast.
         gen_kwargs["use_cache"] = True

@@ -4,13 +4,16 @@ import numpy as np
 
 from obsidianlink.agents.memory import AgentMemory
 from obsidianlink.env.live_view import annotate_frame
+from obsidianlink.env.live_view import format_process_event
 from obsidianlink.env.survival import (
     SURVIVAL_IRON_SWORD_ENV_ID,
     SurvivalIronSwordEnv,
     iron_sword_count,
     register_survival_iron_sword_spec,
+    wooden_sword_count,
 )
 from obsidianlink.experiments.run_iron_sword import iron_sword_goal_verified
+from obsidianlink.experiments.run_wooden_sword import wooden_sword_goal_verified
 
 
 def test_survival_env_is_lazy() -> None:
@@ -59,6 +62,37 @@ def test_iron_sword_goal_reads_inventory_only() -> None:
     )
     assert iron_sword_count({"iron_sword": 1}) == 1
     assert iron_sword_count({"oak_planks": 4}) == 0
+
+
+def test_wooden_sword_goal_reads_inventory_only() -> None:
+    memory = AgentMemory()
+    from obsidianlink.env.environment import Observation
+
+    assert not wooden_sword_goal_verified(
+        "craft wooden sword", memory, Observation(inventory={"oak_log": 2})
+    )
+    assert wooden_sword_goal_verified(
+        "craft wooden sword",
+        memory,
+        Observation(inventory={"wooden_sword": 1, "oak_planks": 1}),
+    )
+    assert wooden_sword_count({"minecraft:wooden_sword": 1}) == 1
+    assert wooden_sword_count({"oak_planks": 4}) == 0
+
+
+def test_process_event_format_is_readable() -> None:
+    line = format_process_event(
+        "skill_execution",
+        {
+            "skill": "attack",
+            "success": True,
+            "message": "got oak_log",
+            "result": {"advanced_goal": True},
+        },
+    )
+    assert "Skill" in line
+    assert "attack" in line
+    assert "推进目标" in line
 
 
 def test_annotate_frame_draws_hud() -> None:

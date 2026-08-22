@@ -50,4 +50,31 @@ def test_reflection_matches_when_observation_meets_expectation() -> None:
     )
 
     assert record.matched is True
+    assert record.advanced_goal is True
     assert memory.failed_attempts == []
+
+
+def test_reflection_marks_dirt_gain_as_not_advancing_iron_sword() -> None:
+    memory = AgentMemory()
+    memory.reset("Find iron and craft iron sword")
+    memory.update_state(Observation(inventory={"dirt": 1}), baseline={})
+    memory.begin_subgoal("collect wood")
+    decision = PlannerDecision(
+        "skill",
+        name="attack",
+        subgoal="collect wood",
+        expected={"inventory_min": {"dirt": 1}},
+    )
+
+    record = reflect_skill_outcome(
+        memory,
+        decision,
+        Observation(inventory={"dirt": 1}),
+        skill_success=True,
+        skill_message="obtained dirt",
+    )
+
+    assert record.matched is True
+    assert record.advanced_goal is False
+    assert "does not advance" in record.progress_note
+    assert memory.failed_attempts[-1].source == "reflection"

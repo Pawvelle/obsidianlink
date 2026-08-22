@@ -4,9 +4,13 @@
 
 ## Current Phase
 
-**General Minecraft Agent Plan — Phase 1: Core Framework**
+**General Minecraft Agent Plan — MineDojo Platform Migration**
 
-用户于 2026-08-21 明确调整当前优先级：暂停 Benchmark / Nether Portal 工作，先开发 Agent 本身。保留既有 benchmark 代码与历史证据，但当前不重构、不扩展。
+当前开发目标：**MineDojo Agent Foundation**。
+
+用户于 2026-08-22 决定 MineDojo 是此后所有主动 Agent 开发与研究的唯一底座。MineRL 环境、benchmark、历史实验和证据全部保留以便复现，但不再扩展、不再作为新能力的目标平台。
+
+当前优先级：先建立 MineDojo 环境适配、受控 smoke 与新 Agent 基线；暂不恢复 MineRL Benchmark / Nether Portal 工作。
 
 当前通用入口架构：
 
@@ -24,6 +28,37 @@ Natural-language Task → GeneralAgent → Planner
 约束：单 Agent；Planner 只调用 Wiki knowledge tool、primitive skill 或 finish；不引入 LangChain、复杂 Agent framework、Multi-Agent、Vision 或 RAG pipeline。
 
 ## Current Task
+
+**MineDojo Platform Integration**
+
+2026-08-22 MineDojo 接入起步：
+
+* 官方 MineDojo 0.1 源码已安装到既有 `mc-agent`（Python 3.10 / Java 8）中；保留 Gym 0.23.1，不执行 MineDojo 要求的 Gym 0.21 降级；用户已要求移除 MineRL，环境中不再安装它
+* 新增 `obsidianlink.env.MineDojoEnvironment`：延迟导入、RGB BGR/CHW → RGB/HWC、36 格 inventory 汇总、selected equipment 提示、MineDojo native event-level action 映射；reward/done/info 不写入 Agent Observation
+* MineDojo 0.1 的公开 `minedojo.make()` 在当前事件级控制配置中会错误套用 ARNN wrapper；adapter 暂调用同一命名任务的 native task factory，绕过该上游 wrapper 缺陷，不引入 Voyager/Mineflayer
+* 新增 `run_minedojo_smoke.py` 与 adapter 离线契约测试；真实 MineDojo smoke 已验证 `reset → no-op step → close`
+* macOS Apple Silicon 兼容层：修复 MineDojo 失效的 MixinGradle JitPack 依赖（本地 SHA-256 校验镜像），自动选择 Rosetta x86_64 Java 8 以加载旧版 LWJGL 原生库；项目 smoke 已进入 CLIENT/SERVER RUNNING 并以退出码 0 正常关闭
+
+2026-08-22 Local Qwen wooden-sword live playtest：
+
+* 新增 `run_wooden_sword.py`：本地 Qwen3-VL（默认 2B，可用 `--model-path` 换 4B），任务是空背包收集木头并合成 `wooden_sword`，不用 MiniMax
+* 桌面同时显示 Minecraft、Agent POV HUD、以及 `ObsidianLink Agent Process` 操作看板（Planner / Validator / Skill / 结果）
+* `QwenLLMClient` 把本地 checkpoint 接到 Planner 的 `generate` / `generate_with_vision`
+* Live `wooden_sword_qwen_live`：2 Planner / 0 env steps / 背包空；第 1 轮只做 memory retrieval，第 2 轮 JSON 解析失败退出；`success=False`，不是木剑能力结论
+* 证据：`logs/wooden_sword_qwen_live/summary.json` 与 `obsidianlink/experiments/episodes/episode_20260822_055531Z/`
+* Live `wooden_sword_minimax_live`：MiniMax-M3，6 Planner / 201 steps / look+move 后 2 次 attack 未获得 log；第 6 轮输出 `type=plan` 解析失败；背包空；`success=False`，不是木剑能力结论
+* 证据：`logs/wooden_sword_minimax_live/summary.json` 与 `obsidianlink/experiments/episodes/episode_20260822_060028Z/`
+
+2026-08-22 Observation / Validator / Reflection / Episode Log：
+
+* Planner 现在读取 `GroundedObservation`：goal、subgoal、next_objective、inventory、equipment、coarse local view、last action、action result、success/failure feedback。冻结 `Observation` 契约仍是 `frame` / `inventory` / `selected_item`，不泄漏 evaluator pose
+* 新增 Action Validator：只拦截明显无法推进当前 subgoal 的 primitive（例如 collect wood 时 mine dirt），不引入 workflow skill
+* Hierarchical plan 在 working memory 中显式保留 current goal / current subgoal / completed / failed attempts / next objective；prompt 要求不要每步重启计划
+* 决策前按 goal+subgoal 检索 Memory；Planner prompt 使用 `decision_context()`，不再把全部长期记忆塞进上下文
+* Reflection 增加 goal-progress：获得 dirt 等无关物品会被记为未推进目标，并写入失败经验
+* Episode log 写入 `obsidianlink/experiments/episodes/episode_xxx/`（events.jsonl + summary.json）；`run_iron_sword.py` 已接入
+* FakeMinecraftEnv 提供 coarse `local_view`（nearby target / reachable / facing），不写入 Observation
+* 完整 offline regression：**229 passed**；未启动 MineRL/Minecraft，未改 benchmark，未增加高层 skill / Vision / Multi-Agent
 
 **Agent Reasoning Foundation**
 
@@ -290,6 +325,7 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 * **2026-08-21 GeneralAgent Phase 1 core**：自然语言 `run(task)` 统一入口、Task→Planner→Skill→Environment→Observation→Memory 有界闭环、可注入 GoalVerifier、失败重规划；保留全部 baseline 与 benchmark；offline 163 passed
 * **2026-08-21 GeneralAgent first live task**：controlled survival-mode MineRL 中 `Mine 1 obsidian block` 成功；Planner 1 call，254 environment steps，inventory Observation 验证 `obsidian=1`；未使用 benchmark/Wiki/RAG/Vision/Multi-Agent
 * **2026-08-21 GeneralAgent Planner/Memory foundation**：Task→Subgoal→Primitive/Wiki→Observation→Memory 决策状态；offline 189 passed；未改 benchmark
+* **2026-08-22 Agent Stability & Grounding Upgrade**：GroundedObservation + Action Validator + goal-progress Reflection + episode log；offline 229 passed；未改 benchmark；未启动真实 Minecraft 任务
 * **2026-08-21 Agent Reasoning Foundation**：FakeMinecraftEnv + Planner 分解/进度 + Memory 知识使用 + 轻量 expected/observed reflection；offline 198 passed；未改 benchmark；未启动真实 Minecraft 任务
 * **2026-08-22 GeneralAgent iron-sword live playtest**：空背包生存 + MiniMax-M3 中国站 + 桌面 POV；26 Planner / 769 steps；`oak_log=1`；Planner JSON 失败退出；非能力结论
 * **L1 Controlled Environment v0.1**（env + inventory + hotbar smoke；无 Oracle / 无 Agent）
@@ -308,8 +344,8 @@ L1 背景约束仍然有效：不要自动继续完整 10 格 frame / 点火 / �
 
 ## Next
 
-1. 继续用 `FakeMinecraftEnv` 测更长的 primitive 组合（例如 log → planks），仍不启动真实 Minecraft 任务。
-2. Reasoning 闭环稳定后再验证 primitive 的 live 可靠性（`move` / `look` / `attack` / `interact`）；不要恢复 `collect_wood` 等高层 workflow skill。
+1. 以 `run_minedojo_smoke.py` 建立 MineDojo 的短预算任务基线，再迁移铁剑实验的 Agent 入口。
+2. MineRL 历史测试在当前环境会因包已卸载而失败；不恢复 MineRL，不再以其作为新平台验证目标。
 3. 不要提前开发 Multi-Agent、Vision pipeline 或 RAG。
 
 不恢复 Nether Portal，不增加多 Agent、reflection framework 或通用 RAG pipeline。

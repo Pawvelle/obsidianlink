@@ -58,17 +58,26 @@ SURVIVAL_INVENTORY_ITEMS = [
 ]
 
 
-def iron_sword_count(inventory: dict[str, int] | None) -> int:
+def _count_item(inventory: dict[str, int] | None, item: str) -> int:
     items = inventory or {}
     total = 0
+    wanted = item.strip().lower()
     for name, qty in items.items():
         key = str(name).strip().lower().split(":", 1)[-1]
-        if key == "iron_sword":
+        if key == wanted:
             try:
                 total += int(qty)
             except (TypeError, ValueError):
                 continue
     return total
+
+
+def iron_sword_count(inventory: dict[str, int] | None) -> int:
+    return _count_item(inventory, "iron_sword")
+
+
+def wooden_sword_count(inventory: dict[str, int] | None) -> int:
+    return _count_item(inventory, "wooden_sword")
 
 
 def register_survival_iron_sword_spec(
@@ -182,6 +191,13 @@ class SurvivalIronSwordEnv(Environment):
     def observe(self) -> Observation:
         return self._env.observe()
 
+    def local_view(self) -> dict[str, Any]:
+        getter = getattr(self._env, "local_view", None)
+        if callable(getter):
+            view = getter()
+            return dict(view) if isinstance(view, dict) else {}
+        return {}
+
     def step(self, action: Any) -> Observation:
         return self._env.step(action)
 
@@ -195,4 +211,5 @@ __all__ = [
     "SurvivalIronSwordEnv",
     "iron_sword_count",
     "register_survival_iron_sword_spec",
+    "wooden_sword_count",
 ]
